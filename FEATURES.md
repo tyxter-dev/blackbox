@@ -95,6 +95,7 @@ Status legend:
 | Provider reference parsing | Supported | `ProviderRef.parse(...)` | Supports `provider:model` as canonical format; slash remains compatible. |
 | Model provider protocol | Supported | `ModelProvider` | Providers implement `stream_turn(TurnRequest)`. |
 | Agent provider protocol | Supported | `AgentProvider` | Providers implement agent/session lifecycle methods. |
+| Chat compatibility facade | Supported | `runtime.chat`, `ChatMessage` | Explicitly projects chat-shaped messages into model runtime inputs for migration paths without making chat the internal source of truth. |
 | Capability flags | Supported | `ModelCapabilities`, `AgentCapabilities` | Providers advertise supported behavior; tests assert honesty. |
 | Direct model run | Supported | `runtime.models.run(...)` | Collects text and provider state from a model turn. |
 | Direct model stream | Supported | `runtime.models.stream(...)` | Streams provider-normalized events. |

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, TypeVar, cast
 from uuid import uuid4
 
+from agent_runtime.compat.chat import ChatMessage, messages_to_input
 from agent_runtime.core.accounting import ModelCatalog, add_usage, usage_to_dict
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
@@ -235,6 +236,44 @@ class AgentRuntimeFacade:
         adapter = self.registry.get_agent(session.provider)
         return await adapter.list_artifacts(
             session, type=type, after=after, limit=limit,
+        )
+
+
+@dataclass(slots=True)
+class ChatRuntimeFacade:
+    """Explicit chat compatibility projection over the model runtime."""
+
+    models: ModelRuntime
+
+    async def stream(
+        self,
+        *,
+        provider: str,
+        messages: list[ChatMessage | dict[str, Any]],
+        model: str | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[AgentEvent]:
+        async for event in self.models.stream(
+            provider=provider,
+            model=model,
+            input=messages_to_input(messages),
+            **kwargs,
+        ):
+            yield event
+
+    async def run(
+        self,
+        *,
+        provider: str,
+        messages: list[ChatMessage | dict[str, Any]],
+        model: str | None = None,
+        **kwargs: Any,
+    ) -> TurnResult:
+        return await self.models.run(
+            provider=provider,
+            model=model,
+            input=messages_to_input(messages),
+            **kwargs,
         )
 
 
@@ -506,6 +545,7 @@ class AgentRuntime:
         self.event_store: EventStore = event_store or InMemoryEventStore()
         self.run_store: RunStore = run_store or InMemoryRunStore()
         self.models = ModelRuntime(self.registry, model_catalog=self.model_catalog)
+        self.chat = ChatRuntimeFacade(self.models)
         self.agents = AgentRuntimeFacade(self.registry)
         self.tools = ToolRuntimeFacade()
 

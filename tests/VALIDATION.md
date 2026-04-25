@@ -66,6 +66,7 @@ await runtime.models.stream(...)
 | 1.15 | ✅ | xAI Responses adapter parity | `golden/openai/test_responses_event_mapping.py::test_openai_compatible_subclass_preserves_provider_identity`, `integration/xai/test_responses_smoke.py` | OpenAI-compatible xAI Responses maps events and provider state under the `xai` provider identity; live smoke is gated by `XAI_API_KEY`. |
 | 1.16 | ✅ | Provider-native request controls | `unit/test_model_request_controls.py` | Common request controls map to OpenAI/xAI/Anthropic/Gemini native kwargs while provider `extra` remains an override escape hatch. |
 | 1.17 | ✅ | Model usage and cost accounting | `unit/test_model_accounting.py` | Provider usage payloads normalize into result metadata and optional catalog pricing produces cost estimates without hard-coded prices. |
+| 1.18 | ✅ | Chat compatibility projection | `unit/test_chat_compat.py` | Chat-shaped messages can be projected into model runtime input through an explicit facade without replacing provider-native internals. |
 
 ---
 

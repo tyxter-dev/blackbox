@@ -119,6 +119,26 @@ result = await runtime.models.run(
 print(result.text)
 ```
 
+## Chat compatibility facade
+
+Chat messages are supported as an explicit compatibility projection:
+
+```python
+from agent_runtime import ChatMessage
+
+result = await runtime.chat.run(
+    provider="openai:gpt-5.4",
+    messages=[
+        ChatMessage(role="system", content="Be concise."),
+        ChatMessage(role="user", content="Summarize this incident."),
+    ],
+)
+```
+
+The facade converts messages into a provider input payload and then delegates
+to `runtime.models`; chat messages do not become the runtime's internal event
+or state model.
+
 ## Local agent usage
 
 ```python

@@ -1,3 +1,4 @@
+from agent_runtime.compat.chat import ChatMessage
 from agent_runtime.core.accounting import ModelCatalog, ModelPricing, ModelUsage
 from agent_runtime.core.approvals import ApprovalDecision, ApprovalRequest
 from agent_runtime.core.artifacts import Artifact, ArtifactRef
@@ -18,7 +19,7 @@ from agent_runtime.providers.base import (
     TurnResult,
 )
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
-from agent_runtime.runtime import AgentRuntime, AgentRuntimeFacade, ModelRuntime
+from agent_runtime.runtime import AgentRuntime, AgentRuntimeFacade, ChatRuntimeFacade, ModelRuntime
 from agent_runtime.tools.session import ToolSession
 
 __all__ = [
@@ -35,6 +36,8 @@ __all__ = [
     "ApprovalRequest",
     "Artifact",
     "ArtifactRef",
+    "ChatMessage",
+    "ChatRuntimeFacade",
     "EventTypes",
     "ItemTypes",
     "ModelCapabilities",
