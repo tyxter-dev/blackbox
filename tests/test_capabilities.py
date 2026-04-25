@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from agent_runtime.agents.anthropic_managed import AnthropicManagedAgentProvider
-from agent_runtime.agents.google_platform import GoogleAgentPlatformProvider
+from agent_runtime.agents.claude_code import ClaudeCodeAgentProvider
 from agent_runtime.agents.local import LocalAgentProvider
 from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
+from agent_runtime.agents.vertex_agent_engine import VertexAIAgentEngineProvider
 from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.echo import EchoModelProvider
@@ -65,8 +65,8 @@ def test_local_agent_capabilities_with_approval_policy() -> None:
 def test_cloud_agent_stub_capabilities_advertise_full_lifecycle() -> None:
     for provider in (
         OpenAICloudAgentProvider(api_key="x"),
-        AnthropicManagedAgentProvider(api_key="x"),
-        GoogleAgentPlatformProvider(project="p"),
+        ClaudeCodeAgentProvider(api_key="x"),
+        VertexAIAgentEngineProvider(project="p"),
     ):
         caps = provider.capabilities()
         assert caps.supports_sessions
@@ -76,7 +76,7 @@ def test_cloud_agent_stub_capabilities_advertise_full_lifecycle() -> None:
         assert caps.supports_cancellation
 
 
-def test_google_agent_advertises_deployments_and_evals() -> None:
-    caps = GoogleAgentPlatformProvider(project="p").capabilities()
+def test_vertex_agent_engine_advertises_deployments_and_evals() -> None:
+    caps = VertexAIAgentEngineProvider(project="p").capabilities()
     assert caps.supports_deployments
     assert caps.supports_evals

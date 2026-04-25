@@ -19,6 +19,12 @@ from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.errors import ApprovalError, SessionError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
+from agent_runtime.core.policy import (
+    ApprovalCallbackPolicy,
+    Policy,
+    PolicyDecision,
+    PolicyRequest,
+)
 from agent_runtime.core.state import ProviderState
 from agent_runtime.tools.runtime import ToolRuntime
 
@@ -50,6 +56,7 @@ class AgentLoop:
 
     tools: ToolRuntime | None = None
     approval_policy: ApprovalPolicy | None = None
+    policy: Policy | None = None
     max_iterations: int = 8
 
     _approvals: dict[str, asyncio.Future[ApprovalDecision]] = field(default_factory=dict)
@@ -113,16 +120,42 @@ class AgentLoop:
                     "Model requested a tool call but the loop has no ToolRuntime."
                 )
 
+            effective_policy = self._effective_policy()
             tool_results: list[RunItem] = []
             for call in pending_calls:
-                approved = True
-                if self.approval_policy and self.approval_policy(call.name, call.arguments):
+                if effective_policy is not None:
+                    decision = await effective_policy.check(
+                        PolicyRequest(
+                            checkpoint="before_tool_call",
+                            action=call.name,
+                            arguments=dict(call.arguments),
+                        )
+                    )
+                else:
+                    decision = PolicyDecision.allow()
+
+                if decision.verdict == "deny":
+                    tool_results.append(
+                        RunItem(
+                            type=ItemTypes.FUNCTION_RESULT,
+                            provider=provider_id,
+                            status="failed",
+                            data={
+                                "call_id": call.call_id,
+                                "name": call.name,
+                                "error": "denied_by_policy",
+                                "reason": decision.reason,
+                            },
+                        )
+                    )
+                    continue
+
+                if decision.verdict == "require_approval":
                     async for ev in self._await_approval(
                         call, session_id=session_id, provider_id=provider_id
                     ):
                         yield ev
-                    approved = self._last_decision.approved
-                    if not approved:
+                    if not self._last_decision.approved:
                         tool_results.append(
                             RunItem(
                                 type=ItemTypes.FUNCTION_RESULT,
@@ -242,6 +275,19 @@ class AgentLoop:
             item_id=approval_id,
             data={"approval_id": approval_id, "reason": decision.reason},
         )
+
+    def _effective_policy(self) -> Policy | None:
+        """Resolve which policy to consult for the current call.
+
+        Priority: an explicit ``self.policy`` if provided; otherwise wrap the
+        legacy ``approval_policy`` callable in ``ApprovalCallbackPolicy``;
+        otherwise no gate.
+        """
+        if self.policy is not None:
+            return self.policy
+        if self.approval_policy is not None:
+            return ApprovalCallbackPolicy(self.approval_policy)
+        return None
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
         future = self._approvals.pop(approval_id, None)

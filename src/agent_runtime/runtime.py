@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, TypeVar, cast
+from uuid import uuid4
 
 from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.artifacts import Artifact
+from agent_runtime.core.artifacts import Artifact, ArtifactPage
 from agent_runtime.core.errors import OutputValidationError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import RunItem
 from agent_runtime.core.results import AgentResult, ToolPayload
-from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
+from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
+from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
 from agent_runtime.providers.base import AgentSpec, TaskSpec, TurnRequest, TurnResult
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
@@ -32,6 +34,7 @@ class ModelRuntime:
         model: str | None = None,
         input: str | list[object],
         provider_state: ProviderState | None = None,
+        run_id: str | None = None,
         **kwargs: object,
     ) -> AsyncIterator[AgentEvent]:
         provider_ref = ProviderRef.parse(provider)
@@ -45,8 +48,15 @@ class ModelRuntime:
             provider_state=provider_state,
             extra=dict(kwargs),
         )
+        effective_run_id = run_id or f"run_{uuid4().hex}"
+        sequence = 0
         async for event in adapter.stream_turn(request):
-            yield event
+            yield replace(
+                event,
+                run_id=event.run_id or effective_run_id,
+                sequence=event.sequence if event.sequence is not None else sequence,
+            )
+            sequence += 1
 
     async def run(
         self,
@@ -55,6 +65,7 @@ class ModelRuntime:
         model: str | None = None,
         input: str | list[object],
         provider_state: ProviderState | None = None,
+        run_id: str | None = None,
         **kwargs: object,
     ) -> TurnResult:
         events: list[AgentEvent] = []
@@ -65,6 +76,7 @@ class ModelRuntime:
             model=model,
             input=input,
             provider_state=provider_state,
+            run_id=run_id,
             **kwargs,
         ):
             events.append(event)
@@ -106,11 +118,21 @@ class AgentRuntimeFacade:
         return session
 
     async def stream(
-        self, session: SessionRef | AgentSession
+        self,
+        session: SessionRef | AgentSession,
+        *,
+        after_event_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
         adapter = self.registry.get_agent(session.provider)
-        async for event in adapter.stream_events(session):
-            yield event
+        run_id = f"run_{uuid4().hex}"
+        sequence = 0
+        async for event in adapter.stream_events(session, after_event_id=after_event_id):
+            yield replace(
+                event,
+                run_id=event.run_id or run_id,
+                sequence=event.sequence if event.sequence is not None else sequence,
+            )
+            sequence += 1
 
     async def run(
         self,
@@ -124,9 +146,11 @@ class AgentRuntimeFacade:
         async for event in self.stream(session):
             yield event
 
-    async def send_message(self, session: SessionRef | AgentSession, message: str) -> None:
+    async def send_message(
+        self, session: SessionRef | AgentSession, message: str
+    ) -> InvocationRef:
         adapter = self.registry.get_agent(session.provider)
-        await adapter.send_message(session, message)
+        return await adapter.send_message(session, message)
 
     async def approve(self, provider: str, approval_id: str, decision: ApprovalDecision) -> None:
         adapter = self.registry.get_agent(ProviderRef.parse(provider).provider_key)
@@ -136,9 +160,18 @@ class AgentRuntimeFacade:
         adapter = self.registry.get_agent(session.provider)
         await adapter.cancel(session)
 
-    async def list_artifacts(self, session: SessionRef | AgentSession) -> list[Artifact]:
+    async def list_artifacts(
+        self,
+        session: SessionRef | AgentSession,
+        *,
+        type: str | None = None,
+        after: str | None = None,
+        limit: int = 100,
+    ) -> ArtifactPage:
         adapter = self.registry.get_agent(session.provider)
-        return await adapter.list_artifacts(session)
+        return await adapter.list_artifacts(
+            session, type=type, after=after, limit=limit,
+        )
 
 
 @dataclass(slots=True)
@@ -206,8 +239,16 @@ class AgentRuntime:
         facades for direct model turns and agent sessions.
     """
 
-    def __init__(self, registry: ProviderRegistry | None = None) -> None:
+    def __init__(
+        self,
+        registry: ProviderRegistry | None = None,
+        *,
+        event_store: EventStore | None = None,
+        run_store: RunStore | None = None,
+    ) -> None:
         self.registry = registry or ProviderRegistry()
+        self.event_store: EventStore = event_store or InMemoryEventStore()
+        self.run_store: RunStore = run_store or InMemoryRunStore()
         self.models = ModelRuntime(self.registry)
         self.agents = AgentRuntimeFacade(self.registry)
         self.tools = ToolRuntimeFacade()
@@ -221,6 +262,7 @@ class AgentRuntime:
         tools: list[str] | None = None,
         tool_execution_context: dict[str, Any] | None = None,
         approval_policy: Any = None,
+        policy: Any = None,
         max_iterations: int = 8,
         mock_tools: bool = False,
         **kwargs: Any,
@@ -258,14 +300,20 @@ class AgentRuntime:
             stream_factory=stream_factory,
             tools=tool_runtime if tools else None,
             approval_policy=approval_policy,
+            policy=policy,
             max_iterations=max_iterations,
         )
+        run_id = f"run_{uuid4().hex}"
+        sequence = 0
         async for event in loop.run(
             input=input,
             provider_id=provider_ref.provider_key,
             mock_tools=mock_tools,
         ):
-            yield event
+            stamped = replace(event, run_id=run_id, sequence=sequence)
+            sequence += 1
+            await self.event_store.append(stamped)
+            yield stamped
 
     async def run(
         self,
@@ -276,6 +324,7 @@ class AgentRuntime:
         tools: list[str] | None = None,
         tool_execution_context: dict[str, Any] | None = None,
         approval_policy: Any = None,
+        policy: Any = None,
         max_iterations: int = 8,
         mock_tools: bool = False,
         output_type: type[T] | None = None,
@@ -301,6 +350,7 @@ class AgentRuntime:
             tools=tools,
             tool_execution_context=tool_execution_context,
             approval_policy=approval_policy,
+            policy=policy,
             max_iterations=max_iterations,
             mock_tools=mock_tools,
             **kwargs,

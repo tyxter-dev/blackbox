@@ -10,10 +10,16 @@ from agent_runtime.providers.base import AgentProvider, ModelProvider
 class ProviderRef:
     """Parsed provider reference.
 
-    Supported examples:
-    - ``openai/gpt-5`` -> provider_key="openai", resource="gpt-5"
-    - ``google/agent-platform/my-agent`` -> provider_key="google", resource="agent-platform/my-agent"
-    - ``echo`` -> provider_key="echo", resource=None
+    Either ``:`` or ``/`` works as the separator. ``:`` is the canonical form
+    at the high level (``model="openai:gpt-5.4"``) because ``/`` collides with
+    namespaced agent paths such as ``vertex-agent-engine/projects/foo/agent``.
+
+    Examples:
+    - ``"openai:gpt-5"`` -> provider_key="openai", resource="gpt-5"
+    - ``"openai/gpt-5"`` -> provider_key="openai", resource="gpt-5"
+    - ``"vertex-agent-engine/projects/foo/agent"`` -> provider_key="vertex-agent-engine",
+      resource="projects/foo/agent"
+    - ``"echo"`` -> provider_key="echo", resource=None
     """
 
     provider_key: str
@@ -21,6 +27,9 @@ class ProviderRef:
 
     @classmethod
     def parse(cls, value: str) -> ProviderRef:
+        if ":" in value:
+            head, _, tail = value.partition(":")
+            return cls(provider_key=head, resource=tail or None)
         head, sep, tail = value.partition("/")
         return cls(provider_key=head, resource=tail if sep else None)
 

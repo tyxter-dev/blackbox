@@ -66,7 +66,7 @@ runtime.tools.register(create_ticket)
 runtime.tools.register(search_customer)
 
 result = await runtime.run(
-    provider="openai/gpt-5.4",
+    provider="openai:gpt-5.4",
     input="Review this customer report and create a ticket if needed.",
     tools=["search_customer", "create_ticket"],
     output_type=TicketDecision,

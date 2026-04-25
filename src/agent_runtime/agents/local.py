@@ -3,12 +3,19 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import uuid4
 
 from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.artifacts import Artifact
+from agent_runtime.core.artifacts import ArtifactPage
 from agent_runtime.core.capabilities import AgentCapabilities
 from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef, SessionStatus
+from agent_runtime.core.sessions import (
+    AgentRef,
+    AgentSession,
+    InvocationRef,
+    SessionRef,
+    SessionStatus,
+)
 from agent_runtime.loop import AgentLoop, ApprovalPolicy
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.runtime import ModelRuntime
@@ -63,7 +70,12 @@ class LocalAgentProvider:
         self._sessions[session.id] = session
         return session
 
-    async def stream_events(self, session: SessionRef | AgentSession) -> AsyncIterator[AgentEvent]:
+    async def stream_events(
+        self,
+        session: SessionRef | AgentSession,
+        *,
+        after_event_id: str | None = None,
+    ) -> AsyncIterator[AgentEvent]:
         session_obj = self._session(session)
         session_obj.status = "running"
         yield AgentEvent(
@@ -123,9 +135,16 @@ class LocalAgentProvider:
             data={"agent_id": session_obj.agent_id},
         )
 
-    async def send_message(self, session: SessionRef | AgentSession, message: str) -> None:
+    async def send_message(
+        self, session: SessionRef | AgentSession, message: str
+    ) -> InvocationRef:
         session_obj = self._session(session)
         session_obj.task = f"{session_obj.task}\n\nUser: {message}"
+        return InvocationRef(
+            provider=self.provider_id,
+            session_id=session_obj.id,
+            id=f"inv_{uuid4().hex}",
+        )
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
         for loop in self._loops.values():
@@ -142,9 +161,16 @@ class LocalAgentProvider:
         if loop is not None:
             loop.cancel()
 
-    async def list_artifacts(self, session: SessionRef | AgentSession) -> list[Artifact]:
+    async def list_artifacts(
+        self,
+        session: SessionRef | AgentSession,
+        *,
+        type: str | None = None,
+        after: str | None = None,
+        limit: int = 100,
+    ) -> ArtifactPage:
         self._session(session)
-        return []
+        return ArtifactPage(items=[], next_cursor=None, has_more=False)
 
     def _session(self, session: SessionRef | AgentSession) -> AgentSession:
         if isinstance(session, AgentSession):

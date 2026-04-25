@@ -170,25 +170,38 @@ For providers with platform lifecycle features, the runtime can create/evaluate/
 
 ### 7.1 MVP scope
 
+The MVP must prove the complete local agent loop works end-to-end against a
+deterministic `ScriptedModelProvider` — not just expose the contract.
+
 The MVP must include:
 
-- `ModelProvider` protocol.
-- `AgentProvider` protocol.
-- Provider registry and routing.
-- Event model.
-- Run/session state model.
-- Session references.
-- Artifact model.
-- Approval model.
-- Local tool registry/runtime with context injection.
-- Tool registry facade on `AgentRuntime`.
-- `AgentResult[T]` data contract.
-- High-level `AgentRuntime.run(...)` contract for complete local model/tool loops.
-- Local model-backed `AgentProvider`.
-- Echo model provider for tests.
+- `ModelProvider` and `AgentProvider` Protocols.
+- Provider registry and routing (canonical separator: `:` at the high level,
+  `/` accepted for backward compatibility).
+- Event model with `run_id` and `sequence` correlation fields.
+- Run/session/`ProviderState` models.
+- `SessionRef`, `AgentRef`, `InvocationRef`.
+- Artifact model with `ArtifactPage` for paginated listing.
+- Approval model and minimal `Policy` Protocol with checkpoint constants.
+- Local tool registry/runtime with context injection and mock-tool support.
+- Tool registry facade on `AgentRuntime` (`runtime.tools`).
+- `AgentResult[T]` data contract with `OutputSpec` describing how the runtime
+  should produce structured output.
+- Optional `RawEnvelope` wrapper for sensitive raw provider payloads.
+- `EventStore` and `RunStore` Protocols plus `InMemoryEventStore` /
+  `InMemoryRunStore` defaults wired into `AgentRuntime`.
+- High-level `AgentRuntime.run(...)` and `AgentRuntime.stream(...)` that
+  execute the complete local model/tool loop against a registered model
+  provider, validated by tests using `ScriptedModelProvider`.
+- Local model-backed `AgentProvider` that delegates to the same `AgentLoop`.
+- Echo model provider for streaming tests.
 - OpenAI Responses-native model provider as the first real model adapter.
-- Provider stubs for Anthropic, Gemini, OpenAI cloud agents, Anthropic Managed Agents, and Google Agent Platform.
-- Pytest coverage for the contracts and local runtime.
+- Pytest coverage for every P0 requirement, including negative capability
+  tests (every advertised `False` capability must produce a typed runtime
+  error rather than a silent no-op).
+
+Speculative cloud-agent provider stubs are no longer mandatory for v0.1.
+Provider-specific implementations land one at a time with golden fixtures.
 
 ### 7.2 Post-MVP scope
 
@@ -508,7 +521,22 @@ Required fields:
 - `provider_state`: final provider continuation state when available,
 - `metadata`: usage, timing, provider, model, and diagnostic metadata.
 
-When `output_type` is provided, the runtime must validate the final model output before returning. Validation failures should be typed runtime errors and should include enough context for retry or debugging without leaking sensitive tool context.
+`OutputSpec` describes how the runtime should produce structured output:
+
+- `provider_native`: the provider supports strict schema output (e.g. OpenAI
+  Responses ``text.format``) and the runtime wires the schema down.
+- `finalizer_tool`: the runtime exposes a hidden ``submit_final_output`` tool
+  whose arguments are validated against the schema; the model finishes by
+  calling it.
+- `posthoc_parse` (default in v0.1): the runtime parses the final text after
+  generation completes.
+- `posthoc_parse_with_retry`: same as `posthoc_parse` but on failure the
+  runtime asks the model to repair, up to `max_validation_retries` times.
+
+Validation failures raise `OutputValidationError` (fail-fast in v0.1; retry
+behavior is opt-in via `posthoc_parse_with_retry`). The error carries the raw
+text and the underlying validator error so the application can decide how to
+recover.
 
 ## 11. Canonical event taxonomy
 
@@ -543,9 +571,13 @@ The library must define stable constants for common lifecycle events. Providers 
 | P0-R8 | Result collection | Model runtime can collect streamed text into a `TurnResult`. |
 | P0-R9 | Capability flags | Providers expose explicit capability objects. |
 | P0-R10 | Test scaffold | Unit tests cover registry, echo model, local agent, and tool runtime. |
-| P0-R11 | High-level agent loop contract | `AgentRuntime.run(...)` API exists and defines the blackbox `input + tools + output_type -> AgentResult[T]` contract, even if the first implementation supports only local model-backed loops. |
-| P0-R12 | Structured result contract | `AgentResult[T]` exists with typed output, text, events, items, artifacts, payloads, provider state, and metadata. |
-| P0-R13 | Tool facade | `AgentRuntime` exposes a tool registry facade usable by the high-level task runner. |
+| P0-R11 | High-level agent loop | `AgentRuntime.run(...)` executes a complete local model/tool loop using a deterministic `ScriptedModelProvider` and validates `AgentResult[T]`. Tests cover text-only, tool dispatch, multiple tools per turn, context injection, deferred payloads, mock tools, and structured output validation. |
+| P0-R12 | Structured result contract | `AgentResult[T]` exists with typed `output`, `text`, `events`, `items`, `artifacts`, `payloads`, `provider_state`, and `metadata`. `OutputSpec` exposes the four output strategies (`provider_native`, `finalizer_tool`, `posthoc_parse`, `posthoc_parse_with_retry`). |
+| P0-R13 | Tool facade | `AgentRuntime` exposes `runtime.tools` with `register / get / all_tools / to_provider_tools / call(..., mock=...)`. |
+| P0-R14 | Event correlation | Every event emitted by `runtime.run/.stream` carries a `run_id` (UUID per invocation) and a monotonic `sequence`. `EventStore.list_events(run_id, after_sequence=...)` returns the ordered tail. |
+| P0-R15 | Persistence interfaces | `EventStore` and `RunStore` Protocols exist with `InMemoryEventStore` / `InMemoryRunStore` defaults. JSONL/SQLite implementations land in P1. |
+| P0-R16 | Policy interface | A minimal `Policy` Protocol with checkpoint constants exists. The legacy `approval_policy` callable is wrapped as one implementation. Declarative rules stay P2. |
+| P0-R17 | Negative capability honesty | Every capability flag a provider advertises as `False` is covered by a test that the corresponding operation raises a typed runtime error rather than silently no-oping. |
 
 ### 12.2 P1 requirements
 
@@ -575,7 +607,9 @@ The library must define stable constants for common lifecycle events. Providers 
 | P2-R5 | Chat compatibility export | Export chat messages when needed, clearly marked as a projection. |
 | P2-R6 | Persistence adapters | Persist sessions, events, artifacts, and provider state to external stores. |
 | P2-R7 | Cost and usage accounting | Aggregate usage across model turns, tools, and cloud sessions. |
-| P2-R8 | Policy engine | Centralized permission, approval, and data-access policy layer. |
+| P2-R8 | Policy engine | Declarative permission, approval, and data-access policy layer on top of the P0 `Policy` Protocol. |
+| P2-R9 | Agent handoffs | Reserve `handoff.requested / .started / .completed / .failed` events. Allow one agent to delegate to another specialized agent without modeling the delegation as a fake function call. |
+| P2-R10 | Agent-as-tool | Reserve `agent_tool.call.started / .completed` events. Expose another agent as a callable tool while preserving session and trace boundaries. |
 
 ## 13. Provider-specific requirements
 
@@ -629,9 +663,15 @@ Requirements:
 - Preserve thinking/reasoning metadata where supported.
 - Avoid requiring alternating chat-message normalization in the runtime core.
 
-### 13.4 Anthropic Managed Agents provider
+### 13.4 Claude Code agent provider
 
-Target adapter: `AnthropicManagedAgentProvider`.
+Target adapter: `ClaudeCodeAgentProvider`.
+
+The earlier name "Anthropic Managed Agents" was speculative. Claude Code /
+Agent SDK is the concrete public surface today (headless mode, file
+operations, code execution, web search, MCP extensibility, permissions,
+session management). A deprecated `AnthropicManagedAgentProvider` alias is
+preserved temporarily.
 
 Requirements:
 
@@ -654,9 +694,14 @@ Requirements:
 - Emit text, function call, function response, and reasoning-related events.
 - Avoid synthetic IDs except as a legacy fallback.
 
-### 13.6 Google Agent Platform provider
+### 13.6 Vertex AI Agent Engine provider
 
-Target adapter: `GoogleAgentPlatformProvider`.
+Target adapter: `VertexAIAgentEngineProvider`.
+
+Google currently exposes two distinct surfaces: ADK (local Python runtime)
+and Vertex AI Agent Engine (cloud-managed sessions, evaluation, deployment,
+monitoring). This adapter targets the cloud-managed surface. A deprecated
+`GoogleAgentPlatformProvider` alias is preserved temporarily.
 
 Requirements:
 
@@ -768,14 +813,33 @@ The library should support two paths:
 1. **Local MCP dispatch:** runtime connects to MCP servers and executes tools locally.
 2. **Provider-native remote MCP:** provider is given an MCP server configuration and handles listing/calling tools remotely.
 
-Requirements:
+Transport requirements:
 
-- MCP server specs for stdio and HTTP.
-- Namespaced tool identities.
-- Approval policy support.
-- Event emission for list/call/approval/result.
-- Raw provider MCP event preservation.
-- Capability checks per provider.
+- stdio,
+- HTTP/SSE,
+- streamable HTTP per the current MCP spec.
+
+Auth requirements:
+
+- a token-provider interface for credential acquisition,
+- OAuth and resource-indicator support for HTTP MCP servers,
+- per-server credential scoping,
+- no token leakage into logs or persisted events,
+- explicit auth-challenge events on the runtime stream.
+
+Tool identity requirements:
+
+- every MCP tool is namespaced by its server (`mcp:<server>.<tool>`),
+- stable `ToolRef` IDs,
+- per-server trust policy and allowlist/denylist support.
+
+Runtime control requirements:
+
+- `list_tools` result caching with explicit invalidation,
+- max output size and timeout per call,
+- approval gating per tool or per server,
+- raw and redacted event preservation,
+- capability negotiation per provider.
 
 ## 17. Approval and safety requirements
 
@@ -923,101 +987,89 @@ For each provider, capture representative raw provider responses/events and asse
 
 ## 22. Milestones
 
-### M0: Scaffold complete
+The order is shaped to prove the core loop before fanning out into provider
+breadth, so v0.1 ships small but real.
 
-Status: initial scaffold.
+### M0: Local loop works
+
+Status: complete.
 
 Deliverables:
 
-- package structure,
-- protocols,
-- event/state/session/artifact/approval models,
-- registry,
-- echo model provider,
-- local agent provider,
-- local tool runtime,
-- `AgentResult[T]` contract,
-- high-level `AgentRuntime.run(...)` contract,
-- baseline tests.
+- package structure, protocols, event/state/session/artifact/approval models,
+- `EventStore` and `RunStore` Protocols + in-memory defaults,
+- `Policy` Protocol + checkpoint constants,
+- echo model provider, `ScriptedModelProvider` test fixture,
+- local tool runtime with context injection and mock-tool support,
+- `runtime.tools` facade,
+- `AgentLoop` shared by `LocalAgentProvider` and `AgentRuntime.run`,
+- high-level `runtime.run/.stream` with `AgentResult[T]` and `OutputSpec`,
+- baseline test suite covering every P0 requirement.
 
 ### M1: OpenAI Responses-native model provider
+
+Status: complete.
 
 Deliverables:
 
 - real provider adapter,
-- text streaming,
-- provider state,
-- function-call events,
-- hosted tool events where available,
-- tool-search event mapping,
-- golden tests.
+- text streaming, reasoning deltas, function-call events,
+- hosted-tool fallback to `MODEL_ITEM_CREATED`,
+- provider state via `previous_response_id`,
+- typed events for stable items, generic fallback for evolving ones,
+- golden fixtures for streaming events.
 
-### M2: Local coding-agent runtime
+### M2: Policy, approvals, and workspace
 
 Deliverables:
 
-- complete local model/tool loop,
-- provider-native tool-call continuation,
-- structured output validation,
-- local workspace spec,
+- richer policy checkpoints (`before_command`, `before_workspace_write`,
+  `before_artifact_export`, `before_final_output`),
+- workspace abstraction: `WorkspaceRef`, `WorkspaceMount`, `FileChange`,
+  `PatchArtifact`, `CommandSpec`, `CommandResult`,
 - file/patch events,
 - command execution policy hooks,
-- local tools integrated into model loop,
-- approval callbacks,
-- artifacts.
+- artifact lifecycle wired through `ArtifactPage`.
 
-### M3: OpenAI cloud/Codex-style agent provider
+### M3: MCP
 
 Deliverables:
 
-- create/resume session,
-- stream logs/events,
-- list artifacts,
-- cancel sessions,
-- preserve provider raw data,
-- integration tests where possible.
+- local MCP connector (stdio + HTTP/SSE + streamable HTTP),
+- token-provider interface and OAuth resource-indicator support,
+- provider-native remote MCP configuration passthrough,
+- namespaced `ToolRef` IDs (`mcp:<server>.<tool>`),
+- approval policy integration,
+- `list_tools` caching with explicit invalidation.
 
-### M4: Anthropic Managed Agents provider
+### M4: Cloud / coding-agent providers
 
-Deliverables:
+Deliverables in priority order:
 
-- agent/environment/session mapping,
-- SSE/event stream mapping,
-- custom tool-use result flow,
-- tool confirmation approval flow,
-- resumption metadata.
+- `OpenAICloudAgentProvider` (Codex-style sessions, sandboxed agents),
+- `ClaudeCodeAgentProvider` (Agent SDK headless mode + sessions),
+- `VertexAIAgentEngineProvider` (Sessions, Memory, Evaluation, Deployment).
 
-### M5: Google Agent Platform provider
+### M5: Observability and persistence adapters
 
 Deliverables:
 
-- Agents CLI wrapper,
-- create/run/eval/deploy/observe surfaces,
-- structured event parsing,
-- artifacts for generated projects, evals, deployments, and logs.
+- JSONL `EventStore` and SQLite `RunStore`,
+- OpenTelemetry trace exporter,
+- replay/debug tooling against stored events.
 
-### M6: MCP and dynamic tool loading
+### M6: Lifecycle (evals + deployments)
 
 Deliverables:
 
-- local MCP connector,
-- remote MCP provider config support,
-- tool catalog,
-- provider-native tool-search bridge,
-- approval policy support.
+- provider eval surface for adapters that expose it,
+- deployment events and platform lifecycle APIs,
+- cost and usage accounting (P2-R7).
 
 ### M7: Hardening and release
 
-Deliverables:
-
-- docs,
-- examples,
-- contract tests,
-- integration test gates,
-- type checking,
-- ruff,
-- changelog,
-- release candidate.
+Deliverables: docs, examples, contract tests, integration test gates, type
+checking, ruff, changelog, release candidate.
 
 ## 23. API examples
 

@@ -24,3 +24,16 @@ class Artifact:
     @property
     def ref(self) -> ArtifactRef:
         return ArtifactRef(id=self.id, uri=self.uri)
+
+
+@dataclass(slots=True, frozen=True)
+class ArtifactPage:
+    """A page of artifacts returned by ``AgentProvider.list_artifacts``.
+
+    ``next_cursor`` is opaque to the runtime; pass it back as ``after`` to
+    retrieve the next page when the provider supports cursor-based paging.
+    """
+
+    items: list[Artifact]
+    next_cursor: str | None = None
+    has_more: bool = False

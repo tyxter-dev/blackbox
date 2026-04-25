@@ -5,10 +5,10 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.artifacts import Artifact, ArtifactRef
+from agent_runtime.core.artifacts import Artifact, ArtifactPage, ArtifactRef
 from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities
 from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
+from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
 
 
@@ -101,10 +101,17 @@ class AgentProvider(Protocol):
     async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> AgentSession:
         ...
 
-    def stream_events(self, session: SessionRef | AgentSession) -> AsyncIterator[AgentEvent]:
+    def stream_events(
+        self,
+        session: SessionRef | AgentSession,
+        *,
+        after_event_id: str | None = None,
+    ) -> AsyncIterator[AgentEvent]:
         ...
 
-    async def send_message(self, session: SessionRef | AgentSession, message: str) -> None:
+    async def send_message(
+        self, session: SessionRef | AgentSession, message: str
+    ) -> InvocationRef:
         ...
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
@@ -113,5 +120,12 @@ class AgentProvider(Protocol):
     async def cancel(self, session: SessionRef | AgentSession) -> None:
         ...
 
-    async def list_artifacts(self, session: SessionRef | AgentSession) -> list[Artifact]:
+    async def list_artifacts(
+        self,
+        session: SessionRef | AgentSession,
+        *,
+        type: str | None = None,
+        after: str | None = None,
+        limit: int = 100,
+    ) -> ArtifactPage:
         ...

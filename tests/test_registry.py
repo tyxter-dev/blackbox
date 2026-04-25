@@ -13,6 +13,18 @@ def test_provider_ref_parse_with_resource() -> None:
     assert ref.resource == "gpt-5"
 
 
+def test_provider_ref_parse_with_colon_separator() -> None:
+    ref = ProviderRef.parse("openai:gpt-5.4")
+    assert ref.provider_key == "openai"
+    assert ref.resource == "gpt-5.4"
+
+
+def test_provider_ref_parse_colon_takes_precedence_over_slash() -> None:
+    ref = ProviderRef.parse("vertex-agent-engine:projects/foo/agent")
+    assert ref.provider_key == "vertex-agent-engine"
+    assert ref.resource == "projects/foo/agent"
+
+
 def test_provider_ref_parse_without_resource() -> None:
     ref = ProviderRef.parse("echo")
     assert ref.provider_key == "echo"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from agent_runtime.core.artifacts import Artifact
 from agent_runtime.core.events import AgentEvent
@@ -9,6 +9,40 @@ from agent_runtime.core.items import RunItem
 from agent_runtime.core.state import ProviderState
 
 T = TypeVar("T")
+
+
+OutputStrategy = Literal[
+    "provider_native",
+    "finalizer_tool",
+    "posthoc_parse",
+    "posthoc_parse_with_retry",
+]
+
+
+@dataclass(slots=True)
+class OutputSpec:
+    """How the runtime should produce structured output.
+
+    ``schema`` is the target type (Pydantic model, dataclass, or ``str``).
+    ``strategy`` selects the validation pipeline:
+
+    - ``provider_native``: provider supports strict schema output (e.g. OpenAI
+      Responses ``text.format``); the runtime wires the schema down to the
+      adapter and trusts the parsed result.
+    - ``finalizer_tool``: the runtime exposes a hidden ``submit_final_output``
+      tool whose arguments are validated against ``schema``; the model calls
+      it to finish.
+    - ``posthoc_parse``: the runtime parses the final text against ``schema``
+      after generation completes.
+    - ``posthoc_parse_with_retry``: same as ``posthoc_parse`` but on failure
+      the runtime asks the model to repair its output, up to
+      ``max_validation_retries`` times.
+    """
+
+    schema: type[Any] | dict[str, Any] | None = None
+    strategy: OutputStrategy = "posthoc_parse"
+    max_validation_retries: int = 1
+    allow_partial: bool = False
 
 
 @dataclass(slots=True)

@@ -12,9 +12,17 @@ class AgentEvent:
 
     Events are the main public stream type. Provider-native payloads are preserved in
     ``raw`` and provider-specific metadata can be stored in ``data``.
+
+    Correlation fields:
+    - ``run_id`` is minted once per :meth:`AgentRuntime.run` / :meth:`AgentRuntime.stream`
+      invocation and stamped on every event so a stream can be replayed or audited.
+    - ``sequence`` is a monotonic integer assigned per-run, useful for ordering
+      events that share a timestamp.
     """
 
     type: str
+    run_id: str | None = None
+    sequence: int | None = None
     session_id: str | None = None
     provider: str | None = None
     item_id: str | None = None
