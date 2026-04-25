@@ -96,7 +96,7 @@ Status legend:
 | Echo model provider | Supported | `EchoModelProvider` | Dependency-free provider for tests/examples. |
 | OpenAI Responses model provider | Supported | `OpenAIResponsesProvider` | Native Responses streaming adapter with typed event mapping and raw payload preservation. |
 | Anthropic Messages model provider | Supported | `AnthropicMessagesProvider` | Native Messages streaming adapter with typed event mapping, tool conversion, reasoning deltas, provider state, and raw payload preservation. |
-| Gemini GenerateContent model provider | Partial | `GeminiGenerateContentProvider` | Stub/provider shell with capabilities; full API integration is not implemented. |
+| Gemini GenerateContent model provider | Supported | `GeminiGenerateContentProvider` | Native GenerateContent streaming adapter with text, reasoning, function-call mapping, function-response continuation, and provider state. |
 
 ## Agent Sessions
 
@@ -126,7 +126,6 @@ Status legend:
 
 ## Explicitly Not Supported Yet
 
-- Full Gemini GenerateContent API integration.
 - OpenAI cloud/Codex-style agent execution.
 - Claude Code or Vertex Agent Engine execution.
 - Local MCP transport dispatch or provider-native remote MCP wiring.

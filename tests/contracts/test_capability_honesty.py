@@ -66,7 +66,13 @@ def test_anthropic_messages_capabilities_match_prd() -> None:
 
 def test_gemini_capabilities_match_prd() -> None:
     caps = GeminiGenerateContentProvider(api_key="x").capabilities()
-    assert caps == ModelCapabilities()
+    assert caps.supports_streaming_events
+    assert caps.supports_function_tools
+    assert caps.supports_parallel_tool_calls
+    assert caps.supports_hosted_tools
+    assert caps.supports_remote_mcp is False  # native MCP not supported per PRD
+    assert caps.supports_reasoning_items
+    assert caps.supports_provider_state
 
 
 def test_local_agent_capabilities_default_no_approvals() -> None:
@@ -167,8 +173,25 @@ async def test_cloud_agent_stub_create_agent_raises_unsupported_when_configured(
         await provider.create_agent(AgentSpec(name="x"))
 
 
-async def test_gemini_scaffold_raises_unsupported_when_configured() -> None:
-    provider = GeminiGenerateContentProvider(api_key="x")
-    with pytest.raises(UnsupportedFeatureError):
+async def test_gemini_requires_credentials_or_client() -> None:
+    provider = GeminiGenerateContentProvider()
+    with pytest.raises(ProviderNotConfiguredError):
         async for _ in provider.stream_turn(TurnRequest(model="gemini-test", input="hi")):
             pass
+
+
+async def test_gemini_client_satisfies_streaming_capability() -> None:
+    class EmptyModels:
+        async def generate_content_stream(self, **kwargs: object):
+            if False:
+                yield None
+
+    class EmptyClient:
+        aio = type("Aio", (), {"models": EmptyModels()})()
+
+    provider = GeminiGenerateContentProvider(client=EmptyClient())
+    events = [
+        event
+        async for event in provider.stream_turn(TurnRequest(model="gemini-test", input="hi"))
+    ]
+    assert events[-1].type == "model.completed"

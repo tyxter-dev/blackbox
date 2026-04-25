@@ -302,11 +302,9 @@ pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
 
 ## Next implementation targets
 
-1. Gemini GenerateContent-native `ModelProvider`.
-2. OpenAI cloud / Codex-style `AgentProvider`.
-3. Claude Code `AgentProvider`.
-4. Vertex AI Agent Engine `AgentProvider`.
-5. MCP local connector + provider-native remote MCP wiring.
-6. AgentLoop integration of workspace ops as a tool backend with approval
+1. OpenAI cloud / Codex-style `AgentProvider`.
+2. Claude Code `AgentProvider`.
+3. Vertex AI Agent Engine `AgentProvider`.
+4. MCP local connector + provider-native remote MCP wiring.
+5. AgentLoop integration of workspace ops as a tool backend with approval
    flow wired through.
-
