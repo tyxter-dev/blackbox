@@ -1,0 +1,222 @@
+from __future__ import annotations
+
+import asyncio
+
+from agent_runtime import AgentRuntime, AgentSpec, EventTypes
+from agent_runtime.agents.local import LocalAgentProvider
+from agent_runtime.core.approvals import ApprovalDecision
+from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
+from tests.fixtures.scripted_model import (
+    ScriptedModelProvider,
+    text_only_turn,
+    tool_call_turn,
+)
+
+
+def _build_runtime(
+    *,
+    tool_runtime: ToolRuntime | None = None,
+    approval_policy=None,
+    max_iterations: int = 8,
+) -> tuple[AgentRuntime, ScriptedModelProvider, LocalAgentProvider]:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    local = LocalAgentProvider(
+        runtime.models,
+        tools=tool_runtime,
+        approval_policy=approval_policy,
+        max_iterations=max_iterations,
+    )
+    runtime.registry.register_agent(local)
+    return runtime, scripted, local
+
+
+async def _drive_session(runtime: AgentRuntime, model: str = "scripted/test") -> list:
+    await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="default"))
+    session = await runtime.agents.create_session(
+        provider="local", agent="default", task="go", model=model,
+    )
+    return [event async for event in runtime.agents.stream(session)], session
+
+
+async def test_tool_call_loop_dispatches_and_feeds_results_back() -> None:
+    registry = ToolRegistry()
+    registry.register(
+        lambda x: ToolResult(content=f"sum={x + 1}"),
+        name="add_one",
+        description="Add one to x.",
+    )
+    tools = ToolRuntime(registry)
+
+    runtime, scripted, _ = _build_runtime(tool_runtime=tools)
+    scripted.queue(tool_call_turn(call_id="c1", name="add_one", arguments={"x": 41}))
+    scripted.queue(text_only_turn("done: 42"))
+
+    events, session = await _drive_session(runtime)
+
+    types = [e.type for e in events]
+    assert types[0] == EventTypes.SESSION_STARTED
+    assert EventTypes.TOOL_CALL_REQUESTED in types
+    assert EventTypes.TOOL_CALL_STARTED in types
+    assert EventTypes.TOOL_CALL_COMPLETED in types
+    assert types[-1] == EventTypes.SESSION_COMPLETED
+    assert session.status == "completed"
+
+    # Second turn was driven with tool result items as input
+    assert len(scripted.calls) == 2
+    follow_up_input = scripted.calls[1].input
+    assert isinstance(follow_up_input, list) and len(follow_up_input) == 1
+    assert follow_up_input[0].data["content"] == "sum=42"
+
+
+async def test_tool_call_without_tool_runtime_raises() -> None:
+    runtime, scripted, _ = _build_runtime()
+    scripted.queue(tool_call_turn(call_id="c1", name="missing", arguments={}))
+
+    await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="default"))
+    session = await runtime.agents.create_session(
+        provider="local", agent="default", task="go", model="scripted/test",
+    )
+    try:
+        async for _ in runtime.agents.stream(session):
+            pass
+    except Exception as exc:
+        assert "ToolRuntime" in str(exc)
+    else:
+        raise AssertionError("expected SessionError")
+
+
+async def test_approval_pause_and_approve() -> None:
+    registry = ToolRegistry()
+    registry.register(lambda: ToolResult(content="ok"), name="dangerous", description="d")
+    tools = ToolRuntime(registry)
+
+    runtime, scripted, local = _build_runtime(
+        tool_runtime=tools,
+        approval_policy=lambda name, args: name == "dangerous",
+    )
+    scripted.queue(tool_call_turn(call_id="c1", name="dangerous", arguments={}))
+    scripted.queue(text_only_turn("done"))
+
+    await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="d"))
+    session = await runtime.agents.create_session(
+        provider="local", agent="d", task="go", model="scripted/test",
+    )
+
+    events: list = []
+    stream = runtime.agents.stream(session)
+
+    async def collector():
+        async for event in stream:
+            events.append(event)
+
+    task = asyncio.create_task(collector())
+
+    # Wait until the runtime registers the approval future
+    for _ in range(100):
+        if local._approvals:
+            break
+        await asyncio.sleep(0.01)
+
+    approval_id = next(iter(local._approvals))
+    assert session.status == "waiting"
+    await runtime.agents.approve(
+        provider="local",
+        approval_id=approval_id,
+        decision=ApprovalDecision.approve("ok"),
+    )
+
+    await task
+    types = [e.type for e in events]
+    assert EventTypes.APPROVAL_REQUESTED in types
+    assert EventTypes.APPROVAL_APPROVED in types
+    assert EventTypes.TOOL_CALL_COMPLETED in types
+    assert types[-1] == EventTypes.SESSION_COMPLETED
+
+
+async def test_approval_denial_skips_tool_and_records_failure() -> None:
+    registry = ToolRegistry()
+    registry.register(lambda: ToolResult(content="ok"), name="dangerous", description="d")
+    tools = ToolRuntime(registry)
+
+    runtime, scripted, local = _build_runtime(
+        tool_runtime=tools,
+        approval_policy=lambda name, args: True,
+    )
+    scripted.queue(tool_call_turn(call_id="c1", name="dangerous", arguments={}))
+    scripted.queue(text_only_turn("noop"))
+
+    await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="d"))
+    session = await runtime.agents.create_session(
+        provider="local", agent="d", task="go", model="scripted/test",
+    )
+
+    events: list = []
+    stream = runtime.agents.stream(session)
+    task = asyncio.create_task(_collect(stream, events))
+
+    for _ in range(100):
+        if local._approvals:
+            break
+        await asyncio.sleep(0.01)
+
+    approval_id = next(iter(local._approvals))
+    await runtime.agents.approve(
+        provider="local",
+        approval_id=approval_id,
+        decision=ApprovalDecision.deny("blocked"),
+    )
+
+    await task
+    types = [e.type for e in events]
+    assert EventTypes.APPROVAL_DENIED in types
+    assert EventTypes.TOOL_CALL_STARTED not in types  # never executed
+    follow_up_input = scripted.calls[1].input
+    assert follow_up_input[0].data["error"] == "denied_by_approval"
+
+
+async def test_max_iterations_fails_session() -> None:
+    registry = ToolRegistry()
+    registry.register(lambda: ToolResult(content="loop"), name="loop", description="l")
+    tools = ToolRuntime(registry)
+
+    runtime, scripted, _ = _build_runtime(tool_runtime=tools, max_iterations=2)
+    # Three tool-call turns; max_iterations=2 should trip on the 3rd request
+    for _ in range(3):
+        scripted.queue(tool_call_turn(call_id="x", name="loop", arguments={}))
+
+    events, session = await _drive_session(runtime)
+    assert session.status == "failed"
+    assert events[-1].type == EventTypes.SESSION_FAILED
+    assert events[-1].data["reason"] == "max_iterations_reached"
+
+
+async def test_cancel_between_turns() -> None:
+    registry = ToolRegistry()
+    registry.register(lambda: ToolResult(content="x"), name="t", description="t")
+    tools = ToolRuntime(registry)
+
+    runtime, scripted, _ = _build_runtime(tool_runtime=tools)
+    scripted.queue(tool_call_turn(call_id="c1", name="t", arguments={}))
+    scripted.queue(text_only_turn("won't be reached"))
+
+    await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="d"))
+    session = await runtime.agents.create_session(
+        provider="local", agent="d", task="go", model="scripted/test",
+    )
+
+    events: list = []
+    async for event in runtime.agents.stream(session):
+        events.append(event)
+        if event.type == EventTypes.TOOL_CALL_COMPLETED:
+            await runtime.agents.cancel(session)
+
+    types = [e.type for e in events]
+    assert EventTypes.SESSION_CANCELLED in types
+    assert types[-1] == EventTypes.SESSION_CANCELLED
+
+
+async def _collect(stream, sink: list) -> None:
+    async for event in stream:
+        sink.append(event)

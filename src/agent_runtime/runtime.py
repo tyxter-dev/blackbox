@@ -6,6 +6,7 @@ from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
+from agent_runtime.core.state import ProviderState
 from agent_runtime.providers.base import AgentSpec, TaskSpec, TurnRequest, TurnResult
 from agent_runtime.providers.registry import ProviderRegistry, ProviderRef
 
@@ -20,6 +21,7 @@ class ModelRuntime:
         provider: str,
         model: str | None = None,
         input: str | list[object],
+        provider_state: ProviderState | None = None,
         **kwargs: object,
     ):
         provider_ref = ProviderRef.parse(provider)
@@ -27,7 +29,12 @@ class ModelRuntime:
         if not model_name:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
         adapter = self.registry.get_model(provider_ref.provider_key)
-        request = TurnRequest(model=model_name, input=input, extra=dict(kwargs))
+        request = TurnRequest(
+            model=model_name,
+            input=input,
+            provider_state=provider_state,
+            extra=dict(kwargs),
+        )
         async for event in adapter.stream_turn(request):
             yield event
 
@@ -37,17 +44,32 @@ class ModelRuntime:
         provider: str,
         model: str | None = None,
         input: str | list[object],
+        provider_state: ProviderState | None = None,
         **kwargs: object,
     ) -> TurnResult:
         events: list[AgentEvent] = []
         text_parts: list[str] = []
-        async for event in self.stream(provider=provider, model=model, input=input, **kwargs):
+        captured_state: ProviderState | None = None
+        async for event in self.stream(
+            provider=provider,
+            model=model,
+            input=input,
+            provider_state=provider_state,
+            **kwargs,
+        ):
             events.append(event)
             if event.type == EventTypes.MODEL_TEXT_DELTA:
                 delta = event.data.get("delta")
                 if isinstance(delta, str):
                     text_parts.append(delta)
-        return TurnResult(text="".join(text_parts), events=events)
+            maybe_state = event.data.get("provider_state")
+            if isinstance(maybe_state, ProviderState):
+                captured_state = maybe_state
+        return TurnResult(
+            text="".join(text_parts),
+            events=events,
+            provider_state=captured_state,
+        )
 
 
 @dataclass(slots=True)
