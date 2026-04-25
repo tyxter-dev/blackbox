@@ -63,6 +63,7 @@ await runtime.models.stream(...)
 | 1.12 | ✅ | Raw provider payload | `golden/openai/test_responses_event_mapping.py::test_hosted_tool_falls_back_to_generic_item_event`, `golden/anthropic/test_messages_event_mapping.py::test_hosted_block_falls_back_to_generic_item_event` | Events keep raw provider data safely. |
 | 1.13 | ✅ | Anthropic Messages adapter parity | `golden/anthropic/test_messages_event_mapping.py` (8 tests) | Second real provider maps streaming events without flattening to chat. |
 | 1.14 | ✅ | Gemini GenerateContent adapter parity | `golden/gemini/test_generate_content_event_mapping.py`, `integration/gemini/test_generate_content_smoke.py` | Third real provider maps streaming events without flattening to chat; live smoke is gated by `GOOGLE_API_KEY`. |
+| 1.15 | ✅ | xAI Responses adapter parity | `golden/openai/test_responses_event_mapping.py::test_openai_compatible_subclass_preserves_provider_identity`, `integration/xai/test_responses_smoke.py` | OpenAI-compatible xAI Responses maps events and provider state under the `xai` provider identity; live smoke is gated by `XAI_API_KEY`. |
 
 ---
 

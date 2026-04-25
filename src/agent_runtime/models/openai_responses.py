@@ -43,9 +43,16 @@ class OpenAIResponsesProvider:
 
     provider_id = "openai"
 
-    def __init__(self, *, api_key: str | None = None, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        client: Any | None = None,
+        base_url: str | None = None,
+    ) -> None:
         self.api_key = api_key
         self._client = client
+        self.base_url = base_url
 
     def capabilities(self, model: str | None = None) -> ModelCapabilities:
         return ModelCapabilities(
@@ -75,7 +82,10 @@ class OpenAIResponsesProvider:
                 "OpenAIResponsesProvider needs the 'openai' package; install with the "
                 "[openai] extra."
             ) from exc
-        self._client = AsyncOpenAI(api_key=self.api_key)
+        client_kwargs: dict[str, Any] = {"api_key": self.api_key}
+        if self.base_url is not None:
+            client_kwargs["base_url"] = self.base_url
+        self._client = AsyncOpenAI(**client_kwargs)
         return self._client
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
@@ -102,7 +112,7 @@ class OpenAIResponsesProvider:
                 f"OpenAI Responses stream failed: {exc!s}"
             ) from exc
 
-        provider_state = _build_provider_state(final_response)
+        provider_state = _build_provider_state(final_response, provider=self.provider_id)
         yield AgentEvent(
             type=EventTypes.MODEL_COMPLETED,
             provider=self.provider_id,
@@ -260,11 +270,11 @@ def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
     )
 
 
-def _build_provider_state(final_response: Any) -> ProviderState:
+def _build_provider_state(final_response: Any, *, provider: str) -> ProviderState:
     response_id = _attr(final_response, "id")
     output = _attr(final_response, "output") or []
     return ProviderState(
-        provider="openai",
+        provider=provider,
         previous_response_id=response_id,
         native_history=list(output) if isinstance(output, list) else [],
         continuation={"previous_response_id": response_id} if response_id else {},

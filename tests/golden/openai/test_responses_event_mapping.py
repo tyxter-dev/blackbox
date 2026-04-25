@@ -5,6 +5,7 @@ from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfigu
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.providers.base import TurnRequest
 from tests.fixtures.fake_openai_client import (
     FakeOpenAIClient,
@@ -114,6 +115,28 @@ async def test_provider_state_drives_previous_response_id() -> None:
     )
 
     assert client.responses.seen_kwargs[0]["previous_response_id"] == "resp_prev"
+
+
+async def test_openai_compatible_subclass_preserves_provider_identity() -> None:
+    client = FakeOpenAIClient()
+    msg = item("message", id_="msg_xai")
+    client.queue(
+        events=[
+            evt("response.output_item.added", item=msg),
+            evt("response.output_text.delta", delta="pong", item_id="msg_xai"),
+            evt("response.output_item.done", item=msg),
+        ],
+        final_response=final_response(id_="resp_xai", output=[msg]),
+    )
+
+    runtime = AgentRuntime()
+    runtime.registry.register_model(XAIResponsesProvider(client=client))
+    result = await runtime.models.run(provider="xai/grok-4", input="ping")
+
+    assert result.text == "pong"
+    assert result.provider_state is not None
+    assert result.provider_state.provider == "xai"
+    assert {event.provider for event in result.events} == {"xai"}
 
 
 async def test_function_result_run_items_become_function_call_outputs() -> None:

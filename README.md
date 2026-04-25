@@ -154,6 +154,26 @@ async for event in runtime.models.stream(
         print(event.data["delta"], end="")
 ```
 
+## xAI Responses model provider
+
+`XAIResponsesProvider` reuses the OpenAI-compatible Responses adapter against
+`https://api.x.ai/v1`. It preserves xAI response IDs in `ProviderState`, maps
+Responses stream events into the same runtime events, and keeps conservative
+capability flags for surfaces that are not wired as native xAI features here
+(`tool_search`, client-executed search, and remote MCP).
+
+```python
+from agent_runtime import AgentRuntime
+from agent_runtime.models.xai_responses import XAIResponsesProvider
+
+runtime = AgentRuntime()
+runtime.registry.register_model(XAIResponsesProvider(api_key="..."))
+
+result = await runtime.models.run(
+    provider="xai", model="grok-4", input="Reply with exactly: pong"
+)
+```
+
 ## Anthropic Messages-native model provider
 
 The second real `ModelProvider` is implemented and wires the Messages API
@@ -326,6 +346,7 @@ events = connector.drain_events()
 pip install -e .[dev]
 pytest                            # offline suite
 pytest -m integration_openai      # network-gated, requires OPENAI_API_KEY
+pytest -m integration_xai         # network-gated, requires XAI_API_KEY
 pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
 pytest -m integration_gemini      # network-gated, requires GOOGLE_API_KEY
 ```

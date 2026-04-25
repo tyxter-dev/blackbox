@@ -32,6 +32,7 @@ from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.echo import EchoModelProvider
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.providers.base import AgentProvider, TaskSpec, TurnRequest
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
@@ -74,6 +75,20 @@ def test_gemini_capabilities_match_prd() -> None:
     assert caps.supports_parallel_tool_calls
     assert caps.supports_hosted_tools
     assert caps.supports_remote_mcp is False  # native MCP not supported per PRD
+    assert caps.supports_reasoning_items
+    assert caps.supports_provider_state
+    assert caps.supports_structured_output is False
+
+
+def test_xai_responses_capabilities_match_prd() -> None:
+    caps = XAIResponsesProvider(api_key="x").capabilities()
+    assert caps.supports_streaming_events
+    assert caps.supports_function_tools
+    assert caps.supports_parallel_tool_calls
+    assert caps.supports_hosted_tools
+    assert caps.supports_tool_search is False
+    assert caps.supports_client_executed_tool_search is False
+    assert caps.supports_remote_mcp is False
     assert caps.supports_reasoning_items
     assert caps.supports_provider_state
     assert caps.supports_structured_output is False

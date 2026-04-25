@@ -96,6 +96,7 @@ Status legend:
 | Direct model stream | Supported | `runtime.models.stream(...)` | Streams provider-normalized events. |
 | Echo model provider | Supported | `EchoModelProvider` | Dependency-free provider for tests/examples. |
 | OpenAI Responses model provider | Supported | `OpenAIResponsesProvider` | Native Responses streaming adapter with typed event mapping and raw payload preservation. |
+| xAI Responses model provider | Supported | `XAIResponsesProvider` | OpenAI-compatible Responses adapter pointed at xAI, with typed event mapping, raw payload preservation, and conservative capability flags for unsupported hosted search/MCP surfaces. |
 | Anthropic Messages model provider | Supported | `AnthropicMessagesProvider` | Native Messages streaming adapter with typed event mapping, tool conversion, reasoning deltas, provider state, and raw payload preservation. |
 | Gemini GenerateContent model provider | Supported | `GeminiGenerateContentProvider` | Native GenerateContent streaming adapter with text, reasoning, function-call mapping, function-response continuation, and provider state. |
 
