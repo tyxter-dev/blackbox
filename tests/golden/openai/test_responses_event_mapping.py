@@ -128,6 +128,64 @@ async def test_unknown_hosted_tool_falls_back_to_generic_item_event() -> None:
     assert fallback[0].raw is not None
 
 
+async def test_mcp_items_include_typed_run_item_data() -> None:
+    client = FakeOpenAIClient()
+    list_tools = item(
+        "mcp_list_tools",
+        id_="mcpl_1",
+        server_label="github",
+        tools=[{"name": "list_issues"}],
+    )
+    mcp_call = item(
+        "mcp_call",
+        id_="mcp_1",
+        server_label="github",
+        name="list_issues",
+        arguments='{"state": "open"}',
+        output='{"count": 2}',
+    )
+    approval = item(
+        "mcp_approval_request",
+        id_="mcpr_1",
+        server_label="github",
+        name="delete_repo",
+        arguments='{"repo": "danger"}',
+    )
+    client.queue(
+        events=[
+            evt("response.output_item.added", item=list_tools),
+            evt("response.output_item.added", item=mcp_call),
+            evt("response.output_item.done", item=mcp_call),
+            evt("response.output_item.added", item=approval),
+        ],
+        final_response=final_response(id_="resp_mcp", output=[list_tools, mcp_call, approval]),
+    )
+
+    runtime = _runtime_with(client)
+    result = await runtime.models.run(provider="openai/gpt-5.4", input="use mcp")
+
+    list_event = next(e for e in result.events if e.item_id == "mcpl_1")
+    assert list_event.type == EventTypes.MCP_LIST_TOOLS_COMPLETED
+    assert list_event.data["server_label"] == "github"
+    assert list_event.data["item"].type == ItemTypes.MCP_LIST_TOOLS
+
+    completed = next(
+        e
+        for e in result.events
+        if e.type == EventTypes.MCP_CALL_COMPLETED and e.item_id == "mcp_1"
+    )
+    assert completed.data["name"] == "list_issues"
+    assert completed.data["arguments"] == {"state": "open"}
+    assert completed.data["output"] == '{"count": 2}'
+    assert completed.data["item"].type == ItemTypes.MCP_CALL
+    assert completed.data["item"].status == "completed"
+
+    approval_event = next(e for e in result.events if e.item_id == "mcpr_1")
+    assert approval_event.type == EventTypes.MCP_APPROVAL_REQUIRED
+    assert approval_event.data["item"].type == ItemTypes.MCP_APPROVAL_REQUEST
+    assert approval_event.data["item"].status == "requires_action"
+
+
 async def test_provider_state_drives_previous_response_id() -> None:
     client = FakeOpenAIClient()
     msg = item("message", id_="msg_2")

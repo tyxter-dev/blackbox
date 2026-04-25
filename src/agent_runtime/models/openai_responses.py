@@ -52,6 +52,16 @@ _HOSTED_TOOL_DATA_KEYS = (
     "call_id",
 )
 
+_MCP_ITEM_DATA_KEYS = (
+    "server_label",
+    "tools",
+    "name",
+    "arguments",
+    "output",
+    "error",
+    "approval_request_id",
+)
+
 
 class OpenAIResponsesProvider:
     """Provider-native adapter for the OpenAI Responses API.
@@ -286,10 +296,15 @@ def _map_item_added(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
     item_id = getattr(item, "id", None) or (item.get("id") if isinstance(item, dict) else None)
 
     data: dict[str, Any] = {"item_type": item_type}
+    status: ItemStatus = "created"
     if item_type == "function_call":
         data["call_id"] = _attr(item, "call_id") or item_id or ""
         data["name"] = _attr(item, "name") or ""
         data["arguments"] = _parse_arguments(_attr(item, "arguments"))
+    elif item_type in _ITEM_TYPE_TO_RUN_ITEM and item_type.startswith("mcp_"):
+        data.update(_mcp_item_data(item, item_type=item_type))
+        if item_type == "mcp_approval_request":
+            status = "requires_action"
     elif item_type in _HOSTED_TOOL_CALL_TYPES:
         run_item_type = ItemTypes.HOSTED_TOOL_CALL
         data.update(_hosted_tool_data(item, item_type=item_type))
@@ -297,7 +312,7 @@ def _map_item_added(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
     run_item = RunItem(
         type=run_item_type,
         provider=provider,
-        status="created",
+        status=status,
         id=item_id or f"item_{id(item)}",
         data=dict(data),
         raw=item,
@@ -358,6 +373,28 @@ def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
             raw=raw,
         )
 
+    if item_type in _ITEM_TYPE_TO_RUN_ITEM and item_type.startswith("mcp_"):
+        data = {
+            "item_type": item_type,
+            **_mcp_item_data(item, item_type=item_type),
+        }
+        run_item = RunItem(
+            type=_ITEM_TYPE_TO_RUN_ITEM[item_type],
+            provider=provider,
+            status=_mcp_item_status(item, item_type=item_type),
+            id=item_id or f"item_{id(item)}",
+            data=dict(data),
+            raw=item,
+        )
+        data["item"] = run_item
+        return AgentEvent(
+            type=_completed_mcp_event_type(item_type),
+            provider=provider,
+            item_id=run_item.id,
+            data=data,
+            raw=raw,
+        )
+
     return AgentEvent(
         type=EventTypes.MODEL_ITEM_COMPLETED,
         provider=provider,
@@ -403,6 +440,37 @@ def _hosted_tool_data(item: Any, *, item_type: str) -> dict[str, Any]:
         if value is not None:
             data[key] = value
     return data
+
+
+def _mcp_item_data(item: Any, *, item_type: str) -> dict[str, Any]:
+    data: dict[str, Any] = {"mcp_item_type": item_type}
+    for key in _MCP_ITEM_DATA_KEYS:
+        value = _attr(item, key)
+        if value is None:
+            continue
+        if key == "arguments":
+            data[key] = _parse_arguments(value)
+        else:
+            data[key] = value
+    return data
+
+
+def _mcp_item_status(item: Any, *, item_type: str) -> ItemStatus:
+    if item_type == "mcp_approval_request":
+        return "requires_action"
+    if _attr(item, "error") is not None:
+        return "failed"
+    return "completed"
+
+
+def _completed_mcp_event_type(item_type: str) -> str:
+    if item_type == "mcp_call":
+        return EventTypes.MCP_CALL_COMPLETED
+    if item_type == "mcp_approval_request":
+        return EventTypes.MCP_APPROVAL_REQUIRED
+    if item_type == "mcp_list_tools":
+        return EventTypes.MCP_LIST_TOOLS_COMPLETED
+    return EventTypes.MODEL_ITEM_COMPLETED
 
 
 def _completed_item_status(item: Any) -> ItemStatus:

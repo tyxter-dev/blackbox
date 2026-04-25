@@ -144,6 +144,49 @@ async def test_hosted_block_falls_back_to_generic_item_event() -> None:
     assert fallback[0].raw is not None
 
 
+async def test_mcp_blocks_map_to_typed_run_items() -> None:
+    client = FakeAnthropicClient()
+    use_block = hosted_block(
+        "mcp_tool_use",
+        id_="mcptoolu_1",
+        name="list_issues",
+        server_name="github",
+        input={"state": "open"},
+    )
+    result_block = hosted_block(
+        "mcp_tool_result",
+        tool_use_id="mcptoolu_1",
+        is_error=False,
+        content=[{"type": "text", "text": "2 issues"}],
+    )
+    client.queue(
+        events=[
+            block_start(0, use_block),
+            block_stop(0),
+            block_start(1, result_block),
+            block_stop(1),
+        ],
+        final_message=final_message(id_="msg_mcp"),
+    )
+
+    runtime = _runtime_with(client)
+    result = await runtime.models.run(
+        provider="anthropic", model="claude-haiku-4-5-20251001", input="use mcp"
+    )
+
+    started = next(e for e in result.events if e.type == EventTypes.MCP_CALL_STARTED)
+    assert started.data["item"].type == ItemTypes.MCP_CALL
+    assert started.data["call_id"] == "mcptoolu_1"
+    assert started.data["server_label"] == "github"
+    assert started.data["arguments"] == {"state": "open"}
+
+    completed = next(e for e in result.events if e.type == EventTypes.MCP_CALL_COMPLETED)
+    assert completed.data["item"].type == ItemTypes.MCP_CALL
+    assert completed.data["call_id"] == "mcptoolu_1"
+    assert completed.data["output"] == [{"type": "text", "text": "2 issues"}]
+    assert completed.data["item"].status == "completed"
+
+
 async def test_function_result_run_items_become_tool_result_blocks() -> None:
     client = FakeAnthropicClient()
     msg = text_block(id_="msg_2")

@@ -9,6 +9,7 @@ provider payloads. Stable block types get typed events:
   for each ``thinking_delta``.
 - ``tool_use`` blocks accumulate ``input_json_delta`` chunks and emit
   ``TOOL_CALL_REQUESTED`` once the block stops, with ``input`` parsed.
+- ``mcp_tool_use`` / ``mcp_tool_result`` blocks become MCP call run items.
 - Other blocks (``server_tool_use``, ``web_search_tool_result``, future
   hosted tools) fall back to ``MODEL_ITEM_CREATED`` with the original block
   type stashed in ``data['item_type']`` and the raw block preserved.
@@ -26,7 +27,7 @@ from agent_runtime.core.accounting import usage_from_anthropic_message
 from agent_runtime.core.capabilities import ModelCapabilities
 from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
 from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.items import ItemTypes, RunItem
+from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.hosted_tools import (
     anthropic_beta_values,
@@ -279,6 +280,8 @@ def _map_block_start(
         state["name"] = _attr(block, "name") or ""
         state["call_id"] = block_id or ""
         json_buffers[index] = []
+    if block_type in {"mcp_tool_use", "mcp_tool_result"}:
+        state.update(_mcp_block_data(block, block_type=block_type))
     partial_blocks[index] = state
 
     canonical = EventTypes.MODEL_ITEM_CREATED
@@ -286,18 +289,26 @@ def _map_block_start(
         "text": ItemTypes.MESSAGE,
         "thinking": ItemTypes.REASONING,
         "tool_use": ItemTypes.FUNCTION_CALL,
+        "mcp_tool_use": ItemTypes.MCP_CALL,
+        "mcp_tool_result": ItemTypes.MCP_CALL,
     }.get(block_type, block_type)
+    if block_type == "mcp_tool_use":
+        canonical = EventTypes.MCP_CALL_STARTED
+    elif block_type == "mcp_tool_result":
+        canonical = EventTypes.MCP_CALL_COMPLETED
 
     item_id = block_id or f"block_{index}"
     data: dict[str, Any] = {"item_type": block_type, "index": index}
     if block_type == "tool_use":
         data["call_id"] = state["call_id"]
         data["name"] = state["name"]
+    elif block_type in {"mcp_tool_use", "mcp_tool_result"}:
+        data.update(_mcp_block_data(block, block_type=block_type))
 
     run_item = RunItem(
         type=run_item_type,
         provider=provider,
-        status="created",
+        status=_block_status(block, block_type=block_type),
         id=item_id,
         data=dict(data),
         raw=block,
@@ -391,6 +402,9 @@ def _map_block_stop(
             raw=raw,
         )
 
+    if block_type in {"mcp_tool_use", "mcp_tool_result"}:
+        return None
+
     return AgentEvent(
         type=EventTypes.MODEL_ITEM_COMPLETED,
         provider=provider,
@@ -432,6 +446,35 @@ def _final_message_content(final_message: Any) -> Any:
     return content
 
 
+def _mcp_block_data(block: Any, *, block_type: str) -> dict[str, Any]:
+    data: dict[str, Any] = {"mcp_item_type": block_type}
+    call_id = _attr(block, "id") or _attr(block, "tool_use_id")
+    server_name = _attr(block, "server_name")
+    name = _attr(block, "name")
+    input_value = _attr(block, "input")
+    content = _attr(block, "content")
+    is_error = _attr(block, "is_error")
+    if call_id is not None:
+        data["call_id"] = call_id
+    if server_name is not None:
+        data["server_label"] = server_name
+    if name is not None:
+        data["name"] = name
+    if input_value is not None:
+        data["arguments"] = input_value
+    if content is not None:
+        data["output"] = content
+    if is_error is not None:
+        data["is_error"] = is_error
+    return data
+
+
+def _block_status(block: Any, *, block_type: str) -> ItemStatus:
+    if block_type == "mcp_tool_result":
+        return "failed" if _attr(block, "is_error") is True else "completed"
+    return "created"
+
+
 def _block_to_dict(block: Any) -> dict[str, Any]:
     """Best-effort conversion of an SDK block object into a serializable dict."""
     dump = getattr(block, "model_dump", None)
@@ -444,7 +487,17 @@ def _block_to_dict(block: Any) -> dict[str, Any]:
             pass
     block_type = _attr(block, "type") or "unknown"
     out: dict[str, Any] = {"type": block_type}
-    for name in ("text", "thinking", "id", "name", "input", "tool_use_id", "content"):
+    for name in (
+        "text",
+        "thinking",
+        "id",
+        "name",
+        "server_name",
+        "input",
+        "tool_use_id",
+        "is_error",
+        "content",
+    ):
         value = _attr(block, name)
         if value is not None:
             out[name] = value
