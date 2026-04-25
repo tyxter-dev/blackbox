@@ -81,6 +81,22 @@ the full event/run-item/artifact log, the tool `payloads` (for the deferred
 payload pattern: tools that return content for the model and structured data
 for the application), and the final `provider_state` for resumption.
 
+For one-off tools, create an isolated tool session. It starts with the global
+tool registry, accepts temporary registrations, and does not leak those tools
+back into later runs:
+
+```python
+tool_session = runtime.tools.session()
+tool_session.register(lookup_ticket, name="lookup_ticket")
+
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Check ticket T-1",
+    tools=["lookup_ticket"],
+    tool_session=tool_session,
+)
+```
+
 ## Lower-level model turns
 
 ```python

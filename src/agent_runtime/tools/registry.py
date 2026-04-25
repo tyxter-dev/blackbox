@@ -68,6 +68,11 @@ class ToolRegistry:
     def all_tools(self) -> list[ToolDefinition]:
         return list(self._tools.values())
 
+    def clone(self) -> ToolRegistry:
+        clone = ToolRegistry()
+        clone._tools = dict(self._tools)
+        return clone
+
     def to_provider_tools(self) -> list[dict[str, Any]]:
         """Export local tools as provider-neutral schemas.
 

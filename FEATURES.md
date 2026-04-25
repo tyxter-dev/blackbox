@@ -37,6 +37,7 @@ Status legend:
 | Feature | Status | Public surface | Notes |
 |---|---|---|---|
 | Local tool registration | Supported | `runtime.tools.register(...)`, `ToolRegistry.register(...)` | Registers normal Python callables as named tools. |
+| Dynamic tool sessions | Supported | `runtime.tools.session()` | Creates an isolated tool registry seeded from global tools so one run can attach ad hoc tools without leaking them into later runs. |
 | Tool lookup/listing | Supported | `runtime.tools.get(...)`, `runtime.tools.all_tools()` | Returns `ToolDefinition` records. |
 | Provider-neutral tool schema export | Supported | `runtime.tools.to_provider_tools()` | Exports registered tools as function schemas for model providers. |
 | Manual JSON schema override | Supported | `register(parameters={...})` | Caller may provide the model-visible schema explicitly. |

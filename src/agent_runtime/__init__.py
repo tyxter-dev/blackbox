@@ -19,6 +19,7 @@ from agent_runtime.providers.base import (
 )
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.runtime import AgentRuntime, AgentRuntimeFacade, ModelRuntime
+from agent_runtime.tools.session import ToolSession
 
 __all__ = [
     "AgentCapabilities",
@@ -52,6 +53,7 @@ __all__ = [
     "SessionRef",
     "TaskSpec",
     "ToolPayload",
+    "ToolSession",
     "TurnRequest",
     "TurnResult",
 ]

@@ -133,6 +133,34 @@ async def test_run_dispatches_a_single_tool_and_returns_final_text() -> None:
     assert any(e.type == EventTypes.TOOL_CALL_COMPLETED for e in result.events)
 
 
+async def test_run_uses_dynamic_tool_session_without_global_registration() -> None:
+    runtime, scripted = _runtime()
+    tool_session = runtime.tools.session()
+    tool_session.register(
+        lambda topic: ToolResult(content=f"dynamic:{topic}"),
+        name="dynamic_lookup",
+        description="Temporary lookup.",
+        parameters={
+            "type": "object",
+            "properties": {"topic": {"type": "string"}},
+            "required": ["topic"],
+        },
+    )
+    scripted.queue(tool_call_turn(call_id="c1", name="dynamic_lookup", arguments={"topic": "x"}))
+    scripted.queue(text_only_turn("Final answer: dynamic:x"))
+
+    result: AgentResult[str] = await runtime.run(
+        provider="scripted:test",
+        input="use temporary tool",
+        tools=["dynamic_lookup"],
+        tool_session=tool_session,
+    )
+
+    assert "dynamic:x" in result.output
+    assert "dynamic_lookup" not in [tool.name for tool in runtime.tools.all_tools()]
+    assert scripted.calls[0].tools[0]["name"] == "dynamic_lookup"
+
+
 async def test_run_dispatches_three_tools_in_one_turn() -> None:
     runtime, scripted = _runtime()
     runtime.tools.register(

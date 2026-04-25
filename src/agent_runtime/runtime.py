@@ -27,6 +27,7 @@ from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
 from agent_runtime.tools.results import ToolResult
 from agent_runtime.tools.runtime import ToolRuntime
+from agent_runtime.tools.session import ToolSession
 
 T = TypeVar("T")
 
@@ -283,6 +284,10 @@ class ToolRuntimeFacade:
     def to_provider_tools(self) -> list[dict[str, Any]]:
         return self.registry.to_provider_tools()
 
+    def session(self) -> ToolSession:
+        """Create an isolated tool registry seeded with the global tools."""
+        return ToolSession.from_registry(self.registry)
+
     async def call(
         self, name: str, arguments: dict[str, Any] | None = None, *, mock: bool = False
     ) -> Any:
@@ -511,6 +516,7 @@ class AgentRuntime:
         input: str,
         model: str | None = None,
         tools: list[str] | None = None,
+        tool_session: ToolSession | None = None,
         tool_execution_context: dict[str, Any] | None = None,
         approval_policy: Any = None,
         policy: Any = None,
@@ -535,8 +541,8 @@ class AgentRuntime:
         if not model_name:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
 
-        tool_definitions = self._tool_payload(tools)
-        tool_runtime = self._tool_runtime_for(tool_execution_context)
+        tool_definitions = self._tool_payload(tools, tool_session=tool_session)
+        tool_runtime = self._tool_runtime_for(tool_execution_context, tool_session=tool_session)
 
         async def stream_factory(
             *, input: str | list[Any], provider_state: ProviderState | None
@@ -578,6 +584,7 @@ class AgentRuntime:
         input: str,
         model: str | None = None,
         tools: list[str] | None = None,
+        tool_session: ToolSession | None = None,
         tool_execution_context: dict[str, Any] | None = None,
         approval_policy: Any = None,
         policy: Any = None,
@@ -626,6 +633,7 @@ class AgentRuntime:
                 input=current_input,
                 model=model,
                 tools=tools,
+                tool_session=tool_session,
                 tool_execution_context=tool_execution_context,
                 approval_policy=approval_policy,
                 policy=policy,
@@ -698,16 +706,22 @@ class AgentRuntime:
         assert last_error is not None
         raise last_error
 
-    def _tool_payload(self, names: list[str] | None) -> list[dict[str, Any]]:
+    def _tool_payload(
+        self, names: list[str] | None, *, tool_session: ToolSession | None = None
+    ) -> list[dict[str, Any]]:
         if not names:
             return []
-        provider_tools = self.tools.to_provider_tools()
+        provider_tools = (
+            tool_session.to_provider_tools() if tool_session is not None else self.tools.to_provider_tools()
+        )
         wanted = set(names)
         return [t for t in provider_tools if t["name"] in wanted]
 
     def _tool_runtime_for(
-        self, context: dict[str, Any] | None
+        self, context: dict[str, Any] | None, *, tool_session: ToolSession | None = None
     ) -> ToolRuntime:
+        if tool_session is not None:
+            return tool_session.runtime(context=context)
         if context is None:
             return self.tools.default_runtime
         return ToolRuntime(self.tools.registry, context=context)

@@ -120,3 +120,14 @@ async def test_mock_call_short_circuits_real_function() -> None:
     assert state["called"] is False
     assert "Mocked execution" in result.content
     assert result.metadata == {"mock": True, "tool_name": "real"}
+
+
+def test_tool_registry_clone_is_isolated() -> None:
+    registry = ToolRegistry()
+    registry.register(lambda: "base", name="base", description="b")
+
+    clone = registry.clone()
+    clone.register(lambda: "dynamic", name="dynamic", description="d")
+
+    assert [tool.name for tool in registry.all_tools()] == ["base"]
+    assert sorted(tool.name for tool in clone.all_tools()) == ["base", "dynamic"]

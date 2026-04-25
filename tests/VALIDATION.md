@@ -93,6 +93,7 @@ runtime.tools.get(...)
 | 2.11 | ✅ | Tool policy allow | `runtime/test_runtime_run.py::test_policy_allow_dispatches_tool` | Policy layer allows safe tool execution after explicit allow verdict. |
 | 2.12 | ✅ | Tool policy deny | `runtime/test_runtime_run.py::test_policy_deny_short_circuits_tool_dispatch` | Policy layer blocks dangerous calls. |
 | 2.13 | ✅ | Tool approval required | `runtime/test_local_agent_provider.py::test_approval_pause_and_approve` | Runtime pauses before sensitive tools. |
+| 2.14 | ✅ | Dynamic tool session | `runtime/test_runtime_run.py::test_run_uses_dynamic_tool_session_without_global_registration`, `unit/test_tool_runtime.py::test_tool_registry_clone_is_isolated` | One run can attach ad hoc tools from an isolated registry without mutating global tools. |
 
 ---
 
