@@ -161,11 +161,11 @@ run_store.load(...)
 |---|---|---|---|---|
 | 5.1 | ✅ | Event IDs | `unit/test_data_models.py::test_agent_event_defaults_and_unique_ids` | Every event is traceable. |
 | 5.2 | ✅ | Event sequence numbers | `runtime/test_runtime_stream.py::test_every_event_carries_run_id_and_monotonic_sequence` | Events can be replayed in order. |
-| 5.3 | ✅ | Event append/list | `unit/test_stores.py::test_in_memory_event_store_round_trip` | Event store works. |
-| 5.4 | ✅ | Run state save/load | `unit/test_stores.py::test_in_memory_run_store_round_trip` | Runtime state can be restored. |
+| 5.3 | ✅ | Event append/list | `unit/test_stores.py::test_in_memory_event_store_round_trip`, `unit/test_stores_persistent.py` (JSONL) | Event store works (in-memory + JSONL). |
+| 5.4 | ✅ | Run state save/load | `unit/test_stores.py::test_in_memory_run_store_round_trip`, `unit/test_stores_persistent.py` (SQLite) | Runtime state can be restored (in-memory + SQLite). |
 | 5.5 | ✅ | Provider state save/load | `unit/test_state.py::test_run_returns_provider_state` + `accepts_provider_state_for_continuation` | Native continuation state survives round-trip. |
 | 5.6 | ✅ | Session state transitions | `runtime/test_local_agent_provider.py` (running → waiting → completed) | Session lifecycle is valid. |
-| 5.7 | ⏳ | Resume from state | not yet — needs replay-from-store | Runtime can continue after interruption. |
+| 5.7 | ✅ | Resume from state | `runtime/test_resume_run_from_saved_state.py` (2 tests) | Save `RunState` to SQLite, reload from a fresh runtime, resume the loop. |
 | 5.8 | ✅ | Raw redaction | `unit/test_event_sinks.py` (9 tests) | `RedactingEventSink` rewrites sensitive `RawEnvelope` payloads before forwarding. |
 
 ---

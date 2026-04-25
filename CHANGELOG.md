@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### Slice 11 — JSONL/SQLite stores + resume-from-saved-state (M5 starter)
+
+First non-memory persistence backends for the runtime, plus the wiring
+to resume an in-flight run from disk. Closes VALIDATION row 5.7.
+
+Persistence:
+- `JSONLEventStore` — append-only file-backed `EventStore`. One JSON
+  object per line. `raw` payloads are dropped by default (portable across
+  processes) but can be retained with `keep_raw=True`. Concurrent writers
+  in one process are serialized via an `asyncio.Lock`.
+- `SQLiteRunStore` — SQLite-backed `RunStore` with a single
+  `runs(session_id PK, provider, model, payload, updated_at)` table.
+  `provider` and `model` are surfaced as columns for cheap filtering;
+  full state lives in a JSON blob. Async wrapper over stdlib `sqlite3`.
+  Adds `list_runs()` and `close()`.
+
+Serialization (`core/serialization.py`):
+- Safe `to_dict` / `from_dict` round-trips for `AgentEvent`, `RunItem`,
+  `ProviderState`, `RunState`, and `RawEnvelope`.
+- `_kind` discriminator on serialized dataclasses keeps deserialization
+  type-aware. Unknown values pass through `repr` so output is always
+  JSON-decodable.
+
+Resume:
+- `AgentRuntime.run` and `AgentRuntime.stream` now accept an optional
+  `provider_state` so apps can hand back state loaded from a `RunStore`.
+  Plumbed through the `AgentLoop` to the model adapter as a real
+  `TurnRequest.provider_state`.
+
+Tests:
+- `tests/unit/test_stores_persistent.py` — 9 tests: typed-payload
+  round-trip, raw drop/keep, JSONL append/list/limit/sequence cursor,
+  cross-instance JSONL persistence, run-id-less event drop, SQLite save/
+  load/list, cross-instance SQLite persistence, missing-key load.
+- `tests/runtime/test_resume_run_from_saved_state.py` — 2 tests proving
+  end-to-end resume: save state to SQLite, reload from a fresh
+  `AgentRuntime`, finish the work, and assert the second turn's
+  `TurnRequest.provider_state` carries the resumed continuation IDs.
+- 109 → 120 passing offline; ruff + mypy --strict clean.
+
 ### Slice 10 — `posthoc_parse_with_retry` + raw redaction sink
 
 Closes two ⏳ rows in `tests/VALIDATION.md` (1.9 and 5.8). Surgical: no

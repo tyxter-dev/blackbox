@@ -179,6 +179,45 @@ async for event in runtime.models.stream(
         print(event.data["delta"], end="")
 ```
 
+## Persistence and resume
+
+`JSONLEventStore` and `SQLiteRunStore` provide non-memory backends for
+the `EventStore` and `RunStore` Protocols. Use them to persist event
+logs to disk and resume an in-flight run from a checkpoint:
+
+```python
+from agent_runtime import AgentRuntime
+from agent_runtime.core.state import RunState
+from agent_runtime.core.stores import JSONLEventStore, SQLiteRunStore
+
+runtime = AgentRuntime(
+    event_store=JSONLEventStore("./events.jsonl"),
+    run_store=SQLiteRunStore("./runs.sqlite"),
+)
+
+# Run, then save the captured provider_state for later.
+result = await runtime.run(provider="openai:gpt-5.4", input="kick off")
+await runtime.run_store.save(RunState(
+    provider="openai", model="gpt-5.4",
+    provider_state=result.provider_state,
+    metadata={"phase": "checkpoint"},
+))
+
+# Later — possibly in a fresh process — reload and continue.
+state = await runtime.run_store.load(saved_session_id)
+follow_up = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="continue from where we left off",
+    provider_state=state.provider_state,
+)
+```
+
+`AgentRuntime.run` and `AgentRuntime.stream` accept an optional
+`provider_state` argument that flows through the loop into the adapter's
+next `TurnRequest`, so resumption uses the provider's native
+continuation IDs (`previous_response_id`, Anthropic message history,
+etc.).
+
 ## Structured output with retry
 
 Pass an `OutputSpec` to ask the runtime to repair its own output when

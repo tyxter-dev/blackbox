@@ -265,6 +265,7 @@ class AgentRuntime:
         policy: Any = None,
         max_iterations: int = 8,
         mock_tools: bool = False,
+        provider_state: ProviderState | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[AgentEvent]:
         """Stream events from a complete agent loop driven by the registered model.
@@ -272,6 +273,9 @@ class AgentRuntime:
         ``tools`` is a list of registered tool names to expose to the model.
         Local tool calls are dispatched through ``runtime.tools`` automatically
         and their results are fed back via provider-native continuation.
+
+        Pass ``provider_state`` to resume from saved state (e.g. one loaded
+        from :class:`SQLiteRunStore`).
         """
         from agent_runtime.loop import AgentLoop
 
@@ -307,6 +311,7 @@ class AgentRuntime:
         sequence = 0
         async for event in loop.run(
             input=input,
+            provider_state=provider_state,
             provider_id=provider_ref.provider_key,
             mock_tools=mock_tools,
         ):
@@ -329,6 +334,7 @@ class AgentRuntime:
         mock_tools: bool = False,
         output_type: type[T] | None = None,
         output_spec: OutputSpec | None = None,
+        provider_state: ProviderState | None = None,
         **kwargs: Any,
     ) -> AgentResult[T]:
         """Run the complete agent loop and return a typed AgentResult.
@@ -354,7 +360,7 @@ class AgentRuntime:
         items: list[RunItem] = []
         artifacts: list[Artifact] = []
         payloads: list[ToolPayload] = []
-        captured_state: ProviderState | None = None
+        captured_state: ProviderState | None = provider_state
         last_text = ""
         last_error: OutputValidationError | None = None
         current_input = input
@@ -371,6 +377,7 @@ class AgentRuntime:
                 policy=policy,
                 max_iterations=max_iterations,
                 mock_tools=mock_tools,
+                provider_state=captured_state,
                 **kwargs,
             ):
                 events.append(event)
