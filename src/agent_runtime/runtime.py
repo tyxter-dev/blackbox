@@ -11,7 +11,7 @@ from agent_runtime.core.artifacts import Artifact, ArtifactPage
 from agent_runtime.core.errors import OutputValidationError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import RunItem
-from agent_runtime.core.results import AgentResult, ToolPayload
+from agent_runtime.core.results import AgentResult, OutputSpec, ToolPayload
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
@@ -328,66 +328,99 @@ class AgentRuntime:
         max_iterations: int = 8,
         mock_tools: bool = False,
         output_type: type[T] | None = None,
+        output_spec: OutputSpec | None = None,
         **kwargs: Any,
     ) -> AgentResult[T]:
         """Run the complete agent loop and return a typed AgentResult.
 
-        When ``output_type`` is provided, the final text is validated against it.
-        Pydantic models, dataclasses, and ``str`` are supported in v0.1.
-        Validation failures raise :class:`OutputValidationError` (fail-fast).
+        When ``output_type`` (or ``output_spec``) is provided, the final text is
+        validated against the schema. Supported schemas: Pydantic models,
+        dataclasses, and ``str``. Validation failures raise
+        :class:`OutputValidationError`.
+
+        Pass ``output_spec=OutputSpec(schema=Cls,
+        strategy="posthoc_parse_with_retry", max_validation_retries=N)`` to ask
+        the runtime to feed validation errors back to the model and retry up to
+        ``N`` times before failing.
         """
+        spec = _resolve_output_spec(output_type, output_spec)
+        attempts_allowed = (
+            1 + spec.max_validation_retries
+            if spec.strategy == "posthoc_parse_with_retry"
+            else 1
+        )
+
         events: list[AgentEvent] = []
         items: list[RunItem] = []
         artifacts: list[Artifact] = []
         payloads: list[ToolPayload] = []
-        text_parts: list[str] = []
         captured_state: ProviderState | None = None
+        last_text = ""
+        last_error: OutputValidationError | None = None
+        current_input = input
 
-        async for event in self.stream(
-            provider=provider,
-            input=input,
-            model=model,
-            tools=tools,
-            tool_execution_context=tool_execution_context,
-            approval_policy=approval_policy,
-            policy=policy,
-            max_iterations=max_iterations,
-            mock_tools=mock_tools,
-            **kwargs,
-        ):
-            events.append(event)
-            if event.type == EventTypes.MODEL_TEXT_DELTA:
-                delta = event.data.get("delta")
-                if isinstance(delta, str):
-                    text_parts.append(delta)
-            elif event.type == EventTypes.TOOL_CALL_COMPLETED:
-                if "payload" in event.data:
-                    payloads.append(
-                        ToolPayload(
-                            tool_name=event.data.get("name", ""),
-                            payload=event.data["payload"],
-                            call_id=event.data.get("call_id"),
+        for attempt in range(attempts_allowed):
+            text_parts: list[str] = []
+            async for event in self.stream(
+                provider=provider,
+                input=current_input,
+                model=model,
+                tools=tools,
+                tool_execution_context=tool_execution_context,
+                approval_policy=approval_policy,
+                policy=policy,
+                max_iterations=max_iterations,
+                mock_tools=mock_tools,
+                **kwargs,
+            ):
+                events.append(event)
+                if event.type == EventTypes.MODEL_TEXT_DELTA:
+                    delta = event.data.get("delta")
+                    if isinstance(delta, str):
+                        text_parts.append(delta)
+                elif event.type == EventTypes.TOOL_CALL_COMPLETED:
+                    if "payload" in event.data:
+                        payloads.append(
+                            ToolPayload(
+                                tool_name=event.data.get("name", ""),
+                                payload=event.data["payload"],
+                                call_id=event.data.get("call_id"),
+                            )
                         )
-                    )
-            item = event.data.get("item")
-            if isinstance(item, RunItem):
-                items.append(item)
-            maybe_state = event.data.get("provider_state")
-            if isinstance(maybe_state, ProviderState):
-                captured_state = maybe_state
+                item = event.data.get("item")
+                if isinstance(item, RunItem):
+                    items.append(item)
+                maybe_state = event.data.get("provider_state")
+                if isinstance(maybe_state, ProviderState):
+                    captured_state = maybe_state
 
-        text = "".join(text_parts)
-        output = _validate_output(text, output_type)
+            last_text = "".join(text_parts)
+            try:
+                output = _validate_output(last_text, spec.schema)
+            except OutputValidationError as exc:
+                last_error = exc
+                if attempt + 1 >= attempts_allowed:
+                    raise
+                current_input = _build_repair_prompt(
+                    previous_text=last_text, error=exc, attempt=attempt + 1
+                )
+                continue
 
-        return AgentResult(
-            output=cast(T, output),
-            text=text,
-            events=events,
-            items=items,
-            artifacts=artifacts,
-            payloads=payloads,
-            provider_state=captured_state,
-        )
+            metadata: dict[str, Any] = {"validation_attempts": attempt + 1}
+            return AgentResult(
+                output=cast(T, output),
+                text=last_text,
+                events=events,
+                items=items,
+                artifacts=artifacts,
+                payloads=payloads,
+                provider_state=captured_state,
+                metadata=metadata,
+            )
+
+        # Should be unreachable: the loop either returns or re-raises.
+        assert last_error is not None
+        raise last_error
 
     def _tool_payload(self, names: list[str] | None) -> list[dict[str, Any]]:
         if not names:
@@ -404,9 +437,38 @@ class AgentRuntime:
         return ToolRuntime(self.tools.registry, context=context)
 
 
-def _validate_output(text: str, output_type: type[Any] | None) -> Any:
+def _resolve_output_spec(
+    output_type: type[Any] | None, output_spec: OutputSpec | None
+) -> OutputSpec:
+    if output_type is not None and output_spec is not None:
+        raise ValueError("Pass either output_type or output_spec, not both.")
+    if output_spec is not None:
+        return output_spec
+    return OutputSpec(schema=output_type, strategy="posthoc_parse")
+
+
+def _build_repair_prompt(
+    *, previous_text: str, error: OutputValidationError, attempt: int
+) -> str:
+    return (
+        "Your previous response failed schema validation.\n\n"
+        f"Previous response:\n{previous_text}\n\n"
+        f"Validation error: {error}\n\n"
+        f"Please return a corrected response (attempt {attempt + 1}) that "
+        "matches the requested schema exactly. Do not include any commentary "
+        "outside the structured output."
+    )
+
+
+def _validate_output(text: str, output_type: type[Any] | dict[str, Any] | None) -> Any:
     if output_type is None or output_type is str:
         return text
+    if isinstance(output_type, dict):
+        raise OutputValidationError(
+            "Dict-based JSON Schemas are not yet supported by posthoc_parse; "
+            "pass a Pydantic model or dataclass.",
+            raw_text=text,
+        )
     pydantic_base: type[Any] | None
     try:
         from pydantic import BaseModel as _PydanticBaseModel

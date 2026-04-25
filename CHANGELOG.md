@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### Slice 10 — `posthoc_parse_with_retry` + raw redaction sink
+
+Closes two ⏳ rows in `tests/VALIDATION.md` (1.9 and 5.8). Surgical: no
+new top-level surface, only wiring.
+
+Output retry (PRD §10.7, P1-R12):
+- `AgentRuntime.run` now accepts `output_spec=OutputSpec(...)` in addition
+  to the convenience `output_type=Class` shortcut. The two are mutually
+  exclusive; passing both raises `ValueError`.
+- When `output_spec.strategy == "posthoc_parse_with_retry"`, validation
+  failures feed the bad text and the validator error back into the model
+  via a repair prompt and re-run the loop, up to
+  `max_validation_retries` extra attempts. Final attempt's
+  `OutputValidationError` is raised on exhaustion.
+- `AgentResult.metadata["validation_attempts"]` reports how many passes
+  were needed (1 on success, N+1 on retry).
+
+Redaction sink (PRD §17–18, supports VALIDATION 5.8):
+- `RedactingEventSink` wraps any `EventSink` and rewrites
+  `event.raw` payloads when they are tagged with a `RawEnvelope` whose
+  `sensitivity ∈ {sensitive, secret}` or `storage_allowed=False`.
+- Pass-through behavior preserved for bare SDK objects on `event.raw` —
+  adapters opt-in to redaction by wrapping in `RawEnvelope`.
+- Custom `RedactionPolicy` callable + custom marker supported.
+- Re-exported from `agent_runtime.observability`.
+
+Tests:
+- `tests/runtime/test_runtime_retry.py` — 5 tests: retry succeeds,
+  retry exhausted raises with raw_text preserved, default strategy does
+  not retry, single-attempt success records 1 attempt, output_type +
+  output_spec mutually exclusive.
+- `tests/unit/test_event_sinks.py` — 9 tests: memory sink ordering,
+  pass-through cases (None, non-envelope, internal envelope), redaction
+  for sensitive/secret/storage-disallowed payloads, custom marker,
+  custom policy, and the default policy contract.
+- 95 → 109 passing offline; 2 skipped (network-gated). Ruff +
+  mypy --strict clean.
+
 ### Slice 12 — M2 workspace primitives + policy hooks
 
 First cut of the workspace layer (PRD §15, M2). Builds the data contracts

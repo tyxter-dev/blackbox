@@ -179,6 +179,49 @@ async for event in runtime.models.stream(
         print(event.data["delta"], end="")
 ```
 
+## Structured output with retry
+
+Pass an `OutputSpec` to ask the runtime to repair its own output when
+validation fails:
+
+```python
+from agent_runtime.core.results import OutputSpec
+
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Decide priority for ticket #42.",
+    output_spec=OutputSpec(
+        schema=Decision,
+        strategy="posthoc_parse_with_retry",
+        max_validation_retries=2,
+    ),
+)
+print(result.metadata["validation_attempts"])  # 1, 2, or 3
+```
+
+On validation failure the runtime feeds the bad text and the validator
+error back into the model via a repair prompt, up to
+`max_validation_retries` extra attempts. The plain `output_type=Cls`
+shortcut still works and uses the default `posthoc_parse` strategy
+(fail-fast).
+
+## Redacting sensitive raw payloads
+
+Wrap an event sink with `RedactingEventSink` to scrub `RawEnvelope`-tagged
+payloads before they reach logs or telemetry:
+
+```python
+from agent_runtime.observability import MemoryEventSink, RedactingEventSink
+
+sink = RedactingEventSink(inner=MemoryEventSink())  # default policy
+async for event in runtime.stream(provider="...", input="..."):
+    await sink.emit(event)
+```
+
+The default policy redacts when `sensitivity ∈ {sensitive, secret}` or
+`storage_allowed=False`. Pass a custom `policy=Callable[[RawEnvelope],
+bool]` for project-specific rules.
+
 ## Workspace runtime (M2 local)
 
 `WorkspaceRuntime` backs `"local"` workspaces with file read/write/delete,

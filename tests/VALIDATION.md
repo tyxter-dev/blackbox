@@ -57,7 +57,7 @@ await runtime.models.stream(...)
 | 1.6 | 🟡 | Parallel tool calls | covered as 1.5 (sequential dispatch) | True concurrent execution awaits an OpenAI Responses path with `parallel_tool_calls=True`. |
 | 1.7 | ✅ | Tool-call error | `runtime/test_local_agent_provider.py` (denial path) | Tool failures convert into typed runtime/tool events. |
 | 1.8 | ✅ | Structured output | `runtime/test_runtime_run.py::test_run_validates_pydantic_output_type` | Runtime validates final output against a schema. |
-| 1.9 | ⏳ | Structured output retry | not yet — `OutputSpec.posthoc_parse_with_retry` exists but isn't wired | Runtime can repair or retry invalid structured output. |
+| 1.9 | ✅ | Structured output retry | `runtime/test_runtime_retry.py` (5 tests) | Runtime can repair invalid structured output via repair prompt up to `max_validation_retries`. |
 | 1.10 | ✅ | Provider state continuation | `unit/test_state.py` | Runtime preserves and reuses `ProviderState`. |
 | 1.11 | ✅ | Cancellation | `runtime/test_local_agent_provider.py::test_cancel_between_turns` | Runtime can cancel a running model/agent loop. |
 | 1.12 | ✅ | Raw provider payload | `golden/openai/test_responses_event_mapping.py::test_hosted_tool_falls_back_to_generic_item_event`, `golden/anthropic/test_messages_event_mapping.py::test_hosted_block_falls_back_to_generic_item_event` | Events keep raw provider data safely. |
@@ -166,7 +166,7 @@ run_store.load(...)
 | 5.5 | ✅ | Provider state save/load | `unit/test_state.py::test_run_returns_provider_state` + `accepts_provider_state_for_continuation` | Native continuation state survives round-trip. |
 | 5.6 | ✅ | Session state transitions | `runtime/test_local_agent_provider.py` (running → waiting → completed) | Session lifecycle is valid. |
 | 5.7 | ⏳ | Resume from state | not yet — needs replay-from-store | Runtime can continue after interruption. |
-| 5.8 | ⏳ | Raw redaction | `RawEnvelope` exists but no sink yet to assert behavior | Sensitive raw data handled safely. |
+| 5.8 | ✅ | Raw redaction | `unit/test_event_sinks.py` (9 tests) | `RedactingEventSink` rewrites sensitive `RawEnvelope` payloads before forwarding. |
 
 ---
 
