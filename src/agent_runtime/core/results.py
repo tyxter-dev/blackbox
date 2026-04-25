@@ -17,6 +17,7 @@ OutputStrategy = Literal[
     "posthoc_parse",
     "posthoc_parse_with_retry",
 ]
+OutputFallback = Literal["error", "finalizer_tool", "posthoc_parse"]
 
 
 @dataclass(slots=True)
@@ -43,6 +44,10 @@ class OutputSpec:
     strategy: OutputStrategy = "posthoc_parse"
     max_validation_retries: int = 1
     allow_partial: bool = False
+    name: str | None = None
+    description: str | None = None
+    strict: bool = True
+    fallback: OutputFallback = "error"
 
 
 @dataclass(slots=True)

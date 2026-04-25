@@ -9,6 +9,7 @@ from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.results import AgentResult, ToolPayload
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
+from agent_runtime.output.schema import OutputSchema
 from agent_runtime.providers.base import (
     AgentProvider,
     AgentSpec,
@@ -47,6 +48,7 @@ __all__ = [
     "ModelRequestControls",
     "ModelRuntime",
     "ModelUsage",
+    "OutputSchema",
     "OutputValidationError",
     "ProviderRef",
     "ProviderRegistry",
