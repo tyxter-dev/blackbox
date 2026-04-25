@@ -11,6 +11,7 @@ from agent_runtime.output.schema import build_output_schema
 class Decision(BaseModel):
     priority: str = Field(description="Priority label")
     escalate: bool
+    note: str | None = None
 
 
 @dataclass
@@ -32,7 +33,9 @@ def test_pydantic_model_builds_output_schema() -> None:
     assert schema.target_type is Decision
     assert schema.schema["type"] == "object"
     assert schema.schema["additionalProperties"] is False
+    assert schema.schema["required"] == ["priority", "escalate", "note"]
     assert "priority" in schema.schema["properties"]
+    assert "default" not in schema.schema["properties"]["note"]
 
 
 def test_dataclass_builds_json_schema() -> None:

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from agent_runtime import AgentResult, AgentRuntime
 from agent_runtime.core.capabilities import ModelCapabilities
-from agent_runtime.core.errors import UnsupportedFeatureError
+from agent_runtime.core.errors import ProviderExecutionError, UnsupportedFeatureError
 from agent_runtime.core.events import EventTypes
 from agent_runtime.core.items import ItemTypes
 from agent_runtime.core.results import OutputSpec
@@ -24,6 +24,11 @@ class StructuredScriptedModelProvider(ScriptedModelProvider):
             supports_provider_state=True,
             supports_structured_output=True,
         )
+
+
+def provider_rejects_schema_turn(request: object) -> object:
+    raise ProviderExecutionError("provider rejected structured output schema")
+    yield  # pragma: no cover
 
 
 async def test_provider_native_output_validates_pydantic_result() -> None:
@@ -142,3 +147,56 @@ async def test_provider_native_can_fallback_to_finalizer_tool() -> None:
 
     assert result.output == {"summary": "done"}
     assert scripted.calls[0].output_strategy == "finalizer_tool"
+
+
+async def test_provider_native_execution_error_can_fallback_to_posthoc_parse() -> None:
+    runtime = AgentRuntime()
+    scripted = StructuredScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    scripted.queue(provider_rejects_schema_turn)
+    scripted.queue(text_only_turn('{"priority": "medium", "escalate": false}'))
+
+    result: AgentResult[Decision] = await runtime.run(
+        provider="scripted:test",
+        input="decide",
+        output_spec=OutputSpec(
+            schema=Decision,
+            strategy="provider_native",
+            fallback="posthoc_parse",
+        ),
+    )
+
+    assert result.output == Decision(priority="medium", escalate=False)
+    assert result.metadata["provider_native_fallback"] == "posthoc_parse"
+    assert scripted.calls[0].output_strategy == "provider_native"
+    assert scripted.calls[1].output_strategy is None
+    assert scripted.calls[1].output_schema is None
+
+
+async def test_provider_native_execution_error_can_fallback_to_finalizer_tool() -> None:
+    runtime = AgentRuntime()
+    scripted = StructuredScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    scripted.queue(provider_rejects_schema_turn)
+    scripted.queue(
+        tool_call_turn(
+            call_id="final_1",
+            name="submit_final_output",
+            arguments={"priority": "high", "escalate": True},
+        )
+    )
+
+    result: AgentResult[Decision] = await runtime.run(
+        provider="scripted:test",
+        input="decide",
+        output_spec=OutputSpec(
+            schema=Decision,
+            strategy="provider_native",
+            fallback="finalizer_tool",
+        ),
+    )
+
+    assert result.output == Decision(priority="high", escalate=True)
+    assert result.metadata["provider_native_fallback"] == "finalizer_tool"
+    assert scripted.calls[0].output_strategy == "provider_native"
+    assert scripted.calls[1].output_strategy == "finalizer_tool"

@@ -185,6 +185,7 @@ def test_gemini_maps_provider_native_output_schema_to_config() -> None:
     assert kwargs["config"]["response_json_schema"] == {
         "type": "object",
         "additionalProperties": False,
+        "required": [],
     }
 
 

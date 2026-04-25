@@ -10,7 +10,11 @@ from agent_runtime.compat.chat import ChatMessage, messages_to_input
 from agent_runtime.core.accounting import ModelCatalog, add_usage, usage_to_dict
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
-from agent_runtime.core.errors import OutputValidationError, UnsupportedFeatureError
+from agent_runtime.core.errors import (
+    OutputValidationError,
+    ProviderExecutionError,
+    UnsupportedFeatureError,
+)
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import RunItem
 from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, ToolPayload
@@ -733,63 +737,81 @@ class AgentRuntime:
         finalizer_output: dict[str, Any] | None = None
         last_error: OutputValidationError | None = None
         current_input = input
+        provider_native_fallback: str | None = None
 
         for attempt in range(attempts_allowed):
             text_parts: list[str] = []
-            async for event in self.stream(
-                provider=provider,
-                input=current_input,
-                model=model,
-                tools=tools,
-                tool_session=tool_session,
-                tool_execution_context=tool_execution_context,
-                tool_max_concurrent=tool_max_concurrent,
-                tool_timeout=tool_timeout,
-                approval_policy=approval_policy,
-                policy=policy,
-                max_iterations=max_iterations,
-                mock_tools=mock_tools,
-                provider_state=captured_state,
-                hosted_tools=hosted_tools,
-                output_schema=output_schema,
-                output_strategy=effective_strategy if output_schema is not None else None,
-                **kwargs,
-            ):
-                events.append(event)
-                if event.type == EventTypes.MODEL_TEXT_DELTA:
-                    delta = event.data.get("delta")
-                    if isinstance(delta, str):
-                        text_parts.append(delta)
-                elif event.type == EventTypes.TOOL_CALL_COMPLETED:
-                    if "payload" in event.data:
-                        payloads.append(
-                            ToolPayload(
-                                tool_name=event.data.get("name", ""),
-                                payload=event.data["payload"],
-                                call_id=event.data.get("call_id"),
-                            )
-                        )
-                item = event.data.get("item")
-                if isinstance(item, RunItem):
-                    items.append(item)
-                event_metadata = event.data.get("metadata")
-                if (
-                    event.type == EventTypes.TOOL_CALL_COMPLETED
-                    and isinstance(event_metadata, dict)
-                    and event_metadata.get("purpose") == "final_output"
-                ):
-                    arguments = event.data.get("arguments")
-                    if isinstance(arguments, dict):
-                        finalizer_output = arguments
-                maybe_state = event.data.get("provider_state")
-                if isinstance(maybe_state, ProviderState):
-                    captured_state = maybe_state
-                if event.type == EventTypes.MODEL_COMPLETED:
-                    usage = add_usage(usage, event.data.get("usage"))
-                    completed_provider = event.provider or completed_provider
-                    model_value = event.data.get("model")
-                    if isinstance(model_value, str):
-                        completed_model = model_value
+            while True:
+                try:
+                    async for event in self.stream(
+                        provider=provider,
+                        input=current_input,
+                        model=model,
+                        tools=tools,
+                        tool_session=tool_session,
+                        tool_execution_context=tool_execution_context,
+                        tool_max_concurrent=tool_max_concurrent,
+                        tool_timeout=tool_timeout,
+                        approval_policy=approval_policy,
+                        policy=policy,
+                        max_iterations=max_iterations,
+                        mock_tools=mock_tools,
+                        provider_state=captured_state,
+                        hosted_tools=hosted_tools,
+                        output_schema=output_schema,
+                        output_strategy=effective_strategy if output_schema is not None else None,
+                        **kwargs,
+                    ):
+                        events.append(event)
+                        if event.type == EventTypes.MODEL_TEXT_DELTA:
+                            delta = event.data.get("delta")
+                            if isinstance(delta, str):
+                                text_parts.append(delta)
+                        elif event.type == EventTypes.TOOL_CALL_COMPLETED:
+                            if "payload" in event.data:
+                                payloads.append(
+                                    ToolPayload(
+                                        tool_name=event.data.get("name", ""),
+                                        payload=event.data["payload"],
+                                        call_id=event.data.get("call_id"),
+                                    )
+                                )
+                        item = event.data.get("item")
+                        if isinstance(item, RunItem):
+                            items.append(item)
+                        event_metadata = event.data.get("metadata")
+                        if (
+                            event.type == EventTypes.TOOL_CALL_COMPLETED
+                            and isinstance(event_metadata, dict)
+                            and event_metadata.get("purpose") == "final_output"
+                        ):
+                            arguments = event.data.get("arguments")
+                            if isinstance(arguments, dict):
+                                finalizer_output = arguments
+                        maybe_state = event.data.get("provider_state")
+                        if isinstance(maybe_state, ProviderState):
+                            captured_state = maybe_state
+                        if event.type == EventTypes.MODEL_COMPLETED:
+                            usage = add_usage(usage, event.data.get("usage"))
+                            completed_provider = event.provider or completed_provider
+                            model_value = event.data.get("model")
+                            if isinstance(model_value, str):
+                                completed_model = model_value
+                    break
+                except ProviderExecutionError:
+                    if not _can_fallback_provider_native(
+                        effective_strategy=effective_strategy,
+                        output_schema=output_schema,
+                        fallback=spec.fallback,
+                        already_used=provider_native_fallback is not None,
+                    ):
+                        raise
+                    provider_native_fallback = spec.fallback
+                    effective_strategy = spec.fallback
+                    if effective_strategy == "posthoc_parse":
+                        output_schema = None
+                    text_parts = []
+                    continue
 
             last_text = (
                 json.dumps(finalizer_output)
@@ -812,6 +834,8 @@ class AgentRuntime:
                 continue
 
             metadata: dict[str, Any] = {"validation_attempts": attempt + 1}
+            if provider_native_fallback is not None:
+                metadata["provider_native_fallback"] = provider_native_fallback
             usage_dict = usage_to_dict(usage)
             if usage_dict is not None:
                 metadata["usage"] = usage_dict
@@ -882,6 +906,21 @@ def _resolve_output_spec(
     if output_spec is not None:
         return output_spec
     return OutputSpec(schema=output_type, strategy="posthoc_parse")
+
+
+def _can_fallback_provider_native(
+    *,
+    effective_strategy: OutputStrategy | None,
+    output_schema: OutputSchema | None,
+    fallback: str,
+    already_used: bool,
+) -> bool:
+    return (
+        effective_strategy == "provider_native"
+        and output_schema is not None
+        and fallback in {"posthoc_parse", "finalizer_tool"}
+        and not already_used
+    )
 
 
 def _mcp_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:

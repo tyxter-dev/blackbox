@@ -64,6 +64,8 @@ def _strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
     normalized: dict[str, Any] = {}
     for key, value in schema.items():
+        if key == "default":
+            continue
         if isinstance(value, dict):
             normalized[key] = _strict_json_schema(value)
         elif isinstance(value, list):
@@ -75,6 +77,11 @@ def _strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
             normalized[key] = value
     if normalized.get("type") == "object":
         normalized.setdefault("additionalProperties", False)
+        properties = normalized.get("properties")
+        if isinstance(properties, dict):
+            normalized["required"] = list(properties)
+        else:
+            normalized.setdefault("required", [])
     return normalized
 
 
