@@ -575,7 +575,7 @@ The library must define stable constants for common lifecycle events. Providers 
 | P0-R12 | Structured result contract | `AgentResult[T]` exists with typed `output`, `text`, `events`, `items`, `artifacts`, `payloads`, `provider_state`, and `metadata`. `OutputSpec` exposes the four output strategies (`provider_native`, `finalizer_tool`, `posthoc_parse`, `posthoc_parse_with_retry`). |
 | P0-R13 | Tool facade | `AgentRuntime` exposes `runtime.tools` with `register / get / all_tools / to_provider_tools / call(..., mock=...)`. |
 | P0-R14 | Event correlation | Every event emitted by `runtime.run/.stream` carries a `run_id` (UUID per invocation) and a monotonic `sequence`. `EventStore.list_events(run_id, after_sequence=...)` returns the ordered tail. |
-| P0-R15 | Persistence interfaces | `EventStore` and `RunStore` Protocols exist with `InMemoryEventStore` / `InMemoryRunStore` defaults. JSONL/SQLite implementations land in P1. |
+| P0-R15 | Persistence interfaces | `EventStore` and `RunStore` Protocols exist with `InMemoryEventStore` / `InMemoryRunStore` defaults. JSONL/SQLite implementations are included as early persistence adapters. |
 | P0-R16 | Policy interface | A minimal `Policy` Protocol with checkpoint constants exists. The legacy `approval_policy` callable is wrapped as one implementation. Declarative rules stay P2. |
 | P0-R17 | Negative capability honesty | Every capability flag a provider advertises as `False` is covered by a test that the corresponding operation raises a typed runtime error rather than silently no-oping. |
 
@@ -1004,6 +1004,7 @@ Deliverables:
 - `runtime.tools` facade,
 - `AgentLoop` shared by `LocalAgentProvider` and `AgentRuntime.run`,
 - high-level `runtime.run/.stream` with `AgentResult[T]` and `OutputSpec`,
+- JSONL event store, SQLite run store, and resume-from-saved-state coverage,
 - baseline test suite covering every P0 requirement.
 
 ### M1: OpenAI Responses-native model provider
@@ -1021,6 +1022,8 @@ Deliverables:
 
 ### M2: Policy, approvals, and workspace
 
+Status: started.
+
 Deliverables:
 
 - richer policy checkpoints (`before_command`, `before_workspace_write`,
@@ -1031,7 +1034,23 @@ Deliverables:
 - command execution policy hooks,
 - artifact lifecycle wired through `ArtifactPage`.
 
+Implemented slice:
+
+- local `WorkspaceRuntime` for local directories,
+- file read/write/delete, patch artifact, snapshot, and command events,
+- `before_workspace_write`, `before_command`, and `before_artifact_export`
+  policy gates,
+- workspace tool registration through `runtime.tools.register_workspace(...)`.
+
+Still pending:
+
+- approval-channel integration at workspace checkpoints,
+- git/sandbox/cloud workspace kinds,
+- richer artifact export and replay behavior.
+
 ### M3: MCP
+
+Status: started.
 
 Deliverables:
 
@@ -1041,6 +1060,19 @@ Deliverables:
 - namespaced `ToolRef` IDs (`mcp:<server>.<tool>`),
 - approval policy integration,
 - `list_tools` caching with explicit invalidation.
+
+Implemented slice:
+
+- local `MCPConnector` surface,
+- registered local MCP tools listed as `mcp:<server>.<tool>`,
+- local MCP call dispatch with canonical events,
+- `before_mcp_call` policy gate and approval-required event.
+
+Still pending:
+
+- stdio, HTTP/SSE, and streamable HTTP transport management,
+- provider-native remote MCP configuration passthrough,
+- list-tools caching and invalidation.
 
 ### M4: Cloud / coding-agent providers
 
@@ -1052,9 +1084,11 @@ Deliverables in priority order:
 
 ### M5: Observability and persistence adapters
 
+Status: started.
+
 Deliverables:
 
-- JSONL `EventStore` and SQLite `RunStore`,
+- JSONL `EventStore` and SQLite `RunStore` (implemented),
 - OpenTelemetry trace exporter,
 - replay/debug tooling against stored events.
 

@@ -14,10 +14,27 @@ This scaffold takes the routing idea but not the dependency or format normalizat
 - Provider-native state is stored in `ProviderState` and adapter-specific metadata.
 - Events and items are normalized; native payloads are preserved.
 
-## First implementation milestone
+## Current milestone posture
 
-1. Implement OpenAI Responses-native `ModelProvider`.
-2. Keep `EchoModelProvider` as the test provider.
-3. Add a provider-native mapping table from OpenAI output item types to `RunItem` and `AgentEvent`.
-4. Add tool dispatch from `RunItem(type="function_call")` to `ToolRuntime`.
-5. Add remote MCP and cloud-agent adapters only after the event/state model proves stable.
+The local model/tool loop is implemented and covered by the validation
+catalog. `AgentRuntime.run(...)` and `AgentRuntime.stream(...)` drive a shared
+`AgentLoop`, dispatch local tools through `ToolRuntime`, collect
+`AgentResult[T]`, preserve provider state, and emit correlated events.
+
+Implemented provider/runtime slices:
+
+1. `EchoModelProvider` and deterministic scripted-model fixtures for local tests.
+2. OpenAI Responses-native event mapping and continuation state.
+3. Anthropic Messages-native event mapping and continuation state.
+4. Gemini GenerateContent-native event mapping and continuation state.
+5. JSONL event store and SQLite run store adapters.
+6. Local workspace runtime and workspace tools registered through the high-level loop.
+7. Local MCP connector for registered tools with namespaced refs and policy gates.
+
+Remaining architectural targets:
+
+1. Cloud/coding-agent providers with real session streaming.
+2. MCP stdio, HTTP/SSE, and streamable HTTP transport management.
+3. Provider-native remote MCP configuration passthrough.
+4. Workspace approval-channel integration and non-local workspace kinds.
+5. OpenTelemetry-style trace export and richer replay/debug tooling.
