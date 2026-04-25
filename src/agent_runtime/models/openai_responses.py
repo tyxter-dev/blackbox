@@ -7,7 +7,7 @@ from agent_runtime.core.accounting import usage_from_openai_response
 from agent_runtime.core.capabilities import ModelCapabilities
 from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
 from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.items import ItemTypes, RunItem
+from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.hosted_tools import openai_include_values, to_openai_tool
 from agent_runtime.providers.base import TurnRequest
@@ -34,13 +34,32 @@ _ITEM_TYPE_TO_RUN_ITEM = {
     "mcp_approval_request": ItemTypes.MCP_APPROVAL_REQUEST,
 }
 
+_HOSTED_TOOL_CALL_TYPES = {
+    "web_search_call": "web_search",
+    "file_search_call": "file_search",
+    "code_interpreter_call": "code_interpreter",
+    "computer_call": "computer",
+    "image_generation_call": "image_generation",
+}
+
+_HOSTED_TOOL_DATA_KEYS = (
+    "status",
+    "query",
+    "results",
+    "output",
+    "code",
+    "action",
+    "call_id",
+)
+
 
 class OpenAIResponsesProvider:
     """Provider-native adapter for the OpenAI Responses API.
 
     Maps native streaming events to AgentEvents while preserving raw payloads.
-    Stable item types get typed events; evolving hosted tools fall back to
-    MODEL_ITEM_CREATED with the original item type stashed in ``data['item_type']``.
+    Stable item types get typed events; known hosted tools become hosted-tool run
+    items. Unknown provider items fall back to MODEL_ITEM_CREATED with the
+    original item type stashed in ``data['item_type']``.
     """
 
     provider_id = "openai"
@@ -271,6 +290,9 @@ def _map_item_added(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
         data["call_id"] = _attr(item, "call_id") or item_id or ""
         data["name"] = _attr(item, "name") or ""
         data["arguments"] = _parse_arguments(_attr(item, "arguments"))
+    elif item_type in _HOSTED_TOOL_CALL_TYPES:
+        run_item_type = ItemTypes.HOSTED_TOOL_CALL
+        data.update(_hosted_tool_data(item, item_type=item_type))
 
     run_item = RunItem(
         type=run_item_type,
@@ -314,6 +336,28 @@ def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
             raw=raw,
         )
 
+    if item_type in _HOSTED_TOOL_CALL_TYPES:
+        data: dict[str, Any] = {
+            "item_type": item_type,
+            **_hosted_tool_data(item, item_type=item_type),
+        }
+        run_item = RunItem(
+            type=ItemTypes.HOSTED_TOOL_CALL,
+            provider=provider,
+            status=_completed_item_status(item),
+            id=item_id or f"item_{id(item)}",
+            data=dict(data),
+            raw=item,
+        )
+        data["item"] = run_item
+        return AgentEvent(
+            type=EventTypes.MODEL_ITEM_COMPLETED,
+            provider=provider,
+            item_id=run_item.id,
+            data=data,
+            raw=raw,
+        )
+
     return AgentEvent(
         type=EventTypes.MODEL_ITEM_COMPLETED,
         provider=provider,
@@ -350,6 +394,22 @@ def _attr(obj: Any, name: str) -> Any:
     if isinstance(obj, dict):
         return obj.get(name)
     return getattr(obj, name, None)
+
+
+def _hosted_tool_data(item: Any, *, item_type: str) -> dict[str, Any]:
+    data: dict[str, Any] = {"hosted_tool_type": _HOSTED_TOOL_CALL_TYPES[item_type]}
+    for key in _HOSTED_TOOL_DATA_KEYS:
+        value = _attr(item, key)
+        if value is not None:
+            data[key] = value
+    return data
+
+
+def _completed_item_status(item: Any) -> ItemStatus:
+    status = _attr(item, "status")
+    if status == "failed":
+        return "failed"
+    return "completed"
 
 
 def _parse_arguments(value: Any) -> dict[str, Any]:

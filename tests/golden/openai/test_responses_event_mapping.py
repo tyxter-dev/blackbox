@@ -77,23 +77,55 @@ async def test_function_call_emits_tool_call_requested_with_parsed_arguments() -
     assert payload["arguments"] == {"city": "Paris"}
 
 
-async def test_hosted_tool_falls_back_to_generic_item_event() -> None:
+async def test_hosted_tool_maps_to_typed_run_item() -> None:
     client = FakeOpenAIClient()
-    hosted = item("web_search_call", id_="ws_1", query="agent runtime")
+    hosted = item("web_search_call", id_="ws_1", query="agent runtime", status="completed")
     client.queue(
-        events=[evt("response.output_item.added", item=hosted)],
+        events=[
+            evt("response.output_item.added", item=hosted),
+            evt("response.output_item.done", item=hosted),
+        ],
         final_response=final_response(id_="resp_3", output=[hosted]),
     )
 
     runtime = _runtime_with(client)
     result = await runtime.models.run(provider="openai/gpt-5.4", input="search")
 
-    fallback = [
-        e for e in result.events
-        if e.type == EventTypes.MODEL_ITEM_CREATED and e.data.get("item_type") == "web_search_call"
+    hosted_events = [
+        e
+        for e in result.events
+        if e.data.get("hosted_tool_type") == "web_search"
     ]
-    assert fallback, "hosted tool should map to MODEL_ITEM_CREATED with item_type"
-    assert fallback[0].raw is not None  # raw payload preserved
+    assert [event.type for event in hosted_events] == [
+        EventTypes.MODEL_ITEM_CREATED,
+        EventTypes.MODEL_ITEM_COMPLETED,
+    ]
+    run_item = hosted_events[0].data["item"]
+    assert run_item.type == ItemTypes.HOSTED_TOOL_CALL
+    assert run_item.data["query"] == "agent runtime"
+    assert hosted_events[0].raw is not None  # raw payload preserved
+
+
+async def test_unknown_hosted_tool_falls_back_to_generic_item_event() -> None:
+    client = FakeOpenAIClient()
+    hosted = item("browser_widget_call", id_="bw_1", prompt="inspect")
+    client.queue(
+        events=[evt("response.output_item.added", item=hosted)],
+        final_response=final_response(id_="resp_3b", output=[hosted]),
+    )
+
+    runtime = _runtime_with(client)
+    result = await runtime.models.run(provider="openai/gpt-5.4", input="inspect")
+
+    fallback = [
+        e
+        for e in result.events
+        if e.type == EventTypes.MODEL_ITEM_CREATED
+        and e.data.get("item_type") == "browser_widget_call"
+    ]
+    assert fallback, "unknown hosted tool should keep the generic item path"
+    assert fallback[0].data["item"].type == "browser_widget_call"
+    assert fallback[0].raw is not None
 
 
 async def test_provider_state_drives_previous_response_id() -> None:

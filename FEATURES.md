@@ -63,6 +63,7 @@ Status legend:
 |---|---|---|---|
 | Typed hosted tool specs | Supported | `WebSearch`, `FileSearch`, `CodeInterpreter`, `HostedToolRaw` | Provider-managed tools are passed via `hosted_tools` and remain distinct from local function tools. |
 | OpenAI hosted tool mapping | Supported | `runtime.run(..., hosted_tools=[...])` | Maps web search, file search, code interpreter, and raw hosted payloads into Responses `tools`; file search result inclusion is wired through `include`. |
+| OpenAI hosted tool events | Supported | `RunItem(type="hosted_tool_call")` | Known hosted output items are normalized into typed run items while preserving provider raw payloads. |
 | Gemini hosted web search | Supported | `WebSearch` | Maps to GenerateContent `google_search`; unsupported hosted tool specs raise typed unsupported-feature errors. |
 | Raw hosted tool passthrough | Supported | `HostedToolRaw` | Escape hatch for provider-native tool payloads where the runtime has no typed wrapper yet. |
 

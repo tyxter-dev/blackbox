@@ -202,8 +202,10 @@ Runnable scripts live under `examples/`:
 
 The first real `ModelProvider` is implemented and wires the Responses API
 event stream into typed `AgentEvent`s. Stable items (`message`, `function_call`,
-`tool_search_*`, `mcp_*`, reasoning) get canonical event types; evolving hosted
-tools fall back to `MODEL_ITEM_CREATED` with the original item type stashed in
+`tool_search_*`, `mcp_*`, reasoning) get canonical event types; known hosted
+tools such as web search, file search, code interpreter, computer use, and image
+generation become `hosted_tool_call` run items. Unknown provider items fall back
+to `MODEL_ITEM_CREATED` with the original item type stashed in
 `data["item_type"]` and the raw payload preserved on `event.raw`.
 `ProviderState.previous_response_id` round-trips for multi-turn continuations.
 

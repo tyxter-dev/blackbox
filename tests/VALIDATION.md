@@ -62,7 +62,7 @@ await runtime.models.stream(...)
 | 1.9b | ✅ | Finalizer tool structured output | `runtime/test_provider_native_output.py::test_finalizer_tool_strategy_returns_validated_output`, `::test_provider_native_can_fallback_to_finalizer_tool` | Runtime injects a hidden final output tool, terminates on the tool call, and validates arguments as the final typed output. |
 | 1.10 | ✅ | Provider state continuation | `unit/test_state.py` | Runtime preserves and reuses `ProviderState`. |
 | 1.11 | ✅ | Cancellation | `runtime/test_local_agent_provider.py::test_cancel_between_turns` | Runtime can cancel a running model/agent loop. |
-| 1.12 | ✅ | Raw provider payload | `golden/openai/test_responses_event_mapping.py::test_hosted_tool_falls_back_to_generic_item_event`, `golden/anthropic/test_messages_event_mapping.py::test_hosted_block_falls_back_to_generic_item_event` | Events keep raw provider data safely. |
+| 1.12 | ✅ | Raw provider payload | `golden/openai/test_responses_event_mapping.py::test_unknown_hosted_tool_falls_back_to_generic_item_event`, `golden/anthropic/test_messages_event_mapping.py::test_hosted_block_falls_back_to_generic_item_event` | Events keep raw provider data safely. |
 | 1.13 | ✅ | Anthropic Messages adapter parity | `golden/anthropic/test_messages_event_mapping.py` (8 tests) | Second real provider maps streaming events without flattening to chat. |
 | 1.14 | ✅ | Gemini GenerateContent adapter parity | `golden/gemini/test_generate_content_event_mapping.py`, `integration/gemini/test_generate_content_smoke.py` | Third real provider maps streaming events without flattening to chat; live smoke is gated by `GOOGLE_API_KEY`. |
 | 1.15 | ✅ | xAI Responses adapter parity | `golden/openai/test_responses_event_mapping.py::test_openai_compatible_subclass_preserves_provider_identity`, `integration/xai/test_responses_smoke.py` | OpenAI-compatible xAI Responses maps events and provider state under the `xai` provider identity; live smoke is gated by `XAI_API_KEY`. |
@@ -70,6 +70,7 @@ await runtime.models.stream(...)
 | 1.17 | ✅ | Model usage and cost accounting | `unit/test_model_accounting.py` | Provider usage payloads normalize into result metadata and optional catalog pricing produces cost estimates without hard-coded prices. |
 | 1.18 | ✅ | Chat compatibility projection | `unit/test_chat_compat.py` | Chat-shaped messages can be projected into model runtime input through an explicit facade without replacing provider-native internals. |
 | 1.19 | ✅ | Hosted tool specs | `unit/test_hosted_tools.py`, `unit/test_model_request_controls.py::test_openai_responses_maps_hosted_tools_to_tools_and_include`, `::test_gemini_maps_web_search_hosted_tool_to_config`, `::test_xai_only_accepts_raw_hosted_tools`, `runtime/test_runtime_run.py::test_run_forwards_hosted_tools_separately_from_local_tools` | Typed hosted tools map to provider-native payloads and stay separate from local function tools. |
+| 1.20 | ✅ | Hosted tool event normalization | `golden/openai/test_responses_event_mapping.py::test_hosted_tool_maps_to_typed_run_item`, `::test_unknown_hosted_tool_falls_back_to_generic_item_event` | Known hosted provider items become typed hosted-tool run items, while unknown provider items keep raw fallback behavior. |
 
 ---
 
