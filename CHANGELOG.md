@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.2.0 — Blackbox `runtime.run(...)` and `AgentResult[T]`
+
+Closes the gap between PRD §6 UC0 and the v0.1 scaffold. The high-level
+product promise from `llm_factory_toolkit` v1 is now restored on top of the
+provider-native primitives.
+
+### High-level API
+- `AgentRuntime.run(input=..., tools=..., output_type=..., tool_execution_context=...,
+  approval_policy=..., max_iterations=..., mock_tools=...)` returns
+  `AgentResult[T]`. Owns the complete tool/model loop end-to-end (PRD P0-R11).
+- `AgentRuntime.stream(...)` yields the same canonical events for callers
+  that want to observe the loop.
+- `AgentResult[T]` carries `output`, `text`, `events`, `items`, `artifacts`,
+  `payloads`, `provider_state`, `metadata` (PRD §10.7, P0-R12).
+- `runtime.tools` facade with `register`, `get`, `all_tools`,
+  `to_provider_tools`, `call(..., mock=...)` (P0-R13).
+
+### Loop extraction
+- New `agent_runtime.loop.AgentLoop` owns the iterative control flow per
+  PRD §8.4. Both `LocalAgentProvider` (session-shaped API) and
+  `AgentRuntime.run` (blackbox API) share the same loop body.
+
+### Tooling
+- `ToolRuntime.call(..., mock=True)` short-circuits real execution and
+  returns a canonical mock result.
+- `ToolResult.payload` is now plumbed through tool events and aggregated
+  into `AgentResult.payloads` (deferred-payload pattern from llm_toolkit).
+- `tool_execution_context={"user_id": ...}` injects context per-call without
+  exposing the parameter in the schema sent to the model.
+
+### Output validation
+- Pydantic `BaseModel` and `@dataclass` `output_type`s validated via
+  `model_validate_json` / `**json.loads`. Failures raise the new
+  `OutputValidationError` (fail-fast, carries `raw_text` and `cause`).
+
+### Tests
+- 10 new offline tests in `test_runtime_blackbox.py` mirroring the
+  `llm_factory_toolkit` v1 contract: text-only, Pydantic output, single tool,
+  three parallel tools, context-injection privacy, deferred-payload
+  collection, mock-tool short-circuit, validation error, stream parity.
+- 48 → 58 passing tests; 1 skipped (network-gated). Ruff + mypy --strict clean.
+
+### Examples
+- `examples/run_with_typed_output.py` runs the full blackbox loop offline
+  with an inline scripted model and a Pydantic `TicketDecision` output type.
+
 ## 0.1.0 — MVP
 
 The first release that satisfies PRD §27 *Definition of done for v0.1*.

@@ -1,39 +1,27 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact
 from agent_runtime.core.capabilities import AgentCapabilities
-from agent_runtime.core.errors import ApprovalError, SessionError
 from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef, SessionStatus
-from agent_runtime.core.state import ProviderState
+from agent_runtime.loop import AgentLoop, ApprovalPolicy
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.runtime import ModelRuntime
 from agent_runtime.tools.runtime import ToolRuntime
-
-ApprovalPolicy = Callable[[str, dict[str, Any]], bool]
-
-
-@dataclass(slots=True)
-class _PendingToolCall:
-    call_id: str
-    name: str
-    arguments: dict[str, Any]
 
 
 @dataclass(slots=True)
 class LocalAgentProvider:
     """Agent provider backed by a registered ModelProvider.
 
-    Drives a multi-turn loop: streams model events, dispatches local tool calls
-    through ToolRuntime, optionally pauses for approvals, and feeds tool results
-    back as the next model turn until the model produces a final answer.
+    Owns the session lifecycle and delegates the inner tool/model loop to
+    :class:`AgentLoop` so the same execution layer is shared with the
+    high-level ``AgentRuntime.run(...)`` API.
     """
 
     models: ModelRuntime
@@ -43,7 +31,7 @@ class LocalAgentProvider:
     provider_id: str = "local"
     _agents: dict[str, AgentSpec] = field(default_factory=dict)
     _sessions: dict[str, AgentSession] = field(default_factory=dict)
-    _approvals: dict[str, asyncio.Future[ApprovalDecision]] = field(default_factory=dict)
+    _loops: dict[str, AgentLoop] = field(default_factory=dict)
 
     def capabilities(self) -> AgentCapabilities:
         return AgentCapabilities(
@@ -86,166 +74,45 @@ class LocalAgentProvider:
         )
 
         model_ref = session_obj.model or "echo/echo-mini"
-        turn_input: str | list[Any] = session_obj.task
-        provider_state: ProviderState | None = None
 
-        for iteration in range(self.max_iterations):
+        async def stream_factory(
+            *, input: str | list[Any], provider_state: Any
+        ) -> AsyncIterator[AgentEvent]:
+            async for event in self.models.stream(
+                provider=model_ref, input=input, provider_state=provider_state,
+            ):
+                yield event
+
+        loop = AgentLoop(
+            stream_factory=stream_factory,
+            tools=self.tools,
+            approval_policy=self.approval_policy,
+            max_iterations=self.max_iterations,
+        )
+        self._loops[session_obj.id] = loop
+
+        terminal_seen: str | None = None
+        async for event in loop.run(
+            input=session_obj.task,
+            session_id=session_obj.id,
+            provider_id=self.provider_id,
+        ):
+            if event.type == EventTypes.APPROVAL_REQUESTED:
+                session_obj.status = "waiting"
+            elif event.type in {EventTypes.APPROVAL_APPROVED, EventTypes.APPROVAL_DENIED}:
+                session_obj.status = "running"
+            elif event.type in {EventTypes.SESSION_CANCELLED, EventTypes.SESSION_FAILED}:
+                terminal_seen = event.type
             current_status: SessionStatus = session_obj.status
             if current_status == "cancelled":
-                yield AgentEvent(
-                    type=EventTypes.SESSION_CANCELLED,
-                    provider=self.provider_id,
-                    session_id=session_obj.id,
-                    data={"agent_id": session_obj.agent_id, "iteration": iteration},
-                )
-                return
+                loop.cancel()
+            yield event
 
-            pending_calls: list[_PendingToolCall] = []
-            last_state: ProviderState | None = None
-
-            async for event in self.models.stream(
-                provider=model_ref,
-                input=turn_input,
-                provider_state=provider_state,
-            ):
-                yield AgentEvent(
-                    type=event.type,
-                    provider=event.provider,
-                    session_id=session_obj.id,
-                    item_id=event.item_id,
-                    data=event.data,
-                    raw=event.raw,
-                )
-                if event.type == EventTypes.TOOL_CALL_REQUESTED:
-                    pending_calls.append(
-                        _PendingToolCall(
-                            call_id=event.data.get("call_id") or event.item_id or "",
-                            name=event.data["name"],
-                            arguments=dict(event.data.get("arguments") or {}),
-                        )
-                    )
-                maybe_state = event.data.get("provider_state")
-                if isinstance(maybe_state, ProviderState):
-                    last_state = maybe_state
-
-            provider_state = last_state
-
-            if not pending_calls:
-                break
-
-            if self.tools is None:
-                raise SessionError(
-                    "Model requested a tool call but LocalAgentProvider has no ToolRuntime."
-                )
-
-            tool_results: list[RunItem] = []
-            for call in pending_calls:
-                if self.approval_policy and self.approval_policy(call.name, call.arguments):
-                    approval_id = f"approval_{call.call_id}"
-                    loop = asyncio.get_running_loop()
-                    future: asyncio.Future[ApprovalDecision] = loop.create_future()
-                    self._approvals[approval_id] = future
-                    session_obj.status = "waiting"
-                    yield AgentEvent(
-                        type=EventTypes.APPROVAL_REQUESTED,
-                        provider=self.provider_id,
-                        session_id=session_obj.id,
-                        item_id=approval_id,
-                        data={
-                            "approval_id": approval_id,
-                            "action": call.name,
-                            "arguments": call.arguments,
-                        },
-                    )
-                    decision = await future
-                    session_obj.status = "running"
-                    yield AgentEvent(
-                        type=(
-                            EventTypes.APPROVAL_APPROVED
-                            if decision.approved
-                            else EventTypes.APPROVAL_DENIED
-                        ),
-                        provider=self.provider_id,
-                        session_id=session_obj.id,
-                        item_id=approval_id,
-                        data={"approval_id": approval_id, "reason": decision.reason},
-                    )
-                    if not decision.approved:
-                        tool_results.append(
-                            RunItem(
-                                type=ItemTypes.FUNCTION_RESULT,
-                                provider=self.provider_id,
-                                status="failed",
-                                data={
-                                    "call_id": call.call_id,
-                                    "name": call.name,
-                                    "error": "denied_by_approval",
-                                    "reason": decision.reason,
-                                },
-                            )
-                        )
-                        continue
-
-                yield AgentEvent(
-                    type=EventTypes.TOOL_CALL_STARTED,
-                    provider=self.provider_id,
-                    session_id=session_obj.id,
-                    item_id=call.call_id,
-                    data={"call_id": call.call_id, "name": call.name},
-                )
-                try:
-                    result = await self.tools.call(call.name, call.arguments)
-                except Exception as exc:
-                    yield AgentEvent(
-                        type=EventTypes.TOOL_CALL_FAILED,
-                        provider=self.provider_id,
-                        session_id=session_obj.id,
-                        item_id=call.call_id,
-                        data={"call_id": call.call_id, "name": call.name, "error": str(exc)},
-                    )
-                    tool_results.append(
-                        RunItem(
-                            type=ItemTypes.FUNCTION_RESULT,
-                            provider=self.provider_id,
-                            status="failed",
-                            data={"call_id": call.call_id, "name": call.name, "error": str(exc)},
-                        )
-                    )
-                    continue
-
-                yield AgentEvent(
-                    type=EventTypes.TOOL_CALL_COMPLETED,
-                    provider=self.provider_id,
-                    session_id=session_obj.id,
-                    item_id=call.call_id,
-                    data={
-                        "call_id": call.call_id,
-                        "name": call.name,
-                        "content": result.content,
-                    },
-                )
-                tool_results.append(
-                    RunItem(
-                        type=ItemTypes.FUNCTION_RESULT,
-                        provider=self.provider_id,
-                        status="completed",
-                        data={
-                            "call_id": call.call_id,
-                            "name": call.name,
-                            "content": result.content,
-                        },
-                    )
-                )
-
-            turn_input = tool_results
-        else:
+        if terminal_seen == EventTypes.SESSION_CANCELLED:
+            session_obj.status = "cancelled"
+            return
+        if terminal_seen == EventTypes.SESSION_FAILED:
             session_obj.status = "failed"
-            yield AgentEvent(
-                type=EventTypes.SESSION_FAILED,
-                provider=self.provider_id,
-                session_id=session_obj.id,
-                data={"reason": "max_iterations_reached", "limit": self.max_iterations},
-            )
             return
 
         session_obj.status = "completed"
@@ -261,14 +128,19 @@ class LocalAgentProvider:
         session_obj.task = f"{session_obj.task}\n\nUser: {message}"
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
-        future = self._approvals.pop(approval_id, None)
-        if future is None or future.done():
-            raise ApprovalError(f"No pending approval with id '{approval_id}'.")
-        future.set_result(decision)
+        for loop in self._loops.values():
+            if approval_id in loop._approvals:
+                await loop.approve(approval_id, decision)
+                return
+        from agent_runtime.core.errors import ApprovalError
+        raise ApprovalError(f"No pending approval with id '{approval_id}'.")
 
     async def cancel(self, session: SessionRef | AgentSession) -> None:
         session_obj = self._session(session)
         session_obj.status = "cancelled"
+        loop = self._loops.get(session_obj.id)
+        if loop is not None:
+            loop.cancel()
 
     async def list_artifacts(self, session: SessionRef | AgentSession) -> list[Artifact]:
         self._session(session)
@@ -278,3 +150,11 @@ class LocalAgentProvider:
         if isinstance(session, AgentSession):
             return session
         return self._sessions[session.id]
+
+    @property
+    def _approvals(self) -> dict[str, Any]:
+        """Compat shim for the existing test that reads _approvals directly."""
+        merged: dict[str, Any] = {}
+        for loop in self._loops.values():
+            merged.update(loop._approvals)
+        return merged

@@ -17,19 +17,37 @@ class ToolRuntime:
     max_concurrent: int | None = None
     timeout: float | None = None
 
-    async def call(self, name: str, arguments: dict[str, Any] | None = None) -> ToolResult:
+    async def call(
+        self,
+        name: str,
+        arguments: dict[str, Any] | None = None,
+        *,
+        mock: bool = False,
+    ) -> ToolResult:
         definition = self.registry.get(name)
+        if mock:
+            return ToolResult(
+                content=f"Mocked execution for tool '{name}'.",
+                metadata={"mock": True, "tool_name": name},
+            )
         return await self._execute(definition, arguments or {})
 
-    async def call_many(self, calls: list[tuple[str, dict[str, Any]]]) -> list[ToolResult]:
+    async def call_many(
+        self,
+        calls: list[tuple[str, dict[str, Any]]],
+        *,
+        mock: bool = False,
+    ) -> list[ToolResult]:
         if self.max_concurrent is None:
-            return await asyncio.gather(*(self.call(name, args) for name, args in calls))
+            return await asyncio.gather(
+                *(self.call(name, args, mock=mock) for name, args in calls)
+            )
 
         semaphore = asyncio.Semaphore(self.max_concurrent)
 
         async def guarded(name: str, args: dict[str, Any]) -> ToolResult:
             async with semaphore:
-                return await self.call(name, args)
+                return await self.call(name, args, mock=mock)
 
         return await asyncio.gather(*(guarded(name, args) for name, args in calls))
 

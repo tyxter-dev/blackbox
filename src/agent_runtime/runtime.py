@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from typing import Any, TypeVar, cast
 
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact
+from agent_runtime.core.errors import OutputValidationError
 from agent_runtime.core.events import AgentEvent, EventTypes
+from agent_runtime.core.items import RunItem
+from agent_runtime.core.results import AgentResult, ToolPayload
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.providers.base import AgentSpec, TaskSpec, TurnRequest, TurnResult
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
+from agent_runtime.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
+from agent_runtime.tools.runtime import ToolRuntime
+
+T = TypeVar("T")
 
 
 @dataclass(slots=True)
@@ -132,13 +141,263 @@ class AgentRuntimeFacade:
         return await adapter.list_artifacts(session)
 
 
+@dataclass(slots=True)
+class ToolRuntimeFacade:
+    """High-level facade exposing the local tool registry on AgentRuntime.
+
+    Wraps a ``ToolRegistry`` and a default ``ToolRuntime`` so applications can
+    register tools without touching the underlying classes.
+    """
+
+    registry: ToolRegistry = field(default_factory=ToolRegistry)
+    default_runtime: ToolRuntime = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.default_runtime = ToolRuntime(self.registry)
+
+    def register(
+        self,
+        function: ToolCallable,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        parameters: dict[str, Any] | None = None,
+        category: str | None = None,
+        tags: list[str] | None = None,
+        blocking: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> ToolDefinition:
+        return self.registry.register(
+            function,
+            name=name,
+            description=description,
+            parameters=parameters,
+            category=category,
+            tags=tags,
+            blocking=blocking,
+            metadata=metadata,
+        )
+
+    def get(self, name: str) -> ToolDefinition:
+        return self.registry.get(name)
+
+    def all_tools(self) -> list[ToolDefinition]:
+        return self.registry.all_tools()
+
+    def to_provider_tools(self) -> list[dict[str, Any]]:
+        return self.registry.to_provider_tools()
+
+    async def call(
+        self, name: str, arguments: dict[str, Any] | None = None, *, mock: bool = False
+    ) -> Any:
+        return await self.default_runtime.call(name, arguments, mock=mock)
+
+
 class AgentRuntime:
     """Top-level runtime.
 
-    The two facades intentionally separate model turns from agent sessions.
+    Exposes:
+      * ``runtime.run(...)`` and ``runtime.stream(...)`` — high-level blackbox
+        loop that owns tool dispatch, continuation, and structured output
+        validation. This is the spiritual successor to the v1 product promise.
+      * ``runtime.tools`` — the local tool registry facade used by the
+        high-level path.
+      * ``runtime.models`` and ``runtime.agents`` — lower-level supervision
+        facades for direct model turns and agent sessions.
     """
 
     def __init__(self, registry: ProviderRegistry | None = None) -> None:
         self.registry = registry or ProviderRegistry()
         self.models = ModelRuntime(self.registry)
         self.agents = AgentRuntimeFacade(self.registry)
+        self.tools = ToolRuntimeFacade()
+
+    async def stream(
+        self,
+        *,
+        provider: str,
+        input: str,
+        model: str | None = None,
+        tools: list[str] | None = None,
+        tool_execution_context: dict[str, Any] | None = None,
+        approval_policy: Any = None,
+        max_iterations: int = 8,
+        mock_tools: bool = False,
+        **kwargs: Any,
+    ) -> AsyncIterator[AgentEvent]:
+        """Stream events from a complete agent loop driven by the registered model.
+
+        ``tools`` is a list of registered tool names to expose to the model.
+        Local tool calls are dispatched through ``runtime.tools`` automatically
+        and their results are fed back via provider-native continuation.
+        """
+        from agent_runtime.loop import AgentLoop
+
+        provider_ref = ProviderRef.parse(provider)
+        model_name = model or provider_ref.resource
+        if not model_name:
+            raise ValueError("model must be provided explicitly or as 'provider/model'.")
+
+        tool_definitions = self._tool_payload(tools)
+        tool_runtime = self._tool_runtime_for(tool_execution_context)
+
+        async def stream_factory(
+            *, input: str | list[Any], provider_state: ProviderState | None
+        ) -> AsyncIterator[AgentEvent]:
+            async for event in self.models.stream(
+                provider=provider,
+                model=model_name,
+                input=input,
+                provider_state=provider_state,
+                tools=tool_definitions,
+                **kwargs,
+            ):
+                yield event
+
+        loop = AgentLoop(
+            stream_factory=stream_factory,
+            tools=tool_runtime if tools else None,
+            approval_policy=approval_policy,
+            max_iterations=max_iterations,
+        )
+        async for event in loop.run(
+            input=input,
+            provider_id=provider_ref.provider_key,
+            mock_tools=mock_tools,
+        ):
+            yield event
+
+    async def run(
+        self,
+        *,
+        provider: str,
+        input: str,
+        model: str | None = None,
+        tools: list[str] | None = None,
+        tool_execution_context: dict[str, Any] | None = None,
+        approval_policy: Any = None,
+        max_iterations: int = 8,
+        mock_tools: bool = False,
+        output_type: type[T] | None = None,
+        **kwargs: Any,
+    ) -> AgentResult[T]:
+        """Run the complete agent loop and return a typed AgentResult.
+
+        When ``output_type`` is provided, the final text is validated against it.
+        Pydantic models, dataclasses, and ``str`` are supported in v0.1.
+        Validation failures raise :class:`OutputValidationError` (fail-fast).
+        """
+        events: list[AgentEvent] = []
+        items: list[RunItem] = []
+        artifacts: list[Artifact] = []
+        payloads: list[ToolPayload] = []
+        text_parts: list[str] = []
+        captured_state: ProviderState | None = None
+
+        async for event in self.stream(
+            provider=provider,
+            input=input,
+            model=model,
+            tools=tools,
+            tool_execution_context=tool_execution_context,
+            approval_policy=approval_policy,
+            max_iterations=max_iterations,
+            mock_tools=mock_tools,
+            **kwargs,
+        ):
+            events.append(event)
+            if event.type == EventTypes.MODEL_TEXT_DELTA:
+                delta = event.data.get("delta")
+                if isinstance(delta, str):
+                    text_parts.append(delta)
+            elif event.type == EventTypes.TOOL_CALL_COMPLETED:
+                if "payload" in event.data:
+                    payloads.append(
+                        ToolPayload(
+                            tool_name=event.data.get("name", ""),
+                            payload=event.data["payload"],
+                            call_id=event.data.get("call_id"),
+                        )
+                    )
+            item = event.data.get("item")
+            if isinstance(item, RunItem):
+                items.append(item)
+            maybe_state = event.data.get("provider_state")
+            if isinstance(maybe_state, ProviderState):
+                captured_state = maybe_state
+
+        text = "".join(text_parts)
+        output = _validate_output(text, output_type)
+
+        return AgentResult(
+            output=cast(T, output),
+            text=text,
+            events=events,
+            items=items,
+            artifacts=artifacts,
+            payloads=payloads,
+            provider_state=captured_state,
+        )
+
+    def _tool_payload(self, names: list[str] | None) -> list[dict[str, Any]]:
+        if not names:
+            return []
+        provider_tools = self.tools.to_provider_tools()
+        wanted = set(names)
+        return [t for t in provider_tools if t["name"] in wanted]
+
+    def _tool_runtime_for(
+        self, context: dict[str, Any] | None
+    ) -> ToolRuntime:
+        if context is None:
+            return self.tools.default_runtime
+        return ToolRuntime(self.tools.registry, context=context)
+
+
+def _validate_output(text: str, output_type: type[Any] | None) -> Any:
+    if output_type is None or output_type is str:
+        return text
+    pydantic_base: type[Any] | None
+    try:
+        from pydantic import BaseModel as _PydanticBaseModel
+        pydantic_base = _PydanticBaseModel
+    except ImportError:
+        pydantic_base = None
+
+    if (
+        pydantic_base is not None
+        and isinstance(output_type, type)
+        and issubclass(output_type, pydantic_base)
+    ):
+        try:
+            return output_type.model_validate_json(text)
+        except Exception as exc:
+            raise OutputValidationError(
+                f"Final output failed validation against {output_type.__name__}: {exc}",
+                raw_text=text,
+                cause=exc,
+            ) from exc
+
+    import dataclasses
+    if dataclasses.is_dataclass(output_type):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise OutputValidationError(
+                f"Final output is not valid JSON for {output_type.__name__}",
+                raw_text=text,
+                cause=exc,
+            ) from exc
+        try:
+            return output_type(**data)
+        except TypeError as exc:
+            raise OutputValidationError(
+                f"Final output cannot be coerced to {output_type.__name__}: {exc}",
+                raw_text=text,
+                cause=exc,
+            ) from exc
+
+    raise OutputValidationError(
+        f"Unsupported output_type: {output_type!r}. Use str, a Pydantic model, or a dataclass.",
+        raw_text=text,
+    )

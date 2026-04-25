@@ -1,8 +1,10 @@
 from agent_runtime.core.approvals import ApprovalDecision, ApprovalRequest
 from agent_runtime.core.artifacts import Artifact, ArtifactRef
 from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities
+from agent_runtime.core.errors import OutputValidationError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
+from agent_runtime.core.results import AgentResult, ToolPayload
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.providers.base import (
@@ -21,6 +23,7 @@ __all__ = [
     "AgentEvent",
     "AgentProvider",
     "AgentRef",
+    "AgentResult",
     "AgentRuntime",
     "AgentRuntimeFacade",
     "AgentSession",
@@ -34,6 +37,7 @@ __all__ = [
     "ModelCapabilities",
     "ModelProvider",
     "ModelRuntime",
+    "OutputValidationError",
     "ProviderRef",
     "ProviderRegistry",
     "ProviderState",
@@ -41,6 +45,7 @@ __all__ = [
     "RunState",
     "SessionRef",
     "TaskSpec",
+    "ToolPayload",
     "TurnRequest",
     "TurnResult",
 ]

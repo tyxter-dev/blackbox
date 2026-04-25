@@ -48,3 +48,16 @@ class WorkspaceError(AgentRuntimeError):
 
 class MCPError(AgentRuntimeError):
     """Raised by MCP connector or remote MCP failures."""
+
+
+class OutputValidationError(AgentRuntimeError):
+    """Raised when a model's final output cannot be validated against the requested type.
+
+    Carries the raw text and the underlying validator error so the application
+    can decide whether to retry, log, or surface to the user.
+    """
+
+    def __init__(self, message: str, *, raw_text: str, cause: Exception | None = None) -> None:
+        super().__init__(message)
+        self.raw_text = raw_text
+        self.cause = cause

@@ -40,7 +40,48 @@ src/agent_runtime/
   observability/    # traces and event sink placeholders
 ```
 
-## Minimal usage
+## High-level blackbox API
+
+The product promise from `llm_factory_toolkit` v1 is preserved on top of the
+provider-native primitives: give the runtime a task, tools, and an output
+schema; get back a validated typed result. The runtime owns the tool/model
+loop end-to-end.
+
+```python
+from pydantic import BaseModel
+
+from agent_runtime import AgentRuntime
+from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+
+
+class TicketDecision(BaseModel):
+    should_escalate: bool
+    priority: str
+    summary: str
+
+
+runtime = AgentRuntime()
+runtime.registry.register_model(OpenAIResponsesProvider(api_key="..."))
+runtime.tools.register(create_ticket)
+runtime.tools.register(search_customer)
+
+result = await runtime.run(
+    provider="openai/gpt-5.4",
+    input="Review this customer report and create a ticket if needed.",
+    tools=["search_customer", "create_ticket"],
+    output_type=TicketDecision,
+)
+
+decision: TicketDecision = result.output
+print(decision.priority, result.payloads)
+```
+
+`AgentResult[T]` carries the validated `output`, the final `text` projection,
+the full event/run-item/artifact log, the tool `payloads` (for the deferred
+payload pattern: tools that return content for the model and structured data
+for the application), and the final `provider_state` for resumption.
+
+## Lower-level model turns
 
 ```python
 from agent_runtime import AgentRuntime
@@ -83,6 +124,8 @@ async for event in runtime.agents.stream(session):
 
 Runnable scripts live under `examples/`:
 
+- `examples/run_with_typed_output.py` — high-level blackbox loop with a
+  Pydantic `output_type`, tool dispatch, and deferred payload collection.
 - `examples/echo_run.py` — minimal model turn with the dependency-free echo provider.
 - `examples/local_agent_with_tool.py` — local agent driving a tool-call loop end-to-end.
 - `examples/openai_responses_run.py` — provider-native OpenAI Responses streaming
