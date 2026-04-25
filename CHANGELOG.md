@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+### Slice 9 — Anthropic Messages-native model provider (P1-R2)
+
+Second real `ModelProvider`, mirroring the M1 OpenAI Responses pattern.
+
+- `AnthropicMessagesProvider.stream_turn` maps native streaming events to
+  canonical `AgentEvent`s while preserving raw provider payloads:
+  - `text` blocks → `MODEL_ITEM_CREATED` plus `MODEL_TEXT_DELTA` per
+    `text_delta`, then `MODEL_ITEM_COMPLETED`.
+  - `thinking` blocks → reasoning items with `MODEL_REASONING_DELTA`.
+  - `tool_use` blocks accumulate `input_json_delta` chunks and emit a
+    single `TOOL_CALL_REQUESTED` (with parsed `arguments`) at
+    `content_block_stop`.
+  - `server_tool_use`, `web_search_tool_result`, and other evolving hosted
+    blocks fall back to `MODEL_ITEM_CREATED` with the original block type in
+    `data["item_type"]` and the raw block preserved on `event.raw`.
+- `ProviderState.native_history` carries the full Anthropic-shaped
+  `messages` array for multi-turn continuation. `FUNCTION_RESULT` `RunItem`s
+  fed back into the loop are converted into a `tool_result` user message
+  whose `tool_use_id` round-trips the original `call_id`.
+- Provider-neutral tool descriptors (OpenAI shape) are converted to
+  Anthropic's `{name, description, input_schema}` form transparently.
+- Capabilities advertise `supports_parallel_tool_calls=True` to match
+  Claude's actual behavior.
+- `[anthropic]` extra installs `anthropic>=0.40,<1`; client is lazy-imported.
+
+### Tests
+- 8 golden tests in `tests/golden/anthropic/test_messages_event_mapping.py`
+  drive a `FakeAnthropicClient` (mirrors the `FakeOpenAIClient` shape) over
+  text-only, tool-use with parsed input, thinking deltas, hosted-block
+  fallback, multi-turn `tool_result` round-trip, tool schema conversion,
+  missing-credentials, and SDK-failure paths.
+- Network-gated `tests/integration/anthropic/test_messages_smoke.py`
+  (`integration_anthropic` marker, skipped without `ANTHROPIC_API_KEY`).
+- 71 → 79 passing offline tests; 1 skipped (network-gated). Ruff +
+  mypy --strict clean.
+
 ## 0.2.0 — Blackbox `runtime.run(...)` and `AgentResult[T]`
 
 Closes the gap between PRD §6 UC0 and the v0.1 scaffold. The high-level

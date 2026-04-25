@@ -154,21 +154,46 @@ async for event in runtime.models.stream(
         print(event.data["delta"], end="")
 ```
 
+## Anthropic Messages-native model provider
+
+The second real `ModelProvider` is implemented and wires the Messages API
+streaming events into typed `AgentEvent`s. `text` and `thinking` blocks emit
+`MODEL_TEXT_DELTA` / `MODEL_REASONING_DELTA`; `tool_use` blocks accumulate
+`input_json_delta` chunks and emit `TOOL_CALL_REQUESTED` once the block
+closes; other blocks (`server_tool_use`, `web_search_tool_result`, future
+hosted tools) fall back to `MODEL_ITEM_CREATED` with the raw block preserved
+on `event.raw`. `ProviderState.native_history` carries the full Anthropic
+`messages` array for multi-turn continuation.
+
+```python
+from agent_runtime import AgentRuntime, EventTypes
+from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
+
+runtime = AgentRuntime()
+runtime.registry.register_model(AnthropicMessagesProvider(api_key="..."))
+
+async for event in runtime.models.stream(
+    provider="anthropic", model="claude-haiku-4-5-20251001", input="Review this patch.",
+):
+    if event.type == EventTypes.MODEL_TEXT_DELTA:
+        print(event.data["delta"], end="")
+```
+
 ## Tests
 
 ```bash
 pip install -e .[dev]
-pytest                          # offline suite
-pytest -m integration_openai    # network-gated, requires OPENAI_API_KEY
+pytest                            # offline suite
+pytest -m integration_openai      # network-gated, requires OPENAI_API_KEY
+pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
 ```
 
 ## Next implementation targets
 
-1. Anthropic Messages-native `ModelProvider`.
-2. Gemini GenerateContent-native `ModelProvider`.
-3. OpenAI cloud / Codex-style `AgentProvider`.
-4. Anthropic Managed Agents `AgentProvider`.
-5. Google Agent Platform `AgentProvider`.
-6. MCP local connector + provider-native remote MCP wiring.
-7. Workspace abstraction for repo/sandbox/cloud workspaces and patches.
+1. Gemini GenerateContent-native `ModelProvider`.
+2. OpenAI cloud / Codex-style `AgentProvider`.
+3. Claude Code `AgentProvider`.
+4. Vertex AI Agent Engine `AgentProvider`.
+5. MCP local connector + provider-native remote MCP wiring.
+6. Workspace abstraction for repo/sandbox/cloud workspaces and patches.
 

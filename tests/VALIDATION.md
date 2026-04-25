@@ -60,7 +60,8 @@ await runtime.models.stream(...)
 | 1.9 | ⏳ | Structured output retry | not yet — `OutputSpec.posthoc_parse_with_retry` exists but isn't wired | Runtime can repair or retry invalid structured output. |
 | 1.10 | ✅ | Provider state continuation | `unit/test_state.py` | Runtime preserves and reuses `ProviderState`. |
 | 1.11 | ✅ | Cancellation | `runtime/test_local_agent_provider.py::test_cancel_between_turns` | Runtime can cancel a running model/agent loop. |
-| 1.12 | ✅ | Raw provider payload | `golden/openai/test_responses_event_mapping.py::test_hosted_tool_falls_back_to_generic_item_event` | Events keep raw provider data safely. |
+| 1.12 | ✅ | Raw provider payload | `golden/openai/test_responses_event_mapping.py::test_hosted_tool_falls_back_to_generic_item_event`, `golden/anthropic/test_messages_event_mapping.py::test_hosted_block_falls_back_to_generic_item_event` | Events keep raw provider data safely. |
+| 1.13 | ✅ | Anthropic Messages adapter parity | `golden/anthropic/test_messages_event_mapping.py` (8 tests) | Second real provider maps streaming events without flattening to chat. |
 
 ---
 
