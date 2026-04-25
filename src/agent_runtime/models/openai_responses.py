@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -10,6 +11,11 @@ from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.hosted_tools import openai_include_values, to_openai_tool
+from agent_runtime.models._support import (
+    is_retryable_status_error,
+    sleep_for_retry,
+    strip_private_fields,
+)
 from agent_runtime.providers.base import TurnRequest
 
 _TYPED_ITEM_EVENTS = {
@@ -79,10 +85,17 @@ class OpenAIResponsesProvider:
         api_key: str | None = None,
         client: Any | None = None,
         base_url: str | None = None,
+        timeout: float | None = None,
+        max_retries: int = 2,
+        retry_min_delay: float = 0.5,
     ) -> None:
         self.api_key = api_key
         self._client = client
         self.base_url = base_url
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_min_delay = retry_min_delay
+        self._owns_client = client is None
 
     def capabilities(self, model: str | None = None) -> ModelCapabilities:
         return ModelCapabilities(
@@ -101,9 +114,11 @@ class OpenAIResponsesProvider:
     def _get_client(self) -> Any:
         if self._client is not None:
             return self._client
-        if not self.api_key:
+        api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
             raise ProviderNotConfiguredError(
-                "OpenAIResponsesProvider requires either a client or an api_key."
+                "OpenAIResponsesProvider requires either a client, an api_key, "
+                "or OPENAI_API_KEY."
             )
         try:
             from openai import AsyncOpenAI
@@ -112,11 +127,23 @@ class OpenAIResponsesProvider:
                 "OpenAIResponsesProvider needs the 'openai' package; install with the "
                 "[openai] extra."
             ) from exc
-        client_kwargs: dict[str, Any] = {"api_key": self.api_key}
+        client_kwargs: dict[str, Any] = {"api_key": api_key}
         if self.base_url is not None:
             client_kwargs["base_url"] = self.base_url
+        if self.timeout is not None:
+            client_kwargs["timeout"] = self.timeout
         self._client = AsyncOpenAI(**client_kwargs)
         return self._client
+
+    async def close(self) -> None:
+        if self._client is None or not self._owns_client:
+            return
+        close = getattr(self._client, "close", None)
+        if callable(close):
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
+        self._client = None
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         client = self._get_client()
@@ -128,19 +155,33 @@ class OpenAIResponsesProvider:
             data={"model": request.model},
         )
 
-        try:
-            async with client.responses.stream(**kwargs) as stream:
-                async for sdk_event in stream:
-                    mapped = _map_event(sdk_event, provider=self.provider_id)
-                    if mapped is not None:
-                        yield mapped
-                final_response = await _get_final_response(stream)
-        except ProviderExecutionError:
-            raise
-        except Exception as exc:
-            raise ProviderExecutionError(
-                f"OpenAI Responses stream failed: {exc!s}"
-            ) from exc
+        attempt = 0
+        while True:
+            emitted_provider_output = False
+            try:
+                async with client.responses.stream(**kwargs) as stream:
+                    async for sdk_event in stream:
+                        mapped = _map_event(sdk_event, provider=self.provider_id)
+                        if mapped is not None:
+                            emitted_provider_output = True
+                            yield mapped
+                    final_response = await _get_final_response(stream)
+                break
+            except ProviderExecutionError:
+                raise
+            except Exception as exc:
+                if (
+                    emitted_provider_output
+                    or attempt >= self.max_retries
+                    or not self._is_retryable_error(exc)
+                ):
+                    raise ProviderExecutionError(
+                        f"OpenAI Responses stream failed: {exc!s}"
+                    ) from exc
+                await sleep_for_retry(
+                    exc, attempt=attempt, base_delay=self.retry_min_delay
+                )
+                attempt += 1
 
         provider_state = _build_provider_state(final_response, provider=self.provider_id)
         usage = usage_from_openai_response(final_response)
@@ -153,6 +194,24 @@ class OpenAIResponsesProvider:
             data=data,
             raw=final_response,
         )
+
+    def _is_retryable_error(self, error: Exception) -> bool:
+        try:
+            from openai import APIConnectionError, APIStatusError, APITimeoutError
+        except ImportError:
+            return is_retryable_status_error(error)
+        if isinstance(error, (APIConnectionError, APITimeoutError)):
+            return True
+        if isinstance(error, APIStatusError):
+            body = getattr(error, "body", None)
+            if (
+                error.status_code == 429
+                and isinstance(body, dict)
+                and isinstance(body.get("error"), dict)
+                and body["error"].get("code") == "insufficient_quota"
+            ):
+                return False
+        return is_retryable_status_error(error)
 
     @staticmethod
     def _build_request_kwargs(request: TurnRequest) -> dict[str, Any]:
@@ -219,7 +278,7 @@ def _coerce_input(value: str | list[Any]) -> Any:
                 }
             )
         else:
-            converted.append(entry)
+            converted.append(strip_private_fields(entry))
     return converted
 
 

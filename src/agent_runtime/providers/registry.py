@@ -80,3 +80,18 @@ class ProviderRegistry:
 
     def list_agent_providers(self) -> list[str]:
         return sorted(self._agents)
+
+    async def close(self) -> None:
+        """Close registered providers that expose an async/sync close hook."""
+        seen: set[int] = set()
+        for provider in [*self._models.values(), *self._agents.values()]:
+            marker = id(provider)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            close = getattr(provider, "close", None)
+            if not callable(close):
+                continue
+            result = close()
+            if hasattr(result, "__await__"):
+                await result

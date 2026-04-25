@@ -20,11 +20,17 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
         api_key: str | None = None,
         client: Any | None = None,
         base_url: str | None = None,
+        timeout: float | None = None,
+        max_retries: int = 2,
+        retry_min_delay: float = 0.5,
     ) -> None:
         super().__init__(
             api_key=api_key,
             client=client,
             base_url=base_url or self.default_base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            retry_min_delay=retry_min_delay,
         )
 
     def capabilities(self, model: str | None = None) -> ModelCapabilities:

@@ -20,6 +20,7 @@ array for native multi-turn continuation.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -34,6 +35,11 @@ from agent_runtime.hosted_tools import (
     anthropic_mcp_servers,
     to_anthropic_tool,
 )
+from agent_runtime.models._support import (
+    is_retryable_status_error,
+    sleep_for_retry,
+    strip_private_fields,
+)
 from agent_runtime.providers.base import TurnRequest
 
 
@@ -42,9 +48,21 @@ class AnthropicMessagesProvider:
 
     provider_id = "anthropic"
 
-    def __init__(self, *, api_key: str | None = None, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        client: Any | None = None,
+        timeout: float | None = None,
+        max_retries: int = 2,
+        retry_min_delay: float = 0.5,
+    ) -> None:
         self.api_key = api_key
         self._client = client
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_min_delay = retry_min_delay
+        self._owns_client = client is None
 
     def capabilities(self, model: str | None = None) -> ModelCapabilities:
         return ModelCapabilities(
@@ -61,9 +79,11 @@ class AnthropicMessagesProvider:
     def _get_client(self) -> Any:
         if self._client is not None:
             return self._client
-        if not self.api_key:
+        api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
             raise ProviderNotConfiguredError(
-                "AnthropicMessagesProvider requires either a client or an api_key."
+                "AnthropicMessagesProvider requires either a client, an api_key, "
+                "or ANTHROPIC_API_KEY."
             )
         try:
             from anthropic import AsyncAnthropic
@@ -72,8 +92,21 @@ class AnthropicMessagesProvider:
                 "AnthropicMessagesProvider needs the 'anthropic' package; install with the "
                 "[anthropic] extra."
             ) from exc
-        self._client = AsyncAnthropic(api_key=self.api_key)
+        client_kwargs: dict[str, Any] = {"api_key": api_key}
+        if self.timeout is not None:
+            client_kwargs["timeout"] = self.timeout
+        self._client = AsyncAnthropic(**client_kwargs)
         return self._client
+
+    async def close(self) -> None:
+        if self._client is None or not self._owns_client:
+            return
+        close = getattr(self._client, "close", None)
+        if callable(close):
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
+        self._client = None
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         client = self._get_client()
@@ -89,24 +122,40 @@ class AnthropicMessagesProvider:
         partial_blocks: dict[int, dict[str, Any]] = {}
         json_buffers: dict[int, list[str]] = {}
 
-        try:
-            async with client.messages.stream(**kwargs) as stream:
-                async for sdk_event in stream:
-                    mapped = _map_event(
-                        sdk_event,
-                        provider=self.provider_id,
-                        partial_blocks=partial_blocks,
-                        json_buffers=json_buffers,
-                    )
-                    if mapped is not None:
-                        yield mapped
-                final_message = await _get_final_message(stream)
-        except ProviderExecutionError:
-            raise
-        except Exception as exc:
-            raise ProviderExecutionError(
-                f"Anthropic Messages stream failed: {exc!s}"
-            ) from exc
+        attempt = 0
+        while True:
+            emitted_provider_output = False
+            partial_blocks.clear()
+            json_buffers.clear()
+            try:
+                async with client.messages.stream(**kwargs) as stream:
+                    async for sdk_event in stream:
+                        mapped = _map_event(
+                            sdk_event,
+                            provider=self.provider_id,
+                            partial_blocks=partial_blocks,
+                            json_buffers=json_buffers,
+                        )
+                        if mapped is not None:
+                            emitted_provider_output = True
+                            yield mapped
+                    final_message = await _get_final_message(stream)
+                break
+            except ProviderExecutionError:
+                raise
+            except Exception as exc:
+                if (
+                    emitted_provider_output
+                    or attempt >= self.max_retries
+                    or not self._is_retryable_error(exc)
+                ):
+                    raise ProviderExecutionError(
+                        f"Anthropic Messages stream failed: {exc!s}"
+                    ) from exc
+                await sleep_for_retry(
+                    exc, attempt=attempt, base_delay=self.retry_min_delay
+                )
+                attempt += 1
 
         provider_state = _build_provider_state(messages, final_message)
         usage = usage_from_anthropic_message(final_message)
@@ -119,6 +168,15 @@ class AnthropicMessagesProvider:
             data=data,
             raw=final_message,
         )
+
+    def _is_retryable_error(self, error: Exception) -> bool:
+        try:
+            from anthropic import APIConnectionError, APIStatusError, APITimeoutError
+        except ImportError:
+            return is_retryable_status_error(error)
+        if isinstance(error, (APIConnectionError, APITimeoutError)):
+            return True
+        return isinstance(error, APIStatusError) and is_retryable_status_error(error)
 
     @staticmethod
     def _build_request_kwargs(
@@ -182,7 +240,7 @@ def _compose_messages(request: TurnRequest) -> list[dict[str, Any]]:
                 block["is_error"] = True
             tool_results.append(block)
         elif isinstance(entry, dict):
-            passthrough.append(entry)
+            passthrough.append(strip_private_fields(entry))
 
     new_turns: list[dict[str, Any]] = []
     if tool_results:

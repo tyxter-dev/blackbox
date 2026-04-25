@@ -8,6 +8,7 @@ messages.
 from __future__ import annotations
 
 import inspect
+import os
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -18,6 +19,11 @@ from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.hosted_tools import to_gemini_tool
+from agent_runtime.models._support import (
+    is_retryable_status_error,
+    sleep_for_retry,
+    strip_private_fields,
+)
 from agent_runtime.providers.base import TurnRequest
 
 
@@ -26,9 +32,21 @@ class GeminiGenerateContentProvider:
 
     provider_id = "google"
 
-    def __init__(self, *, api_key: str | None = None, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        client: Any | None = None,
+        timeout: float | None = None,
+        max_retries: int = 2,
+        retry_min_delay: float = 0.5,
+    ) -> None:
         self.api_key = api_key
         self._client = client
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_min_delay = retry_min_delay
+        self._owns_client = client is None
 
     def capabilities(self, model: str | None = None) -> ModelCapabilities:
         return ModelCapabilities(
@@ -45,9 +63,15 @@ class GeminiGenerateContentProvider:
     def _get_client(self) -> Any:
         if self._client is not None:
             return self._client
-        if not self.api_key:
+        api_key = (
+            self.api_key
+            or os.environ.get("GOOGLE_API_KEY")
+            or os.environ.get("GEMINI_API_KEY")
+        )
+        if not api_key:
             raise ProviderNotConfiguredError(
-                "GeminiGenerateContentProvider requires either a client or an api_key."
+                "GeminiGenerateContentProvider requires either a client, an api_key, "
+                "GOOGLE_API_KEY, or GEMINI_API_KEY."
             )
         try:
             from google import genai
@@ -56,8 +80,21 @@ class GeminiGenerateContentProvider:
                 "GeminiGenerateContentProvider needs the 'google-genai' package; "
                 "install with the [google] extra."
             ) from exc
-        self._client = genai.Client(api_key=self.api_key)
+        client_kwargs: dict[str, Any] = {"api_key": api_key}
+        if self.timeout is not None:
+            client_kwargs["http_options"] = {"timeout": self.timeout * 1000}
+        self._client = genai.Client(**client_kwargs)
         return self._client
+
+    async def close(self) -> None:
+        if self._client is None or not self._owns_client:
+            return
+        close = getattr(self._client, "close", None)
+        if callable(close):
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
+        self._client = None
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         client = self._get_client()
@@ -75,27 +112,45 @@ class GeminiGenerateContentProvider:
         tool_call_ids: list[str] = []
         usage = None
 
-        try:
-            stream = client.aio.models.generate_content_stream(**kwargs)
-            if inspect.isawaitable(stream):
-                stream = await stream
-            async for chunk in stream:
-                response_id = _attr(chunk, "response_id") or response_id
-                usage = add_usage(usage, usage_from_gemini_chunk(chunk))
-                for event in _map_chunk(
-                    chunk,
-                    provider=self.provider_id,
-                    assistant_parts=assistant_parts,
-                    thought_signatures=thought_signatures,
-                    tool_call_ids=tool_call_ids,
+        attempt = 0
+        while True:
+            emitted_provider_output = False
+            assistant_parts.clear()
+            thought_signatures.clear()
+            tool_call_ids.clear()
+            usage = None
+            try:
+                stream = client.aio.models.generate_content_stream(**kwargs)
+                if inspect.isawaitable(stream):
+                    stream = await stream
+                async for chunk in stream:
+                    response_id = _attr(chunk, "response_id") or response_id
+                    usage = add_usage(usage, usage_from_gemini_chunk(chunk))
+                    for event in _map_chunk(
+                        chunk,
+                        provider=self.provider_id,
+                        assistant_parts=assistant_parts,
+                        thought_signatures=thought_signatures,
+                        tool_call_ids=tool_call_ids,
+                    ):
+                        emitted_provider_output = True
+                        yield event
+                break
+            except ProviderExecutionError:
+                raise
+            except Exception as exc:
+                if (
+                    emitted_provider_output
+                    or attempt >= self.max_retries
+                    or not is_retryable_status_error(exc)
                 ):
-                    yield event
-        except ProviderExecutionError:
-            raise
-        except Exception as exc:
-            raise ProviderExecutionError(
-                f"Gemini GenerateContent stream failed: {exc!s}"
-            ) from exc
+                    raise ProviderExecutionError(
+                        f"Gemini GenerateContent stream failed: {exc!s}"
+                    ) from exc
+                await sleep_for_retry(
+                    exc, attempt=attempt, base_delay=self.retry_min_delay
+                )
+                attempt += 1
 
         provider_state = _build_provider_state(
             request=request,
@@ -190,7 +245,7 @@ def _compose_contents(request: TurnRequest) -> Any:
                 }
             )
         else:
-            passthrough.append(entry)
+            passthrough.append(strip_private_fields(entry))
 
     if parts:
         return [*prior, {"role": "user", "parts": parts}, *passthrough]

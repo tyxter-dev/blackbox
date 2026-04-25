@@ -567,6 +567,10 @@ class AgentRuntime:
         self.agents = AgentRuntimeFacade(self.registry)
         self.tools = ToolRuntimeFacade()
 
+    async def close(self) -> None:
+        """Release resources held by registered provider adapters."""
+        await self.registry.close()
+
     async def stream(
         self,
         *,
