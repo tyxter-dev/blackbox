@@ -182,7 +182,7 @@ async def test_gemini_requires_credentials_or_client() -> None:
 
 async def test_gemini_client_satisfies_streaming_capability() -> None:
     class EmptyModels:
-        async def generate_content_stream(self, **kwargs: object):
+        async def generate_content_stream(self, **kwargs: object) -> object:
             if False:
                 yield None
 

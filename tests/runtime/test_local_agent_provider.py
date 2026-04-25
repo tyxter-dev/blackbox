@@ -8,10 +8,14 @@ test_runtime_run.py / test_runtime_stream.py.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from typing import Any
 
 from agent_runtime import AgentRuntime, AgentSpec, EventTypes
 from agent_runtime.agents.local import LocalAgentProvider
 from agent_runtime.core.approvals import ApprovalDecision
+from agent_runtime.core.events import AgentEvent
+from agent_runtime.core.sessions import AgentSession
 from agent_runtime.models.echo import EchoModelProvider
 from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
 from tests.fixtures.scripted_model import (
@@ -24,7 +28,7 @@ from tests.fixtures.scripted_model import (
 def _build_runtime(
     *,
     tool_runtime: ToolRuntime | None = None,
-    approval_policy=None,
+    approval_policy: Any = None,
     max_iterations: int = 8,
 ) -> tuple[AgentRuntime, ScriptedModelProvider, LocalAgentProvider]:
     runtime = AgentRuntime()
@@ -40,7 +44,9 @@ def _build_runtime(
     return runtime, scripted, local
 
 
-async def _drive_session(runtime: AgentRuntime, model: str = "scripted/test") -> list:
+async def _drive_session(
+    runtime: AgentRuntime, model: str = "scripted/test"
+) -> tuple[list[AgentEvent], AgentSession]:
     await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="default"))
     session = await runtime.agents.create_session(
         provider="local", agent="default", task="go", model=model,
@@ -141,10 +147,10 @@ async def test_approval_pause_and_approve() -> None:
         provider="local", agent="d", task="go", model="scripted/test",
     )
 
-    events: list = []
+    events: list[AgentEvent] = []
     stream = runtime.agents.stream(session)
 
-    async def collector():
+    async def collector() -> None:
         async for event in stream:
             events.append(event)
 
@@ -188,7 +194,7 @@ async def test_approval_denial_skips_tool_and_records_failure() -> None:
         provider="local", agent="d", task="go", model="scripted/test",
     )
 
-    events: list = []
+    events: list[AgentEvent] = []
     stream = runtime.agents.stream(session)
     task = asyncio.create_task(_collect(stream, events))
 
@@ -209,6 +215,7 @@ async def test_approval_denial_skips_tool_and_records_failure() -> None:
     assert EventTypes.APPROVAL_DENIED in types
     assert EventTypes.TOOL_CALL_STARTED not in types
     follow_up_input = scripted.calls[1].input
+    assert isinstance(follow_up_input, list)
     assert follow_up_input[0].data["error"] == "denied_by_approval"
 
 
@@ -243,7 +250,7 @@ async def test_cancel_between_turns() -> None:
         provider="local", agent="d", task="go", model="scripted/test",
     )
 
-    events: list = []
+    events: list[AgentEvent] = []
     async for event in runtime.agents.stream(session):
         events.append(event)
         if event.type == EventTypes.TOOL_CALL_COMPLETED:
@@ -254,6 +261,8 @@ async def test_cancel_between_turns() -> None:
     assert types[-1] == EventTypes.SESSION_CANCELLED
 
 
-async def _collect(stream, sink: list) -> None:
+async def _collect(
+    stream: AsyncIterator[AgentEvent], sink: list[AgentEvent]
+) -> None:
     async for event in stream:
         sink.append(event)

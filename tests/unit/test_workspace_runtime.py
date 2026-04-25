@@ -246,4 +246,5 @@ async def test_patch_artifact_to_artifact_round_trip(tmp_path: Path) -> None:
     generic = artifact.to_artifact()
     assert generic.type == "patch"
     assert generic.id == artifact.id
+    assert generic.data is not None
     assert generic.data["diff"] == "diff"

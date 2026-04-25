@@ -6,7 +6,7 @@ replay or correlate across the EventStore.
 """
 from __future__ import annotations
 
-from agent_runtime import AgentRuntime, EventTypes
+from agent_runtime import AgentResult, AgentRuntime, EventTypes
 from agent_runtime.tools import ToolResult
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,
@@ -56,7 +56,7 @@ async def test_every_event_carries_run_id_and_monotonic_sequence() -> None:
 
     from itertools import pairwise
 
-    sequences = [e.sequence for e in events]
+    sequences = [e.sequence for e in events if e.sequence is not None]
     assert sequences == sorted(sequences)
     assert sequences[0] == 0
     assert all(b - a == 1 for a, b in pairwise(sequences))
@@ -68,7 +68,7 @@ async def test_run_and_stream_yield_correlated_run_ids() -> None:
     scripted.queue(text_only_turn("first"))
     scripted.queue(text_only_turn("second"))
 
-    first = await runtime.run(provider="scripted:test", input="a")
+    first: AgentResult[str] = await runtime.run(provider="scripted:test", input="a")
     second_events = [
         e async for e in runtime.stream(provider="scripted:test", input="b")
     ]

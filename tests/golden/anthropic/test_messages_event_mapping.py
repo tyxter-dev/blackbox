@@ -5,6 +5,7 @@ from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfigu
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.providers.base import TurnRequest
 from tests.fixtures.fake_anthropic_client import (
     FakeAnthropicClient,
     block_delta,
@@ -250,7 +251,7 @@ async def test_missing_credentials_and_client_raises_configuration_error() -> No
 
 async def test_sdk_failure_wrapped_in_provider_execution_error() -> None:
     class ExplodingMessages:
-        def stream(self, **kwargs):
+        def stream(self, **kwargs: object) -> object:
             raise RuntimeError("boom")
 
     bad_client = type("C", (), {"messages": ExplodingMessages()})()
@@ -264,6 +265,5 @@ async def test_sdk_failure_wrapped_in_provider_execution_error() -> None:
         raise AssertionError("expected ProviderExecutionError")
 
 
-def _dummy_request(text: str):
-    from agent_runtime.providers.base import TurnRequest
+def _dummy_request(text: str) -> TurnRequest:
     return TurnRequest(model="claude-haiku-4-5-20251001", input=text)

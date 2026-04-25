@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_runtime import AgentRuntime
+from agent_runtime import AgentResult, AgentRuntime
 from agent_runtime.core.state import RunState
 from agent_runtime.core.stores import SQLiteRunStore
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
@@ -28,7 +28,7 @@ async def test_resume_run_picks_up_saved_provider_state(tmp_path: Path) -> None:
     # First runtime: complete a turn and save state to disk.
     runtime_a, scripted_a = _runtime()
     scripted_a.queue(text_only_turn("first answer"))
-    first = await runtime_a.run(provider="scripted:test", input="initial")
+    first: AgentResult[str] = await runtime_a.run(provider="scripted:test", input="initial")
     assert first.text == "first answer"
     assert first.provider_state is not None
 
@@ -57,7 +57,7 @@ async def test_resume_run_picks_up_saved_provider_state(tmp_path: Path) -> None:
 
     # Resume: feed the loaded state back into runtime.run.
     scripted_b.queue(text_only_turn("second answer"))
-    second = await runtime_b.run(
+    second: AgentResult[str] = await runtime_b.run(
         provider="scripted:test",
         input="continue",
         provider_state=loaded.provider_state,

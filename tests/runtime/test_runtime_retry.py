@@ -11,7 +11,7 @@ import json
 import pytest
 from pydantic import BaseModel
 
-from agent_runtime import AgentRuntime, OutputValidationError
+from agent_runtime import AgentResult, AgentRuntime, OutputValidationError
 from agent_runtime.core.results import OutputSpec
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
@@ -35,7 +35,7 @@ async def test_retry_succeeds_after_validation_failure() -> None:
         text_only_turn(json.dumps({"priority": "high", "summary": "fix it"}))
     )
 
-    result = await runtime.run(
+    result: AgentResult[Decision] = await runtime.run(
         provider="scripted:test",
         input="Decide priority for ticket #42.",
         output_spec=OutputSpec(
@@ -97,7 +97,7 @@ async def test_first_attempt_success_records_single_attempt() -> None:
         text_only_turn(json.dumps({"priority": "low", "summary": "ok"}))
     )
 
-    result = await runtime.run(
+    result: AgentResult[Decision] = await runtime.run(
         provider="scripted:test",
         input="please decide",
         output_spec=OutputSpec(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_runtime import AgentRuntime, EventTypes
+from agent_runtime import AgentResult, AgentRuntime, EventTypes
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
@@ -28,7 +28,7 @@ async def test_runtime_appends_events_to_store_during_run() -> None:
     runtime.registry.register_model(scripted)
     scripted.queue(text_only_turn("ok"))
 
-    result = await runtime.run(provider="scripted/test", input="hi")
+    result: AgentResult[str] = await runtime.run(provider="scripted/test", input="hi")
     run_id = result.events[0].run_id
     assert run_id is not None
 

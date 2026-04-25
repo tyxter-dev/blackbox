@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -62,7 +63,7 @@ async def test_run_validates_pydantic_output_type() -> None:
         "name": "Sarah", "age": 35, "location": "Paris", "sentiment": "positive",
     })))
 
-    result = await runtime.run(
+    result: AgentResult[ExtractedInfo] = await runtime.run(
         provider="scripted:test", input="Extract info.", output_type=ExtractedInfo,
     )
 
@@ -92,7 +93,7 @@ async def test_run_validates_dataclass_output_type() -> None:
     runtime, scripted = _runtime()
     scripted.queue(text_only_turn(json.dumps({"priority": "high", "notes": "x"})))
 
-    result = await runtime.run(
+    result: AgentResult[Decision] = await runtime.run(
         provider="scripted:test", input="x", output_type=Decision,
     )
     assert isinstance(result.output, Decision)
@@ -116,7 +117,7 @@ async def test_run_dispatches_a_single_tool_and_returns_final_text() -> None:
     scripted.queue(tool_call_turn(call_id="c1", name="get_secret", arguments={"data_id": "abc"}))
     scripted.queue(text_only_turn("Final answer: secret=abc-XYZ"))
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test", input="get me the secret", tools=["get_secret"],
     )
 
@@ -161,7 +162,7 @@ async def test_run_dispatches_three_tools_in_one_turn() -> None:
     scripted.queue(three_tool_turn)
     scripted.queue(text_only_turn("alpha-BRAVO-charlie123"))
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test", input="combine all parts",
         tools=["part_1", "part_2", "part_3"],
     )
@@ -193,7 +194,7 @@ async def test_run_injects_tool_execution_context_without_schema_visibility() ->
     scripted.queue(tool_call_turn(call_id="c1", name="get_user_password", arguments={}))
     scripted.queue(text_only_turn("Password retrieved (snippet): gam***"))
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test",
         input="I need the password.",
         tools=["get_user_password"],
@@ -217,7 +218,7 @@ async def test_run_collects_deferred_payloads_from_each_tool() -> None:
     runtime, scripted = _runtime()
     secrets = {1: "Alpha-", 2: "BRAVO-", 3: "Charlie123"}
 
-    def make(part_no: int):
+    def make(part_no: int) -> Any:
         def fn(**_kwargs: Any) -> ToolResult:
             return ToolResult(
                 content=json.dumps({"status": "retrieved", "part": part_no}),
@@ -245,7 +246,7 @@ async def test_run_collects_deferred_payloads_from_each_tool() -> None:
     scripted.queue(parallel_turn)
     scripted.queue(text_only_turn("All three parts retrieved; assembled externally."))
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test", input="get all three parts",
         tools=["part_1", "part_2", "part_3"],
     )
@@ -276,7 +277,7 @@ async def test_run_with_mock_tools_does_not_invoke_real_function() -> None:
     scripted.queue(tool_call_turn(call_id="c1", name="real", arguments={"value": 1}))
     scripted.queue(text_only_turn("done"))
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test", input="x", tools=["real"], mock_tools=True,
     )
 
@@ -310,7 +311,7 @@ async def test_policy_deny_short_circuits_tool_dispatch() -> None:
     scripted.queue(text_only_turn("done"))
 
     policy: Policy = _DenyAll()
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test", input="x", tools=["t"], policy=policy,
     )
 
@@ -319,11 +320,12 @@ async def test_policy_deny_short_circuits_tool_dispatch() -> None:
     assert started == []
 
     sent_back = scripted.calls[1].input
+    assert isinstance(sent_back, list)
     assert sent_back[0].data["error"] == "denied_by_policy"
     assert sent_back[0].data["reason"] == "blocked by test policy"
 
 
-async def test_workspace_tools_run_through_agent_loop(tmp_path) -> None:
+async def test_workspace_tools_run_through_agent_loop(tmp_path: Path) -> None:
     (tmp_path / "notes.txt").write_text("ship it")
     runtime, scripted = _runtime()
     workspace_runtime = WorkspaceRuntime()
@@ -339,7 +341,7 @@ async def test_workspace_tools_run_through_agent_loop(tmp_path) -> None:
     )
     scripted.queue(text_only_turn("done"))
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test",
         input="read notes",
         tools=[tool.name for tool in registered],

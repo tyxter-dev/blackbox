@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, TypeVar, cast
 from uuid import uuid4
@@ -33,7 +33,7 @@ class ModelRuntime:
         *,
         provider: str,
         model: str | None = None,
-        input: str | list[object],
+        input: str | Sequence[object],
         provider_state: ProviderState | None = None,
         run_id: str | None = None,
         **kwargs: object,
@@ -45,7 +45,7 @@ class ModelRuntime:
         adapter = self.registry.get_model(provider_ref.provider_key)
         request = TurnRequest(
             model=model_name,
-            input=input,
+            input=input if isinstance(input, str) else list(input),
             provider_state=provider_state,
             extra=dict(kwargs),
         )
@@ -64,7 +64,7 @@ class ModelRuntime:
         *,
         provider: str,
         model: str | None = None,
-        input: str | list[object],
+        input: str | Sequence[object],
         provider_state: ProviderState | None = None,
         run_id: str | None = None,
         **kwargs: object,
