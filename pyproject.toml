@@ -25,11 +25,13 @@ openai = ["openai>=2,<3"]
 anthropic = ["anthropic>=0.40,<1"]
 google = ["google-genai>=1,<2"]
 mcp = ["mcp>=1,<2"]
+validate = ["pydantic>=2,<3"]
 dev = [
   "pytest>=8,<10",
   "pytest-asyncio>=0.24,<1",
   "ruff>=0.9,<1",
   "mypy>=1.15,<2",
+  "pydantic>=2,<3",
 ]
 all = [
   "openai>=2,<3",
