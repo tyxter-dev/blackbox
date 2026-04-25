@@ -79,12 +79,53 @@ async for event in runtime.agents.stream(session):
     print(event.type, event.data)
 ```
 
+## Examples
+
+Runnable scripts live under `examples/`:
+
+- `examples/echo_run.py` — minimal model turn with the dependency-free echo provider.
+- `examples/local_agent_with_tool.py` — local agent driving a tool-call loop end-to-end.
+- `examples/openai_responses_run.py` — provider-native OpenAI Responses streaming
+  (requires `OPENAI_API_KEY` and `pip install -e .[openai]`).
+
+## OpenAI Responses-native model provider
+
+The first real `ModelProvider` is implemented and wires the Responses API
+event stream into typed `AgentEvent`s. Stable items (`message`, `function_call`,
+`tool_search_*`, `mcp_*`, reasoning) get canonical event types; evolving hosted
+tools fall back to `MODEL_ITEM_CREATED` with the original item type stashed in
+`data["item_type"]` and the raw payload preserved on `event.raw`.
+`ProviderState.previous_response_id` round-trips for multi-turn continuations.
+
+```python
+from agent_runtime import AgentRuntime, EventTypes
+from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+
+runtime = AgentRuntime()
+runtime.registry.register_model(OpenAIResponsesProvider(api_key="..."))
+
+async for event in runtime.models.stream(
+    provider="openai", model="gpt-4o-mini", input="Review this patch."
+):
+    if event.type == EventTypes.MODEL_TEXT_DELTA:
+        print(event.data["delta"], end="")
+```
+
+## Tests
+
+```bash
+pip install -e .[dev]
+pytest                          # offline suite
+pytest -m integration_openai    # network-gated, requires OPENAI_API_KEY
+```
+
 ## Next implementation targets
 
-1. Implement OpenAI Responses-native `ModelProvider`.
-2. Add provider-native event mappings for tool calls, hosted tools, tool search, remote MCP, and reasoning items.
-3. Implement an OpenAI cloud-agent `AgentProvider` or SDK wrapper.
-4. Implement Google Agent Platform wrapper as an `AgentProvider`.
-5. Implement Anthropic Managed Agents wrapper as an `AgentProvider`.
-6. Keep LiteLLM out of the core; optionally add a compatibility provider later.
+1. Anthropic Messages-native `ModelProvider`.
+2. Gemini GenerateContent-native `ModelProvider`.
+3. OpenAI cloud / Codex-style `AgentProvider`.
+4. Anthropic Managed Agents `AgentProvider`.
+5. Google Agent Platform `AgentProvider`.
+6. MCP local connector + provider-native remote MCP wiring.
+7. Workspace abstraction for repo/sandbox/cloud workspaces and patches.
 
