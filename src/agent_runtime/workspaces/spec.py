@@ -16,9 +16,9 @@ class WorkspaceSpec:
     metadata: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def local(cls, root: str | Path) -> "WorkspaceSpec":
+    def local(cls, root: str | Path) -> WorkspaceSpec:
         return cls(kind="local", root=str(root))
 
     @classmethod
-    def git(cls, repo: str, *, branch: str | None = None) -> "WorkspaceSpec":
+    def git(cls, repo: str, *, branch: str | None = None) -> WorkspaceSpec:
         return cls(kind="git", repo=repo, branch=branch)

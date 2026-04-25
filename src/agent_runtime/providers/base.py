@@ -76,7 +76,7 @@ class ModelProvider(Protocol):
     def capabilities(self, model: str | None = None) -> ModelCapabilities:
         ...
 
-    async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
+    def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         ...
 
 
@@ -101,7 +101,7 @@ class AgentProvider(Protocol):
     async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> AgentSession:
         ...
 
-    async def stream_events(self, session: SessionRef | AgentSession) -> AsyncIterator[AgentEvent]:
+    def stream_events(self, session: SessionRef | AgentSession) -> AsyncIterator[AgentEvent]:
         ...
 
     async def send_message(self, session: SessionRef | AgentSession, message: str) -> None:

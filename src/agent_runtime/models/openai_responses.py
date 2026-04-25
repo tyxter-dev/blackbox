@@ -10,7 +10,6 @@ from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.providers.base import TurnRequest
 
-
 _TYPED_ITEM_EVENTS = {
     "message": EventTypes.MODEL_ITEM_CREATED,
     "reasoning": EventTypes.MODEL_ITEM_CREATED,

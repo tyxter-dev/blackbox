@@ -10,7 +10,6 @@ from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.providers.base import TurnRequest
 
-
 TurnScript = Callable[[TurnRequest], Iterable[AgentEvent]]
 
 

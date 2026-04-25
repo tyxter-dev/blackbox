@@ -65,7 +65,7 @@ class ToolRegistry:
         except KeyError as exc:
             raise ToolExecutionError(f"Unknown tool: {name}") from exc
 
-    def list(self) -> list[ToolDefinition]:
+    def all_tools(self) -> list[ToolDefinition]:
         return list(self._tools.values())
 
     def to_provider_tools(self) -> list[dict[str, Any]]:
@@ -81,5 +81,5 @@ class ToolRegistry:
                 "parameters": tool.parameters,
                 "metadata": tool.metadata,
             }
-            for tool in self.list()
+            for tool in self.all_tools()
         ]

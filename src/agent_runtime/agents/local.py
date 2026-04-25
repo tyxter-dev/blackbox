@@ -11,7 +11,7 @@ from agent_runtime.core.capabilities import AgentCapabilities
 from agent_runtime.core.errors import ApprovalError, SessionError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
+from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef, SessionStatus
 from agent_runtime.core.state import ProviderState
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.runtime import ModelRuntime
@@ -90,7 +90,8 @@ class LocalAgentProvider:
         provider_state: ProviderState | None = None
 
         for iteration in range(self.max_iterations):
-            if session_obj.status == "cancelled":
+            current_status: SessionStatus = session_obj.status
+            if current_status == "cancelled":
                 yield AgentEvent(
                     type=EventTypes.SESSION_CANCELLED,
                     provider=self.provider_id,
@@ -194,7 +195,7 @@ class LocalAgentProvider:
                 )
                 try:
                     result = await self.tools.call(call.name, call.arguments)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     yield AgentEvent(
                         type=EventTypes.TOOL_CALL_FAILED,
                         provider=self.provider_id,

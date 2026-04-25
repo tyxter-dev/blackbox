@@ -8,9 +8,23 @@
 
 ## 1. Executive summary
 
-Agent Runtime Core is a new Python library for supervising both model-level LLM workflows and cloud-managed agent workflows through a unified, provider-native runtime.
+Agent Runtime Core is a new Python library for running complete agent workflows and supervising both model-level LLM workflows and cloud-managed agent workflows through a unified, provider-native runtime.
 
-The library is not a rewrite of `llm_factory_toolkit`. It is a new architecture shaped around two first-class provider interfaces:
+The library is not a rewrite of `llm_factory_toolkit`. It is a new architecture, but it must preserve the original v1 product promise:
+
+```text
+User gives input.
+Runtime runs the full agent/tool loop internally.
+Model can request tools.
+Runtime executes tools safely.
+Model continues with tool results.
+Runtime validates the final output.
+User receives a final typed result.
+```
+
+That blackbox loop was the soul of `llm_factory_toolkit`: developers did not have to manually parse tool calls, dispatch functions, feed results back into the model, or reconstruct structured output. The new runtime must keep that high-level promise while adding modern provider-native sessions, events, artifacts, approvals, MCP, and cloud-agent support.
+
+The new architecture is shaped around two first-class provider interfaces:
 
 ```text
 ModelProvider
@@ -26,6 +40,10 @@ The core product thesis is:
 
 > Modern AI applications no longer only call models and execute local tools. They supervise agents that use hosted tools, cloud runtimes, MCP servers, sandboxes, workspaces, approvals, artifacts, checkpoints, and event streams. The library should normalize the supervision layer, not flatten every provider into chat messages.
 
+The companion product promise is:
+
+> The default user experience should still be: give the runtime a task, tools, and an output schema; the runtime runs the agent correctly and returns a validated result.
+
 The library must therefore be event-first, session-first, state-first, and provider-native. Chat messages may exist as an import/export compatibility layer, but they must not become the internal source of truth.
 
 ## 2. Why this product should exist
@@ -36,7 +54,9 @@ Older LLM libraries were designed around a simple loop:
 user message -> model response -> local tool call -> local tool result -> final answer
 ```
 
-That loop is still useful, but it is no longer enough for coding agents and production agents. Current provider offerings increasingly include hosted tools, cloud sandboxes, managed agents, remote MCP servers, persistent sessions, event streams, tool approvals, workspace state, generated artifacts, and deployment/evaluation workflows.
+`llm_factory_toolkit` v1 existed because that loop was still hard and still novel. Developers could provide input, tools, context, and a structured output model, then rely on the library to own the iterative model/tool exchange inside a blackbox. That was the product value, not just an implementation detail.
+
+That loop is still useful, and it must remain the easiest path. But by itself it is no longer enough for coding agents and production agents. Current provider offerings increasingly include hosted tools, cloud sandboxes, managed agents, remote MCP servers, persistent sessions, event streams, tool approvals, workspace state, generated artifacts, and deployment/evaluation workflows.
 
 The result is a new integration problem. Developers need one library that can coordinate:
 
@@ -53,6 +73,13 @@ The result is a new integration problem. Developers need one library that can co
 - resumable state.
 
 Existing provider-normalization libraries are useful for simple model calls, but they tend to normalize provider APIs into a shared text/chat format. That is not enough for agent supervision. This new library should preserve provider-native capabilities while exposing a common control plane.
+
+The runtime should therefore serve two levels of use:
+
+- **High-level task execution:** `input + tools + output schema -> AgentResult[T]`.
+- **Low-level supervision:** provider-native model turns, agent sessions, events, artifacts, state, approvals, and traces.
+
+The high-level path must be built on top of the low-level primitives, not replaced by them.
 
 ## 3. Product positioning
 

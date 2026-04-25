@@ -44,6 +44,14 @@ packages = ["src/agent_runtime"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+  "integration_openai: requires OPENAI_API_KEY and network access",
+  "integration_anthropic: requires ANTHROPIC_API_KEY and network access",
+  "integration_gemini: requires GOOGLE_API_KEY and network access",
+  "integration_google_platform: requires Google Agent Platform credentials",
+  "integration_cloud_agent: requires cloud-agent provider credentials",
+  "integration_mcp: requires a reachable MCP server",
+]
 
 [tool.mypy]
 python_version = "3.11"

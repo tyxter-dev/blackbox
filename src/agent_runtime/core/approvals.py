@@ -22,9 +22,9 @@ class ApprovalDecision:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def approve(cls, reason: str | None = None) -> "ApprovalDecision":
+    def approve(cls, reason: str | None = None) -> ApprovalDecision:
         return cls(approved=True, reason=reason)
 
     @classmethod
-    def deny(cls, reason: str | None = None) -> "ApprovalDecision":
+    def deny(cls, reason: str | None = None) -> ApprovalDecision:
         return cls(approved=False, reason=reason)

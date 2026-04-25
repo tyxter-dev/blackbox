@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from agent_runtime.core.approvals import ApprovalDecision
@@ -8,7 +9,7 @@ from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.providers.base import AgentSpec, TaskSpec, TurnRequest, TurnResult
-from agent_runtime.providers.registry import ProviderRegistry, ProviderRef
+from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 
 
 @dataclass(slots=True)
@@ -23,7 +24,7 @@ class ModelRuntime:
         input: str | list[object],
         provider_state: ProviderState | None = None,
         **kwargs: object,
-    ):
+    ) -> AsyncIterator[AgentEvent]:
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource
         if not model_name:
@@ -95,7 +96,9 @@ class AgentRuntimeFacade:
         self._sessions[session.id] = session
         return session
 
-    async def stream(self, session: SessionRef | AgentSession):
+    async def stream(
+        self, session: SessionRef | AgentSession
+    ) -> AsyncIterator[AgentEvent]:
         adapter = self.registry.get_agent(session.provider)
         async for event in adapter.stream_events(session):
             yield event
@@ -107,7 +110,7 @@ class AgentRuntimeFacade:
         agent: AgentRef | str,
         task: str | TaskSpec,
         model: str | None = None,
-    ):
+    ) -> AsyncIterator[AgentEvent]:
         session = await self.create_session(provider=provider, agent=agent, task=task, model=model)
         async for event in self.stream(session):
             yield event

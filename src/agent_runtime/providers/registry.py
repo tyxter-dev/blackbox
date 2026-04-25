@@ -20,7 +20,7 @@ class ProviderRef:
     resource: str | None = None
 
     @classmethod
-    def parse(cls, value: str) -> "ProviderRef":
+    def parse(cls, value: str) -> ProviderRef:
         head, sep, tail = value.partition("/")
         return cls(provider_key=head, resource=tail if sep else None)
 

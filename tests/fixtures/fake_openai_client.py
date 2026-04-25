@@ -14,21 +14,21 @@ class FakeStream:
     final_response: Any = None
     captured_kwargs: dict[str, Any] = field(default_factory=dict)
 
-    async def __aenter__(self) -> "FakeStream":
+    async def __aenter__(self) -> FakeStream:
         return self
 
     async def __aexit__(self, *exc: Any) -> bool:
         return False
 
-    def __aiter__(self) -> "FakeStream":
+    def __aiter__(self) -> FakeStream:
         self._iter = iter(self.events)
         return self
 
     async def __anext__(self) -> Any:
         try:
             return next(self._iter)
-        except StopIteration:
-            raise StopAsyncIteration
+        except StopIteration as exc:
+            raise StopAsyncIteration from exc
 
     async def get_final_response(self) -> Any:
         return self.final_response
