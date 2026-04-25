@@ -58,6 +58,7 @@ await runtime.models.stream(...)
 | 1.7 | ✅ | Tool-call error | `runtime/test_local_agent_provider.py` (denial path) | Tool failures convert into typed runtime/tool events. |
 | 1.8 | ✅ | Structured output | `runtime/test_runtime_run.py::test_run_validates_pydantic_output_type` | Runtime validates final output against a schema. |
 | 1.9 | ✅ | Structured output retry | `runtime/test_runtime_retry.py` (5 tests) | Runtime can repair invalid structured output via repair prompt up to `max_validation_retries`. |
+| 1.9a | ✅ | Provider-native structured output | `unit/test_output_schema.py`, `unit/test_model_request_controls.py`, `runtime/test_provider_native_output.py` | Runtime converts schemas, wires OpenAI/Gemini native schema controls, gates provider capability, and validates returned structured JSON locally. |
 | 1.10 | ✅ | Provider state continuation | `unit/test_state.py` | Runtime preserves and reuses `ProviderState`. |
 | 1.11 | ✅ | Cancellation | `runtime/test_local_agent_provider.py::test_cancel_between_turns` | Runtime can cancel a running model/agent loop. |
 | 1.12 | ✅ | Raw provider payload | `golden/openai/test_responses_event_mapping.py::test_hosted_tool_falls_back_to_generic_item_event`, `golden/anthropic/test_messages_event_mapping.py::test_hosted_block_falls_back_to_generic_item_event` | Events keep raw provider data safely. |

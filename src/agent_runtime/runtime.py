@@ -10,13 +10,14 @@ from agent_runtime.compat.chat import ChatMessage, messages_to_input
 from agent_runtime.core.accounting import ModelCatalog, add_usage, usage_to_dict
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
-from agent_runtime.core.errors import OutputValidationError
+from agent_runtime.core.errors import OutputValidationError, UnsupportedFeatureError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import RunItem
-from agent_runtime.core.results import AgentResult, OutputSpec, ToolPayload
+from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, ToolPayload
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
+from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
     AgentSpec,
     ModelRequestControls,
@@ -46,6 +47,8 @@ class ModelRuntime:
         input: str | Sequence[object],
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
+        output_schema: OutputSchema | None = None,
+        output_strategy: OutputStrategy | None = None,
         instructions: str | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
@@ -66,6 +69,8 @@ class ModelRuntime:
             input=input if isinstance(input, str) else list(input),
             provider_state=provider_state,
             tools=list(tools or []),
+            output_schema=output_schema,
+            output_strategy=output_strategy,
             controls=ModelRequestControls(
                 instructions=instructions,
                 temperature=temperature,
@@ -95,6 +100,8 @@ class ModelRuntime:
         input: str | Sequence[object],
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
+        output_schema: OutputSchema | None = None,
+        output_strategy: OutputStrategy | None = None,
         instructions: str | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
@@ -117,6 +124,8 @@ class ModelRuntime:
             input=input,
             provider_state=provider_state,
             tools=tools,
+            output_schema=output_schema,
+            output_strategy=output_strategy,
             instructions=instructions,
             temperature=temperature,
             top_p=top_p,
@@ -565,6 +574,8 @@ class AgentRuntime:
         max_iterations: int = 8,
         mock_tools: bool = False,
         provider_state: ProviderState | None = None,
+        output_schema: OutputSchema | None = None,
+        output_strategy: OutputStrategy | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[AgentEvent]:
         """Stream events from a complete agent loop driven by the registered model.
@@ -600,6 +611,8 @@ class AgentRuntime:
                 input=input,
                 provider_state=provider_state,
                 tools=tool_definitions,
+                output_schema=output_schema,
+                output_strategy=output_strategy,
                 **kwargs,
             ):
                 yield event
@@ -657,6 +670,18 @@ class AgentRuntime:
         ``N`` times before failing.
         """
         spec = _resolve_output_spec(output_type, output_spec)
+        output_schema = build_output_schema(spec)
+        provider_ref = ProviderRef.parse(provider)
+        if spec.strategy == "provider_native":
+            adapter = self.registry.get_model(provider_ref.provider_key)
+            if not adapter.capabilities(model or provider_ref.resource).supports_structured_output:
+                if spec.fallback == "posthoc_parse":
+                    output_schema = None
+                else:
+                    raise UnsupportedFeatureError(
+                        f"Provider '{provider_ref.provider_key}' does not support "
+                        "provider-native structured output."
+                    )
         attempts_allowed = (
             1 + spec.max_validation_retries
             if spec.strategy == "posthoc_parse_with_retry"
@@ -691,6 +716,8 @@ class AgentRuntime:
                 max_iterations=max_iterations,
                 mock_tools=mock_tools,
                 provider_state=captured_state,
+                output_schema=output_schema,
+                output_strategy=spec.strategy if output_schema is not None else None,
                 **kwargs,
             ):
                 events.append(event)
@@ -722,7 +749,11 @@ class AgentRuntime:
 
             last_text = "".join(text_parts)
             try:
-                output = _validate_output(last_text, spec.schema)
+                output = _validate_output(
+                    last_text,
+                    spec.schema,
+                    allow_dict_schema=spec.strategy in {"provider_native", "finalizer_tool"},
+                )
             except OutputValidationError as exc:
                 last_error = exc
                 if attempt + 1 >= attempts_allowed:
@@ -815,10 +846,24 @@ def _build_repair_prompt(
     )
 
 
-def _validate_output(text: str, output_type: type[Any] | dict[str, Any] | None) -> Any:
+def _validate_output(
+    text: str,
+    output_type: type[Any] | dict[str, Any] | None,
+    *,
+    allow_dict_schema: bool = False,
+) -> Any:
     if output_type is None or output_type is str:
         return text
     if isinstance(output_type, dict):
+        if allow_dict_schema:
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise OutputValidationError(
+                    "Final output is not valid JSON for the requested JSON Schema.",
+                    raw_text=text,
+                    cause=exc,
+                ) from exc
         raise OutputValidationError(
             "Dict-based JSON Schemas are not yet supported by posthoc_parse; "
             "pass a Pydantic model or dataclass.",

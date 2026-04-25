@@ -56,7 +56,7 @@ def test_openai_responses_capabilities_match_prd() -> None:
     assert caps.supports_remote_mcp
     assert caps.supports_reasoning_items
     assert caps.supports_provider_state
-    assert caps.supports_structured_output is False
+    assert caps.supports_structured_output
 
 
 def test_anthropic_messages_capabilities_match_prd() -> None:
@@ -77,7 +77,7 @@ def test_gemini_capabilities_match_prd() -> None:
     assert caps.supports_remote_mcp is False  # native MCP not supported per PRD
     assert caps.supports_reasoning_items
     assert caps.supports_provider_state
-    assert caps.supports_structured_output is False
+    assert caps.supports_structured_output
 
 
 def test_xai_responses_capabilities_match_prd() -> None:

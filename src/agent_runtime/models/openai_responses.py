@@ -66,7 +66,7 @@ class OpenAIResponsesProvider:
             supports_remote_mcp=True,
             supports_reasoning_items=True,
             supports_provider_state=True,
-            supports_structured_output=False,
+            supports_structured_output=True,
         )
 
     def _get_client(self) -> Any:
@@ -148,6 +148,8 @@ class OpenAIResponsesProvider:
             kwargs["parallel_tool_calls"] = controls.parallel_tool_calls
         if controls.reasoning_effort is not None:
             kwargs["reasoning"] = {"effort": controls.reasoning_effort}
+        if request.output_schema is not None and request.output_strategy == "provider_native":
+            _merge_text_format(kwargs, request)
         if request.provider_state:
             previous = (
                 request.provider_state.previous_response_id
@@ -155,7 +157,18 @@ class OpenAIResponsesProvider:
             )
             if previous:
                 kwargs["previous_response_id"] = previous
-        kwargs.update(request.extra)
+        extra = dict(request.extra)
+        if request.output_schema is not None and request.output_strategy == "provider_native":
+            extra_text = extra.pop("text", None)
+            if extra_text is not None:
+                if not isinstance(extra_text, dict):
+                    raise ValueError("extra['text'] must be a dict when using provider_native output.")
+                if "format" in extra_text and extra_text["format"] != kwargs["text"]["format"]:
+                    raise ValueError(
+                        "extra['text']['format'] conflicts with provider_native output schema."
+                    )
+                kwargs["text"] = {**extra_text, "format": kwargs["text"]["format"]}
+        kwargs.update(extra)
         return kwargs
 
 
@@ -175,6 +188,21 @@ def _coerce_input(value: str | list[Any]) -> Any:
         else:
             converted.append(entry)
     return converted
+
+
+def _merge_text_format(kwargs: dict[str, Any], request: TurnRequest) -> None:
+    assert request.output_schema is not None
+    response_format: dict[str, Any] = {
+        "type": "json_schema",
+        "name": request.output_schema.name,
+        "schema": request.output_schema.schema,
+        "strict": request.output_schema.strict,
+    }
+    if request.output_schema.description is not None:
+        response_format["description"] = request.output_schema.description
+    text_config = dict(kwargs.get("text", {}))
+    text_config["format"] = response_format
+    kwargs["text"] = text_config
 
 
 def _map_event(sdk_event: Any, *, provider: str) -> AgentEvent | None:

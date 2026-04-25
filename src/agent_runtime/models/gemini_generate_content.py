@@ -37,7 +37,7 @@ class GeminiGenerateContentProvider:
             supports_remote_mcp=False,
             supports_reasoning_items=True,
             supports_provider_state=True,
-            supports_structured_output=False,
+            supports_structured_output=True,
         )
 
     def _get_client(self) -> Any:
@@ -128,10 +128,28 @@ class GeminiGenerateContentProvider:
             config.setdefault("top_p", controls.top_p)
         if controls.max_output_tokens is not None:
             config.setdefault("max_output_tokens", controls.max_output_tokens)
+        if request.output_schema is not None and request.output_strategy == "provider_native":
+            _merge_output_schema_config(config, request)
         if config:
             kwargs["config"] = config
         kwargs.update(extra)
         return kwargs
+
+
+def _merge_output_schema_config(config: dict[str, Any], request: TurnRequest) -> None:
+    assert request.output_schema is not None
+    existing_mime = config.get("response_mime_type")
+    if existing_mime is not None and existing_mime != "application/json":
+        raise ValueError(
+            "config.response_mime_type conflicts with provider_native output schema."
+        )
+    existing_schema = config.get("response_json_schema")
+    if existing_schema is not None and existing_schema != request.output_schema.schema:
+        raise ValueError(
+            "config.response_json_schema conflicts with provider_native output schema."
+        )
+    config["response_mime_type"] = "application/json"
+    config["response_json_schema"] = request.output_schema.schema
 
 
 def _compose_contents(request: TurnRequest) -> Any:
