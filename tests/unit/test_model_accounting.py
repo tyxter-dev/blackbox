@@ -80,6 +80,91 @@ async def test_agent_runtime_result_metadata_includes_usage_and_cost() -> None:
     assert result.metadata["cost"]["total"] == 0.00002
 
 
+async def test_model_runtime_collects_mcp_cache_metadata() -> None:
+    client = FakeOpenAIClient()
+    listed = item(
+        "mcp_list_tools",
+        id_="mcpl_1",
+        server_label="github",
+        tools=[{"name": "list_issues"}, {"name": "get_pr"}],
+    )
+    called = item(
+        "mcp_call",
+        id_="mcp_1",
+        server_label="github",
+        name="list_issues",
+        arguments='{"state": "open"}',
+        output="[]",
+    )
+    msg = item("message", id_="msg_1")
+    client.queue(
+        events=[
+            evt("response.output_item.added", item=listed),
+            evt("response.output_item.added", item=called),
+            evt("response.output_item.done", item=called),
+            evt("response.output_item.added", item=msg),
+            evt("response.output_text.delta", delta="done", item_id="msg_1"),
+        ],
+        final_response=final_response(id_="resp_mcp", output=[listed, called, msg]),
+    )
+
+    runtime = AgentRuntime()
+    runtime.registry.register_model(OpenAIResponsesProvider(client=client))
+
+    result = await runtime.models.run(provider="openai:gpt-test", input="use mcp")
+
+    assert result.metadata["mcp"] == {
+        "tool_lists": [
+            {
+                "server_label": "github",
+                "tool_count": 2,
+                "tool_names": ["list_issues", "get_pr"],
+                "item_id": "mcpl_1",
+            }
+        ],
+        "calls": [
+            {
+                "server_label": "github",
+                "name": "list_issues",
+                "item_id": "mcp_1",
+                "failed": False,
+            }
+        ],
+        "approval_requests": [],
+        "tool_list_cacheable": True,
+        "context_item_ids": ["mcpl_1"],
+    }
+
+
+async def test_agent_runtime_result_metadata_includes_mcp_cache_metadata() -> None:
+    client = FakeOpenAIClient()
+    approval = item(
+        "mcp_approval_request",
+        id_="mcpr_1",
+        server_label="github",
+        name="delete_repo",
+        arguments='{"repo": "danger"}',
+    )
+    msg = item("message", id_="msg_1")
+    client.queue(
+        events=[
+            evt("response.output_item.added", item=approval),
+            evt("response.output_item.added", item=msg),
+            evt("response.output_text.delta", delta="needs approval", item_id="msg_1"),
+        ],
+        final_response=final_response(id_="resp_mcp_approval", output=[approval, msg]),
+    )
+
+    runtime = AgentRuntime()
+    runtime.registry.register_model(OpenAIResponsesProvider(client=client))
+
+    result: AgentResult[str] = await runtime.run(provider="openai:gpt-test", input="use mcp")
+
+    assert result.metadata["mcp"]["approval_requests"] == [
+        {"server_label": "github", "name": "delete_repo", "item_id": "mcpr_1"}
+    ]
+
+
 def test_usage_accumulates_and_estimates_cached_input_cost() -> None:
     usage = ModelUsage(input_tokens=100, output_tokens=20, cached_input_tokens=25)
     other = ModelUsage(input_tokens=50, output_tokens=10, cached_input_tokens=5)

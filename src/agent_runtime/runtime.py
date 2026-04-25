@@ -166,6 +166,9 @@ class ModelRuntime:
             )
             if cost is not None:
                 metadata["cost"] = cost
+        mcp_metadata = _mcp_metadata_from_events(events)
+        if mcp_metadata:
+            metadata["mcp"] = mcp_metadata
         return TurnResult(
             text="".join(text_parts),
             events=events,
@@ -814,6 +817,9 @@ class AgentRuntime:
                 )
                 if cost is not None:
                     metadata["cost"] = cost
+            mcp_metadata = _mcp_metadata_from_events(events)
+            if mcp_metadata:
+                metadata["mcp"] = mcp_metadata
             return AgentResult(
                 output=cast(T, output),
                 text=last_text,
@@ -872,6 +878,66 @@ def _resolve_output_spec(
     if output_spec is not None:
         return output_spec
     return OutputSpec(schema=output_type, strategy="posthoc_parse")
+
+
+def _mcp_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
+    tool_lists: list[dict[str, Any]] = []
+    calls: list[dict[str, Any]] = []
+    approvals: list[dict[str, Any]] = []
+    for event in events:
+        if event.type == EventTypes.MCP_LIST_TOOLS_COMPLETED:
+            tools = event.data.get("tools")
+            tool_names = _tool_names(tools)
+            tool_lists.append(
+                {
+                    "server_label": event.data.get("server_label"),
+                    "tool_count": len(tool_names),
+                    "tool_names": tool_names,
+                    "item_id": event.item_id,
+                }
+            )
+        elif event.type == EventTypes.MCP_CALL_COMPLETED:
+            calls.append(
+                {
+                    "server_label": event.data.get("server_label"),
+                    "name": event.data.get("name"),
+                    "item_id": event.item_id,
+                    "failed": event.data.get("error") is not None
+                    or event.data.get("is_error") is True,
+                }
+            )
+        elif event.type == EventTypes.MCP_APPROVAL_REQUIRED:
+            approvals.append(
+                {
+                    "server_label": event.data.get("server_label"),
+                    "name": event.data.get("name"),
+                    "item_id": event.item_id,
+                }
+            )
+    if not (tool_lists or calls or approvals):
+        return {}
+    metadata: dict[str, Any] = {
+        "tool_lists": tool_lists,
+        "calls": calls,
+        "approval_requests": approvals,
+    }
+    if tool_lists:
+        metadata["tool_list_cacheable"] = True
+        metadata["context_item_ids"] = [
+            item["item_id"] for item in tool_lists if item.get("item_id") is not None
+        ]
+    return metadata
+
+
+def _tool_names(tools: Any) -> list[str]:
+    if not isinstance(tools, list):
+        return []
+    names: list[str] = []
+    for tool in tools:
+        name = tool.get("name") if isinstance(tool, dict) else getattr(tool, "name", None)
+        if isinstance(name, str):
+            names.append(name)
+    return names
 
 
 def _finalizer_tool_payload(output_schema: OutputSchema) -> dict[str, Any]:

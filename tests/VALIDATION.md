@@ -71,6 +71,8 @@ await runtime.models.stream(...)
 | 1.18 | ✅ | Chat compatibility projection | `unit/test_chat_compat.py` | Chat-shaped messages can be projected into model runtime input through an explicit facade without replacing provider-native internals. |
 | 1.19 | ✅ | Hosted tool specs | `unit/test_hosted_tools.py`, `unit/test_model_request_controls.py::test_openai_responses_maps_hosted_tools_to_tools_and_include`, `::test_gemini_maps_web_search_hosted_tool_to_config`, `::test_xai_only_accepts_raw_hosted_tools`, `runtime/test_runtime_run.py::test_run_forwards_hosted_tools_separately_from_local_tools` | Typed hosted tools map to provider-native payloads and stay separate from local function tools. |
 | 1.20 | ✅ | Hosted tool event normalization | `golden/openai/test_responses_event_mapping.py::test_hosted_tool_maps_to_typed_run_item`, `::test_unknown_hosted_tool_falls_back_to_generic_item_event` | Known hosted provider items become typed hosted-tool run items, while unknown provider items keep raw fallback behavior. |
+| 1.21 | ✅ | Provider-native remote MCP | `unit/test_hosted_tools.py::test_remote_mcp_serializes_for_openai`, `::test_remote_mcp_serializes_for_anthropic`, `unit/test_model_request_controls.py::test_openai_responses_maps_remote_mcp_to_tool`, `::test_anthropic_maps_remote_mcp_to_server_and_toolset` | Remote MCP has a typed hosted-tool API and provider-native OpenAI/Anthropic request mapping. |
+| 1.22 | ✅ | MCP event and cache metadata | `golden/openai/test_responses_event_mapping.py::test_mcp_items_include_typed_run_item_data`, `golden/anthropic/test_messages_event_mapping.py::test_mcp_blocks_map_to_typed_run_items`, `unit/test_model_accounting.py::test_model_runtime_collects_mcp_cache_metadata`, `::test_agent_runtime_result_metadata_includes_mcp_cache_metadata` | MCP list/call/approval items become typed run items and result metadata exposes cacheable tool-list context IDs. |
 
 ---
 
@@ -234,4 +236,4 @@ connector.call_tool(...)
 | 7.3 | ✅ | `before_mcp_call` deny | `::test_mcp_connector_gates_calls_with_policy` | Policy can block MCP calls with typed `MCPError`. |
 | 7.4 | ✅ | MCP approval required | `::test_mcp_connector_surfaces_required_approval` | Required approval emits `MCP_APPROVAL_REQUIRED` and raises `ApprovalError`. |
 | 7.5 | ⏳ | MCP transports | `unit/test_mcp_connector.py::test_mcp_server_spec_represents_prd_transport_names` covers spec names only | stdio + HTTP/SSE + streamable HTTP process/client management. |
-| 7.6 | ⏳ | Provider-native remote MCP | not yet | Provider adapters receive remote MCP server configuration. |
+| 7.6 | ✅ | Provider-native remote MCP | `unit/test_hosted_tools.py::test_remote_mcp_serializes_for_openai`, `::test_remote_mcp_serializes_for_anthropic`, `unit/test_model_request_controls.py::test_openai_responses_maps_remote_mcp_to_tool`, `::test_anthropic_maps_remote_mcp_to_server_and_toolset` | Provider adapters receive remote MCP server configuration. |

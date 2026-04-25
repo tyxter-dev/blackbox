@@ -109,7 +109,7 @@ tool specs through `hosted_tools`; the provider adapter maps them to native
 tool configuration without registering fake local callables:
 
 ```python
-from agent_runtime import AgentRuntime, FileSearch, WebSearch
+from agent_runtime import AgentRuntime, FileSearch, RemoteMCP, WebSearch
 
 runtime = AgentRuntime()
 
@@ -119,14 +119,27 @@ result = await runtime.run(
     hosted_tools=[
         WebSearch(search_context_size="medium"),
         FileSearch(vector_store_ids=["vs_123"], include_results=True),
+        RemoteMCP(
+            server_label="github",
+            server_url="https://mcp.example.com/sse",
+            allowed_tools=["list_issues", "get_pull_request"],
+            require_approval="never",
+        ),
     ],
 )
 ```
 
 OpenAI Responses maps `WebSearch`, `FileSearch`, and `CodeInterpreter` to
-native `tools` entries. Gemini currently maps `WebSearch` to `google_search`.
-Use `HostedToolRaw` as an explicit escape hatch for provider-specific hosted
-tool payloads.
+native `tools` entries, and maps `RemoteMCP` to the provider-native MCP tool.
+Anthropic maps `RemoteMCP` to `mcp_servers` plus an `mcp_toolset`. Gemini
+currently maps `WebSearch` to `google_search`. Use `HostedToolRaw` as an
+explicit escape hatch for provider-specific hosted tool payloads.
+
+When a provider returns MCP tool-list, call, or approval items, the runtime
+normalizes them into MCP run items and adds an `mcp` summary to result
+metadata. For OpenAI, `ProviderState.native_history` also preserves native
+`mcp_list_tools` items so callers can continue a workflow without forcing the
+provider to list the same MCP tools again.
 
 ## Lower-level model turns
 

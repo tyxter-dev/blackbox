@@ -378,8 +378,9 @@ class HostedToolRaw:
     payload: dict[str, Any]
 ```
 
-Remote MCP should not be part of this phase unless needed for type layout.
-Leave `RemoteMCP` for the next spec/commit.
+Remote MCP was intentionally left out of the first hosted-tool phase and added
+in the follow-up provider-native MCP slice. It shares the hosted-tool surface
+instead of the local function-tool registry.
 
 ### TurnRequest Changes
 

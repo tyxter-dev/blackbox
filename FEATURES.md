@@ -61,9 +61,11 @@ Status legend:
 
 | Feature | Status | Public surface | Notes |
 |---|---|---|---|
-| Typed hosted tool specs | Supported | `WebSearch`, `FileSearch`, `CodeInterpreter`, `HostedToolRaw` | Provider-managed tools are passed via `hosted_tools` and remain distinct from local function tools. |
-| OpenAI hosted tool mapping | Supported | `runtime.run(..., hosted_tools=[...])` | Maps web search, file search, code interpreter, and raw hosted payloads into Responses `tools`; file search result inclusion is wired through `include`. |
+| Typed hosted tool specs | Supported | `WebSearch`, `FileSearch`, `CodeInterpreter`, `RemoteMCP`, `HostedToolRaw` | Provider-managed tools are passed via `hosted_tools` and remain distinct from local function tools. |
+| OpenAI hosted tool mapping | Supported | `runtime.run(..., hosted_tools=[...])` | Maps web search, file search, code interpreter, remote MCP, and raw hosted payloads into Responses `tools`; file search result inclusion is wired through `include`. |
 | OpenAI hosted tool events | Supported | `RunItem(type="hosted_tool_call")` | Known hosted output items are normalized into typed run items while preserving provider raw payloads. |
+| Provider-native remote MCP | Supported | `RemoteMCP` | OpenAI maps to `type="mcp"` tools; Anthropic maps to `mcp_servers` plus `mcp_toolset` with the current MCP client beta. |
+| MCP result metadata | Supported | `result.metadata["mcp"]` | Summarizes MCP tool lists, calls, approvals, and OpenAI tool-list context item IDs that callers can retain for lower-latency continuation. |
 | Gemini hosted web search | Supported | `WebSearch` | Maps to GenerateContent `google_search`; unsupported hosted tool specs raise typed unsupported-feature errors. |
 | Raw hosted tool passthrough | Supported | `HostedToolRaw` | Escape hatch for provider-native tool payloads where the runtime has no typed wrapper yet. |
 
@@ -146,6 +148,6 @@ Status legend:
 
 - OpenAI cloud/Codex-style agent execution.
 - Claude Code or Vertex Agent Engine execution.
-- MCP stdio/HTTP transport process management or provider-native remote MCP wiring.
+- MCP stdio/HTTP transport process management.
 - Provider cache controls beyond preserving native continuation state.
 - Provider-breadth routing through LiteLLM.
