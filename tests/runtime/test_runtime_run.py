@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from agent_runtime import AgentResult, AgentRuntime, EventTypes, OutputValidationError
 from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
+from agent_runtime.hosted_tools import WebSearch
 from agent_runtime.tools import ToolResult
 from agent_runtime.workspaces import (
     CommandResult,
@@ -131,6 +132,36 @@ async def test_run_dispatches_a_single_tool_and_returns_final_text() -> None:
 
     assert "secret=abc-XYZ" in result.output
     assert any(e.type == EventTypes.TOOL_CALL_COMPLETED for e in result.events)
+
+
+async def test_run_forwards_hosted_tools_separately_from_local_tools() -> None:
+    runtime, scripted = _runtime()
+    runtime.tools.register(
+        lambda: ToolResult(content="local"),
+        name="local_tool",
+        description="Local tool.",
+        parameters={"type": "object", "properties": {}},
+    )
+    scripted.queue(text_only_turn("done"))
+
+    result: AgentResult[str] = await runtime.run(
+        provider="scripted:test",
+        input="use tools",
+        tools=["local_tool"],
+        hosted_tools=[WebSearch()],
+    )
+
+    assert result.output == "done"
+    assert scripted.calls[0].tools == [
+        {
+            "type": "function",
+            "name": "local_tool",
+            "description": "Local tool.",
+            "parameters": {"type": "object", "properties": {}},
+            "metadata": {},
+        }
+    ]
+    assert scripted.calls[0].hosted_tools == [WebSearch()]
 
 
 async def test_run_uses_dynamic_tool_session_without_global_registration() -> None:

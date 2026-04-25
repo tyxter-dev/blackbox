@@ -17,6 +17,7 @@ from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, 
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
+from agent_runtime.hosted_tools import HostedToolSpec
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
     AgentSpec,
@@ -48,6 +49,7 @@ class ModelRuntime:
         input: str | Sequence[object],
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
+        hosted_tools: list[HostedToolSpec] | None = None,
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         instructions: str | None = None,
@@ -70,6 +72,7 @@ class ModelRuntime:
             input=input if isinstance(input, str) else list(input),
             provider_state=provider_state,
             tools=list(tools or []),
+            hosted_tools=list(hosted_tools or []),
             output_schema=output_schema,
             output_strategy=output_strategy,
             controls=ModelRequestControls(
@@ -101,6 +104,7 @@ class ModelRuntime:
         input: str | Sequence[object],
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
+        hosted_tools: list[HostedToolSpec] | None = None,
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         instructions: str | None = None,
@@ -125,6 +129,7 @@ class ModelRuntime:
             input=input,
             provider_state=provider_state,
             tools=tools,
+            hosted_tools=hosted_tools,
             output_schema=output_schema,
             output_strategy=output_strategy,
             instructions=instructions,
@@ -577,6 +582,7 @@ class AgentRuntime:
         provider_state: ProviderState | None = None,
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
+        hosted_tools: list[HostedToolSpec] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[AgentEvent]:
         """Stream events from a complete agent loop driven by the registered model.
@@ -614,6 +620,7 @@ class AgentRuntime:
                 input=input,
                 provider_state=provider_state,
                 tools=tool_definitions,
+                hosted_tools=hosted_tools,
                 output_schema=output_schema,
                 output_strategy=output_strategy,
                 **kwargs,
@@ -663,6 +670,7 @@ class AgentRuntime:
         output_type: type[T] | None = None,
         output_spec: OutputSpec | None = None,
         provider_state: ProviderState | None = None,
+        hosted_tools: list[HostedToolSpec] | None = None,
         **kwargs: Any,
     ) -> AgentResult[T]:
         """Run the complete agent loop and return a typed AgentResult.
@@ -735,6 +743,7 @@ class AgentRuntime:
                 max_iterations=max_iterations,
                 mock_tools=mock_tools,
                 provider_state=captured_state,
+                hosted_tools=hosted_tools,
                 output_schema=output_schema,
                 output_strategy=effective_strategy if output_schema is not None else None,
                 **kwargs,

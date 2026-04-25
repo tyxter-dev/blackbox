@@ -11,6 +11,7 @@ from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.results import OutputStrategy
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
+from agent_runtime.hosted_tools import HostedToolSpec
 from agent_runtime.output.schema import OutputSchema
 
 
@@ -40,6 +41,7 @@ class TurnRequest:
     input: str | list[Any]
     provider_state: ProviderState | None = None
     tools: list[Any] = field(default_factory=list)
+    hosted_tools: list[HostedToolSpec] = field(default_factory=list)
     controls: ModelRequestControls = field(default_factory=ModelRequestControls)
     output_schema: OutputSchema | None = None
     output_strategy: OutputStrategy | None = None

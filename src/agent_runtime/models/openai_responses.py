@@ -9,6 +9,7 @@ from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfigu
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
+from agent_runtime.hosted_tools import openai_include_values, to_openai_tool
 from agent_runtime.providers.base import TurnRequest
 
 _TYPED_ITEM_EVENTS = {
@@ -131,8 +132,12 @@ class OpenAIResponsesProvider:
             "model": request.model,
             "input": _coerce_input(request.input),
         }
-        if request.tools:
-            kwargs["tools"] = list(request.tools)
+        tools = [*request.tools, *(to_openai_tool(tool) for tool in request.hosted_tools)]
+        if tools:
+            kwargs["tools"] = tools
+        include_values = openai_include_values(request.hosted_tools)
+        if include_values:
+            kwargs["include"] = include_values
         controls = request.controls
         if controls.instructions is not None:
             kwargs["instructions"] = controls.instructions

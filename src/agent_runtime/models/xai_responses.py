@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from agent_runtime.core.capabilities import ModelCapabilities
+from agent_runtime.hosted_tools import to_raw_hosted_tool
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.providers.base import TurnRequest
 
@@ -42,6 +43,8 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
 
     @staticmethod
     def _build_request_kwargs(request: TurnRequest) -> dict[str, Any]:
+        for hosted_tool in request.hosted_tools:
+            to_raw_hosted_tool(hosted_tool, provider="xAI")
         kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
         kwargs.pop("instructions", None)
         return kwargs

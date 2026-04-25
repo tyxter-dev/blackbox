@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from agent_runtime.core.results import OutputSpec
+from agent_runtime.hosted_tools import FileSearch, HostedToolRaw, WebSearch
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
@@ -201,3 +202,51 @@ def test_gemini_rejects_conflicting_response_schema_config() -> None:
         assert "conflicts" in str(exc)
     else:
         raise AssertionError("expected conflicting response schema to fail")
+
+
+def test_openai_responses_maps_hosted_tools_to_tools_and_include() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        tools=[{"type": "function", "name": "local"}],
+        hosted_tools=[
+            WebSearch(),
+            FileSearch(vector_store_ids=["vs_1"], include_results=True),
+        ],
+    )
+
+    kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["tools"] == [
+        {"type": "function", "name": "local"},
+        {"type": "web_search"},
+        {"type": "file_search", "vector_store_ids": ["vs_1"]},
+    ]
+    assert kwargs["include"] == ["file_search_call.results"]
+
+
+def test_gemini_maps_web_search_hosted_tool_to_config() -> None:
+    request = TurnRequest(model="gemini-test", input="hi", hosted_tools=[WebSearch()])
+
+    kwargs = GeminiGenerateContentProvider._build_request_kwargs(request)
+
+    assert kwargs["config"]["tools"] == [{"google_search": {}}]
+
+
+def test_xai_only_accepts_raw_hosted_tools() -> None:
+    raw_request = TurnRequest(
+        model="grok-test",
+        input="hi",
+        hosted_tools=[HostedToolRaw({"type": "future_tool"})],
+    )
+    assert XAIResponsesProvider._build_request_kwargs(raw_request)["tools"] == [
+        {"type": "future_tool"}
+    ]
+
+    typed_request = TurnRequest(model="grok-test", input="hi", hosted_tools=[WebSearch()])
+    try:
+        XAIResponsesProvider._build_request_kwargs(typed_request)
+    except Exception as exc:
+        assert "xAI hosted tool mapping" in str(exc)
+    else:
+        raise AssertionError("expected typed hosted tools to fail for xAI")

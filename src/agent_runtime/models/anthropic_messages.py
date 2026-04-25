@@ -28,6 +28,7 @@ from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfigu
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
+from agent_runtime.hosted_tools import to_anthropic_tool
 from agent_runtime.providers.base import TurnRequest
 
 
@@ -125,7 +126,9 @@ class AnthropicMessagesProvider:
             "messages": messages,
             "max_tokens": 1024,
         }
-        tools = request.tools or tools_from_extra
+        tools = [*request.tools, *(to_anthropic_tool(tool) for tool in request.hosted_tools)]
+        if not tools:
+            tools = tools_from_extra
         if tools:
             kwargs["tools"] = _convert_tools(tools)
         controls = request.controls
@@ -184,6 +187,9 @@ def _convert_tools(tools: list[Any]) -> list[dict[str, Any]]:
             converted.append(tool)
             continue
         if "input_schema" in tool:
+            converted.append(tool)
+            continue
+        if tool.get("type") not in {None, "function"}:
             converted.append(tool)
             continue
         converted.append(

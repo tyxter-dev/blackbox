@@ -16,6 +16,7 @@ from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfigu
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
+from agent_runtime.hosted_tools import to_gemini_tool
 from agent_runtime.providers.base import TurnRequest
 
 
@@ -116,7 +117,14 @@ class GeminiGenerateContentProvider:
         }
         extra = dict(request.extra)
         config = dict(extra.pop("config", {})) if "config" in extra else {}
-        tools = request.tools or config.get("tools")
+        tools: list[Any] = [
+            *request.tools,
+            *(to_gemini_tool(tool) for tool in request.hosted_tools),
+        ]
+        if not tools:
+            config_tools = config.get("tools")
+            if isinstance(config_tools, list):
+                tools = config_tools
         if tools:
             config["tools"] = _convert_tools(tools)
         controls = request.controls
@@ -193,6 +201,9 @@ def _convert_tools(tools: list[Any]) -> list[dict[str, Any]]:
             passthrough.append(tool)
             continue
         if "function_declarations" in tool:
+            passthrough.append(tool)
+            continue
+        if "name" not in tool and "parameters" not in tool and "description" not in tool:
             passthrough.append(tool)
             continue
         if tool.get("type") not in {None, "function"}:

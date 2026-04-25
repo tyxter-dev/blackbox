@@ -57,6 +57,15 @@ Status legend:
 | Workspace tool backend | Supported | `runtime.tools.register_workspace(...)` | Registers local workspace operations as normal tools for the high-level agent loop. |
 | Namespaced `ToolRef` IDs | Not supported yet | Planned for MCP | Current high-level API references tools by simple name. |
 
+## Hosted Tools
+
+| Feature | Status | Public surface | Notes |
+|---|---|---|---|
+| Typed hosted tool specs | Supported | `WebSearch`, `FileSearch`, `CodeInterpreter`, `HostedToolRaw` | Provider-managed tools are passed via `hosted_tools` and remain distinct from local function tools. |
+| OpenAI hosted tool mapping | Supported | `runtime.run(..., hosted_tools=[...])` | Maps web search, file search, code interpreter, and raw hosted payloads into Responses `tools`; file search result inclusion is wired through `include`. |
+| Gemini hosted web search | Supported | `WebSearch` | Maps to GenerateContent `google_search`; unsupported hosted tool specs raise typed unsupported-feature errors. |
+| Raw hosted tool passthrough | Supported | `HostedToolRaw` | Escape hatch for provider-native tool payloads where the runtime has no typed wrapper yet. |
+
 ## Policy, Approvals, and Safety
 
 | Feature | Status | Public surface | Notes |

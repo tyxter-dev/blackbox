@@ -69,6 +69,7 @@ await runtime.models.stream(...)
 | 1.16 | ✅ | Provider-native request controls | `unit/test_model_request_controls.py` | Common request controls map to OpenAI/xAI/Anthropic/Gemini native kwargs while provider `extra` remains an override escape hatch. |
 | 1.17 | ✅ | Model usage and cost accounting | `unit/test_model_accounting.py` | Provider usage payloads normalize into result metadata and optional catalog pricing produces cost estimates without hard-coded prices. |
 | 1.18 | ✅ | Chat compatibility projection | `unit/test_chat_compat.py` | Chat-shaped messages can be projected into model runtime input through an explicit facade without replacing provider-native internals. |
+| 1.19 | ✅ | Hosted tool specs | `unit/test_hosted_tools.py`, `unit/test_model_request_controls.py::test_openai_responses_maps_hosted_tools_to_tools_and_include`, `::test_gemini_maps_web_search_hosted_tool_to_config`, `::test_xai_only_accepts_raw_hosted_tools`, `runtime/test_runtime_run.py::test_run_forwards_hosted_tools_separately_from_local_tools` | Typed hosted tools map to provider-native payloads and stay separate from local function tools. |
 
 ---
 

@@ -95,12 +95,38 @@ result = await runtime.run(
     provider="openai:gpt-5.4",
     input="Check ticket T-1",
     tools=["lookup_ticket"],
-tool_session=tool_session,
+    tool_session=tool_session,
 )
 ```
 
 `tool_max_concurrent` and `tool_timeout` apply to local tool execution in the
 blackbox loop, including dynamic tool sessions.
+
+## Provider-hosted tools
+
+Provider-hosted tools stay separate from local Python tools. Pass typed hosted
+tool specs through `hosted_tools`; the provider adapter maps them to native
+tool configuration without registering fake local callables:
+
+```python
+from agent_runtime import AgentRuntime, FileSearch, WebSearch
+
+runtime = AgentRuntime()
+
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Research this policy and cite relevant files.",
+    hosted_tools=[
+        WebSearch(search_context_size="medium"),
+        FileSearch(vector_store_ids=["vs_123"], include_results=True),
+    ],
+)
+```
+
+OpenAI Responses maps `WebSearch`, `FileSearch`, and `CodeInterpreter` to
+native `tools` entries. Gemini currently maps `WebSearch` to `google_search`.
+Use `HostedToolRaw` as an explicit escape hatch for provider-specific hosted
+tool payloads.
 
 ## Lower-level model turns
 
