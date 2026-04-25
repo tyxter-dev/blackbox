@@ -22,6 +22,8 @@ def build_output_schema(spec: OutputSpec) -> OutputSchema | None:
     if spec.schema is None or spec.schema is str:
         return None
     schema = _schema_for(spec.schema)
+    if spec.strict:
+        schema = _strict_json_schema(schema)
     name = _normalize_name(spec.name or _schema_title(schema) or _schema_name(spec.schema))
     description = spec.description or _schema_description(schema)
     return OutputSchema(
@@ -49,6 +51,31 @@ def _schema_for(target: type[Any] | dict[str, Any]) -> dict[str, Any]:
         f"Unsupported output schema target: {target!r}. "
         "Use a Pydantic model, dataclass, raw JSON Schema dict, or str."
     )
+
+
+def _strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return a provider-friendly strict object schema.
+
+    OpenAI's strict structured output mode requires object schemas to opt out
+    of unknown keys with ``additionalProperties: false``. Pydantic does not add
+    that by default, so normalize it here without mutating caller-owned schema
+    objects.
+    """
+
+    normalized: dict[str, Any] = {}
+    for key, value in schema.items():
+        if isinstance(value, dict):
+            normalized[key] = _strict_json_schema(value)
+        elif isinstance(value, list):
+            normalized[key] = [
+                _strict_json_schema(item) if isinstance(item, dict) else item
+                for item in value
+            ]
+        else:
+            normalized[key] = value
+    if normalized.get("type") == "object":
+        normalized.setdefault("additionalProperties", False)
+    return normalized
 
 
 def _dataclass_schema(target: type[Any]) -> dict[str, Any]:

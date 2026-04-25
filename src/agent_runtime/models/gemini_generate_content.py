@@ -7,6 +7,7 @@ messages.
 """
 from __future__ import annotations
 
+import inspect
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -75,7 +76,10 @@ class GeminiGenerateContentProvider:
         usage = None
 
         try:
-            async for chunk in client.aio.models.generate_content_stream(**kwargs):
+            stream = client.aio.models.generate_content_stream(**kwargs)
+            if inspect.isawaitable(stream):
+                stream = await stream
+            async for chunk in stream:
                 response_id = _attr(chunk, "response_id") or response_id
                 usage = add_usage(usage, usage_from_gemini_chunk(chunk))
                 for event in _map_chunk(

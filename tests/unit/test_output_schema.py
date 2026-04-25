@@ -31,6 +31,7 @@ def test_pydantic_model_builds_output_schema() -> None:
     assert schema.strict is True
     assert schema.target_type is Decision
     assert schema.schema["type"] == "object"
+    assert schema.schema["additionalProperties"] is False
     assert "priority" in schema.schema["properties"]
 
 

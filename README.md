@@ -497,6 +497,10 @@ pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
 pytest -m integration_gemini      # network-gated, requires GOOGLE_API_KEY
 ```
 
+Integration tests load a repo-root `.env` only when an integration marker or
+`tests/integration/...` path is selected, so the default `pytest` run remains
+offline.
+
 ## Next implementation targets
 
 1. OpenAI cloud / Codex-style `AgentProvider`.

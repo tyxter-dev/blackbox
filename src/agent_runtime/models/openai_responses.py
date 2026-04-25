@@ -15,7 +15,6 @@ from agent_runtime.providers.base import TurnRequest
 _TYPED_ITEM_EVENTS = {
     "message": EventTypes.MODEL_ITEM_CREATED,
     "reasoning": EventTypes.MODEL_ITEM_CREATED,
-    "function_call": EventTypes.TOOL_CALL_REQUESTED,
     "tool_search_call": EventTypes.TOOL_SEARCH_REQUESTED,
     "tool_search_result": EventTypes.TOOL_SEARCH_COMPLETED,
     "mcp_list_tools": EventTypes.MCP_LIST_TOOLS_COMPLETED,

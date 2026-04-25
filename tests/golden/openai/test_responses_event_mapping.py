@@ -70,7 +70,8 @@ async def test_function_call_emits_tool_call_requested_with_parsed_arguments() -
     result = await runtime.models.run(provider="openai/gpt-5.4", input="weather?")
 
     tool_events = [e for e in result.events if e.type == EventTypes.TOOL_CALL_REQUESTED]
-    assert len(tool_events) >= 1
+    assert len(tool_events) == 1
+    assert result.events[1].type == EventTypes.MODEL_ITEM_CREATED
     payload = tool_events[-1].data
     assert payload["call_id"] == "call_abc"
     assert payload["name"] == "lookup_weather"

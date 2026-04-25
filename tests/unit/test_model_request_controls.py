@@ -182,7 +182,10 @@ def test_gemini_maps_provider_native_output_schema_to_config() -> None:
     kwargs = GeminiGenerateContentProvider._build_request_kwargs(request)
 
     assert kwargs["config"]["response_mime_type"] == "application/json"
-    assert kwargs["config"]["response_json_schema"] == {"type": "object"}
+    assert kwargs["config"]["response_json_schema"] == {
+        "type": "object",
+        "additionalProperties": False,
+    }
 
 
 def test_gemini_rejects_conflicting_response_schema_config() -> None:

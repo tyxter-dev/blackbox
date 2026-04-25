@@ -45,6 +45,18 @@ async def test_text_stream_produces_text_and_provider_state() -> None:
     ]
 
 
+async def test_awaitable_stream_produces_text_and_provider_state() -> None:
+    client = FakeGeminiClient(awaitable_stream=True)
+    client.queue([chunk(response_id="resp_awaitable", parts=[text_part("pong")])])
+    runtime = _runtime_with(client)
+
+    result = await runtime.models.run(provider="google/gemini-test", input="say pong")
+
+    assert result.text == "pong"
+    assert result.provider_state is not None
+    assert result.provider_state.conversation_id == "resp_awaitable"
+
+
 async def test_function_call_part_emits_tool_call_requested() -> None:
     client = FakeGeminiClient()
     client.queue(

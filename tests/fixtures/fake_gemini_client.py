@@ -34,16 +34,25 @@ class FakeAsyncModels:
         return stream
 
 
+class FakeAwaitableAsyncModels(FakeAsyncModels):
+    async def generate_content_stream(self, **kwargs: Any) -> FakeGenerateContentStream:  # type: ignore[override]
+        return super().generate_content_stream(**kwargs)
+
+
 class FakeAio:
-    def __init__(self, client: FakeGeminiClient) -> None:
-        self.models = FakeAsyncModels(client)
+    def __init__(self, client: FakeGeminiClient, *, awaitable_stream: bool = False) -> None:
+        self.models = (
+            FakeAwaitableAsyncModels(client)
+            if awaitable_stream
+            else FakeAsyncModels(client)
+        )
 
 
 class FakeGeminiClient:
-    def __init__(self) -> None:
+    def __init__(self, *, awaitable_stream: bool = False) -> None:
         self._streams: list[FakeGenerateContentStream] = []
         self.calls: list[dict[str, Any]] = []
-        self.aio = FakeAio(self)
+        self.aio = FakeAio(self, awaitable_stream=awaitable_stream)
 
     def queue(self, chunks: Iterable[Any]) -> FakeGenerateContentStream:
         stream = FakeGenerateContentStream(chunks)
