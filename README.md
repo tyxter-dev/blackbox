@@ -69,6 +69,8 @@ result = await runtime.run(
     provider="openai:gpt-5.4",
     input="Review this customer report and create a ticket if needed.",
     tools=["search_customer", "create_ticket"],
+    tool_max_concurrent=2,
+    tool_timeout=10.0,
     output_type=TicketDecision,
 )
 
@@ -93,9 +95,12 @@ result = await runtime.run(
     provider="openai:gpt-5.4",
     input="Check ticket T-1",
     tools=["lookup_ticket"],
-    tool_session=tool_session,
+tool_session=tool_session,
 )
 ```
+
+`tool_max_concurrent` and `tool_timeout` apply to local tool execution in the
+blackbox loop, including dynamic tool sessions.
 
 ## Lower-level model turns
 

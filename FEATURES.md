@@ -46,6 +46,7 @@ Status legend:
 | Async tool execution | Supported | Async callable tools | Async functions are awaited directly. |
 | Tool timeouts | Supported | `ToolRuntime(timeout_seconds=...)` | Long-running tools fail with typed tool errors. |
 | Tool concurrency cap | Supported | `ToolRuntime(max_concurrency=...)` | Limits concurrent tool execution. |
+| High-level tool controls | Supported | `runtime.run(tool_timeout=..., tool_max_concurrent=...)` | Applies timeout and concurrency limits to tool execution in the blackbox loop. |
 | Multiple tool calls in one turn | Supported | `AgentLoop` | Dispatches all tool calls requested by a model turn before continuing. |
 | Tool result coercion | Supported | Return `ToolResult`, `str`, `dict`, or other object | Non-`ToolResult` returns are converted into `ToolResult`. |
 | Tool payload separation | Supported | `ToolResult(content=..., payload=...)` | `content` goes back to the model; `payload` is collected for application use in `AgentResult.payloads`. |

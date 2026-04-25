@@ -37,10 +37,11 @@ class ToolRuntime:
         calls: list[tuple[str, dict[str, Any]]],
         *,
         mock: bool = False,
-    ) -> list[ToolResult]:
+    ) -> list[ToolResult | BaseException]:
         if self.max_concurrent is None:
             return await asyncio.gather(
-                *(self.call(name, args, mock=mock) for name, args in calls)
+                *(self.call(name, args, mock=mock) for name, args in calls),
+                return_exceptions=True,
             )
 
         semaphore = asyncio.Semaphore(self.max_concurrent)
@@ -49,7 +50,10 @@ class ToolRuntime:
             async with semaphore:
                 return await self.call(name, args, mock=mock)
 
-        return await asyncio.gather(*(guarded(name, args) for name, args in calls))
+        return await asyncio.gather(
+            *(guarded(name, args) for name, args in calls),
+            return_exceptions=True,
+        )
 
     async def _execute(self, definition: ToolDefinition, arguments: dict[str, Any]) -> ToolResult:
         kwargs = self._inject_context(definition, arguments)

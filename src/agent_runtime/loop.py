@@ -180,12 +180,9 @@ class AgentLoop:
                     data={"call_id": call.call_id, "name": call.name},
                 )
 
-            task_results = await asyncio.gather(
-                *(
-                    tool_runtime.call(call.name, call.arguments, mock=mock_tools)
-                    for _, call in allowed_calls
-                ),
-                return_exceptions=True,
+            task_results = await tool_runtime.call_many(
+                [(call.name, call.arguments) for _, call in allowed_calls],
+                mock=mock_tools,
             )
 
             for (index, call), result in zip(allowed_calls, task_results, strict=True):

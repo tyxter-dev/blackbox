@@ -263,6 +263,84 @@ async def test_run_executes_parallel_tool_calls_concurrently() -> None:
     assert result.text == "abc"
 
 
+async def test_run_can_limit_tool_concurrency() -> None:
+    runtime, scripted = _runtime()
+    active = 0
+    max_active = 0
+
+    def make_tool(part: str) -> Callable[[], Awaitable[ToolResult]]:
+        async def tool() -> ToolResult:
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return ToolResult(content=part)
+
+        return tool
+
+    for index in range(3):
+        runtime.tools.register(
+            make_tool(str(index)),
+            name=f"limited_{index}",
+            description="limited",
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+    def three_tool_turn(request: Any) -> Any:
+        from agent_runtime.core.events import AgentEvent as Evt
+        from agent_runtime.core.state import ProviderState
+
+        yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
+        for index in range(3):
+            yield Evt(
+                type=EventTypes.TOOL_CALL_REQUESTED,
+                provider="scripted",
+                item_id=f"c{index}",
+                data={"call_id": f"c{index}", "name": f"limited_{index}", "arguments": {}},
+            )
+        yield Evt(
+            type=EventTypes.MODEL_COMPLETED,
+            provider="scripted",
+            data={"provider_state": ProviderState(provider="scripted")},
+        )
+
+    scripted.queue(three_tool_turn)
+    scripted.queue(text_only_turn("012"))
+
+    await runtime.run(
+        provider="scripted:test",
+        input="limit tools",
+        tools=["limited_0", "limited_1", "limited_2"],
+        tool_max_concurrent=1,
+    )
+
+    assert max_active == 1
+
+
+async def test_run_can_timeout_tool_execution() -> None:
+    runtime, scripted = _runtime()
+
+    async def slow() -> ToolResult:
+        await asyncio.sleep(0.05)
+        return ToolResult(content="late")
+
+    runtime.tools.register(slow, name="slow_tool", description="slow")
+    scripted.queue(tool_call_turn(call_id="c1", name="slow_tool", arguments={}))
+    scripted.queue(text_only_turn("handled timeout"))
+
+    result: AgentResult[str] = await runtime.run(
+        provider="scripted:test",
+        input="timeout tool",
+        tools=["slow_tool"],
+        tool_timeout=0.001,
+    )
+
+    failed = [event for event in result.events if event.type == EventTypes.TOOL_CALL_FAILED]
+    assert failed
+    assert "handled timeout" in result.output
+
+
 # --- context injection ------------------------------------------------------
 
 async def test_run_injects_tool_execution_context_without_schema_visibility() -> None:

@@ -518,6 +518,8 @@ class AgentRuntime:
         tools: list[str] | None = None,
         tool_session: ToolSession | None = None,
         tool_execution_context: dict[str, Any] | None = None,
+        tool_max_concurrent: int | None = None,
+        tool_timeout: float | None = None,
         approval_policy: Any = None,
         policy: Any = None,
         max_iterations: int = 8,
@@ -542,7 +544,12 @@ class AgentRuntime:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
 
         tool_definitions = self._tool_payload(tools, tool_session=tool_session)
-        tool_runtime = self._tool_runtime_for(tool_execution_context, tool_session=tool_session)
+        tool_runtime = self._tool_runtime_for(
+            tool_execution_context,
+            tool_session=tool_session,
+            max_concurrent=tool_max_concurrent,
+            timeout=tool_timeout,
+        )
 
         async def stream_factory(
             *, input: str | list[Any], provider_state: ProviderState | None
@@ -586,6 +593,8 @@ class AgentRuntime:
         tools: list[str] | None = None,
         tool_session: ToolSession | None = None,
         tool_execution_context: dict[str, Any] | None = None,
+        tool_max_concurrent: int | None = None,
+        tool_timeout: float | None = None,
         approval_policy: Any = None,
         policy: Any = None,
         max_iterations: int = 8,
@@ -635,6 +644,8 @@ class AgentRuntime:
                 tools=tools,
                 tool_session=tool_session,
                 tool_execution_context=tool_execution_context,
+                tool_max_concurrent=tool_max_concurrent,
+                tool_timeout=tool_timeout,
                 approval_policy=approval_policy,
                 policy=policy,
                 max_iterations=max_iterations,
@@ -718,13 +729,27 @@ class AgentRuntime:
         return [t for t in provider_tools if t["name"] in wanted]
 
     def _tool_runtime_for(
-        self, context: dict[str, Any] | None, *, tool_session: ToolSession | None = None
+        self,
+        context: dict[str, Any] | None,
+        *,
+        tool_session: ToolSession | None = None,
+        max_concurrent: int | None = None,
+        timeout: float | None = None,
     ) -> ToolRuntime:
         if tool_session is not None:
-            return tool_session.runtime(context=context)
-        if context is None:
+            return tool_session.runtime(
+                context=context,
+                max_concurrent=max_concurrent,
+                timeout=timeout,
+            )
+        if context is None and max_concurrent is None and timeout is None:
             return self.tools.default_runtime
-        return ToolRuntime(self.tools.registry, context=context)
+        return ToolRuntime(
+            self.tools.registry,
+            context=context or {},
+            max_concurrent=max_concurrent,
+            timeout=timeout,
+        )
 
 
 def _resolve_output_spec(
