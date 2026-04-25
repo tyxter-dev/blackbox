@@ -5,7 +5,12 @@ from dataclasses import dataclass
 
 @dataclass(slots=True, frozen=True)
 class ModelCapabilities:
-    """Feature flags for a model-level provider."""
+    """Feature flags for a model-level provider.
+
+    ``supports_structured_output`` means the adapter accepts and enforces a
+    provider-native schema contract. Runtime-level posthoc validation does not
+    set this flag.
+    """
 
     supports_streaming_events: bool = True
     supports_function_tools: bool = False

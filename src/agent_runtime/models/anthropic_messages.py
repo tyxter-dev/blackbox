@@ -48,7 +48,7 @@ class AnthropicMessagesProvider:
             supports_remote_mcp=True,
             supports_reasoning_items=True,
             supports_provider_state=True,
-            supports_structured_output=True,
+            supports_structured_output=False,
         )
 
     def _get_client(self) -> Any:
