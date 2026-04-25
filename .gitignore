@@ -1,0 +1,37 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+coverage.xml
+
+# Environments
+.env
+.venv
+env/
+venv/
+
+# mypy / ruff
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# Project-specific
+*.patch
+/.claude
+requirements.txt
