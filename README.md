@@ -327,6 +327,7 @@ pip install -e .[dev]
 pytest                            # offline suite
 pytest -m integration_openai      # network-gated, requires OPENAI_API_KEY
 pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
+pytest -m integration_gemini      # network-gated, requires GOOGLE_API_KEY
 ```
 
 ## Next implementation targets
