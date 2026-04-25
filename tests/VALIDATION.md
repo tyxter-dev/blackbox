@@ -206,17 +206,20 @@ await runtime.snapshot(ws)
 
 ---
 
-## 7. MCP functions ⏳ (M3)
+## 7. MCP functions (M3)
 
 For first-class MCP support.
 
 ```python
-runtime.mcp.connect(...)
-runtime.mcp.list_tools(...)
-runtime.mcp.call_tool(...)
-runtime.mcp.disconnect(...)
+connector.list_tools(...)
+connector.call_tool(...)
 ```
 
-Planned coverage: stdio + HTTP/SSE + streamable HTTP transports, list_tools
-namespacing, call execution, approval gating, auth-failure typing, raw
-event preservation.
+| # | Status | Functionality | Test | What it proves |
+|---|---|---|---|---|
+| 7.1 | ✅ | Namespaced list_tools | `unit/test_mcp_connector.py::test_mcp_connector_lists_namespaced_tools` | Local MCP tools get stable `mcp:<server>.<tool>` refs. |
+| 7.2 | ✅ | Local MCP call dispatch | `::test_mcp_connector_calls_registered_tool_and_emits_events` | Registered tools execute and emit started/completed events. |
+| 7.3 | ✅ | `before_mcp_call` deny | `::test_mcp_connector_gates_calls_with_policy` | Policy can block MCP calls with typed `MCPError`. |
+| 7.4 | ✅ | MCP approval required | `::test_mcp_connector_surfaces_required_approval` | Required approval emits `MCP_APPROVAL_REQUIRED` and raises `ApprovalError`. |
+| 7.5 | ⏳ | MCP transports | not yet | stdio + HTTP/SSE + streamable HTTP process/client management. |
+| 7.6 | ⏳ | Provider-native remote MCP | not yet | Provider adapters receive remote MCP server configuration. |

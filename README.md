@@ -303,6 +303,23 @@ result = await runtime.run(
 )
 ```
 
+## MCP local connector
+
+`MCPConnector` provides the first local MCP dispatch slice: register
+discovered tools against a server spec, list stable namespaced refs, call
+tools through a policy gate, and drain canonical MCP events.
+
+```python
+from agent_runtime.mcp import MCPConnector, MCPServerSpec
+
+connector = MCPConnector([MCPServerSpec(name="tickets", transport="stdio")])
+connector.register_tool("tickets", "lookup", lambda ticket_id: {"id": ticket_id})
+
+tools = await connector.list_tools()
+result = await connector.call_tool("tickets", "mcp:tickets.lookup", {"ticket_id": "T-1"})
+events = connector.drain_events()
+```
+
 ## Tests
 
 ```bash
@@ -317,4 +334,4 @@ pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
 1. OpenAI cloud / Codex-style `AgentProvider`.
 2. Claude Code `AgentProvider`.
 3. Vertex AI Agent Engine `AgentProvider`.
-4. MCP local connector + provider-native remote MCP wiring.
+4. MCP stdio/HTTP transport management + provider-native remote MCP wiring.
