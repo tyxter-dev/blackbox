@@ -170,22 +170,39 @@ run_store.load(...)
 
 ---
 
-## 6. Workspace functions ⏳ (M2)
+## 6. Workspace functions (M2)
 
-For coding-agent workflows. None of these exist in v0.1; targets land with M2.
+For coding-agent workflows. v0.1 ships a `WorkspaceRuntime` that backs
+`"local"` workspaces; cloud/sandbox/git kinds remain ⏳.
 
 ```python
-runtime.workspaces.create(...)
-runtime.workspaces.read_file(...)
-runtime.workspaces.write_file(...)
-runtime.workspaces.run_command(...)
-runtime.workspaces.create_patch(...)
-runtime.workspaces.snapshot(...)
+ws = await runtime.open(WorkspaceSpec.local(path))
+await runtime.read_file(ws, path)
+await runtime.write_file(ws, path, content)
+await runtime.delete_file(ws, path)
+await runtime.apply_patch(ws, patch)
+await runtime.run_command(ws, CommandSpec(...))
+await runtime.snapshot(ws)
 ```
 
-Planned coverage: workspace creation, file read/write events, command
-execution start/completed/timeout, patch artifact creation, snapshot
-artifacts, write-approval gating.
+| # | Status | Functionality | Test | What it proves |
+|---|---|---|---|---|
+| 6.1 | ✅ | Open local workspace | `unit/test_workspace_runtime.py::test_open_local_workspace_returns_ref` | Spec validates and returns a stable ref. |
+| 6.2 | ✅ | Reject non-local kinds | `::test_open_rejects_non_local_workspace_kind` | Cloud/sandbox/git raise `WorkspaceError` until adapters land. |
+| 6.3 | ✅ | File read events | `::test_read_file_emits_workspace_file_read` | Reads emit `WORKSPACE_FILE_READ`. |
+| 6.4 | ✅ | File write events | `::test_write_file_emits_change_and_returns_file_change` | Writes emit `WORKSPACE_FILE_CHANGED` with a `FileChange`. |
+| 6.5 | ✅ | Patch lifecycle | `::test_apply_patch_emits_per_change_events_and_creates_patch_artifact` | Per-change events + `WORKSPACE_PATCH_CREATED` + `ARTIFACT_CREATED`. |
+| 6.6 | ✅ | Path escape rejected | `::test_path_escape_is_rejected` | Relative paths cannot leave the root. |
+| 6.7 | ✅ | Command lifecycle | `::test_run_command_emits_started_completed_via_executor` | `WORKSPACE_COMMAND_STARTED` + `WORKSPACE_COMMAND_COMPLETED`. |
+| 6.8 | ✅ | Command failure surfaced | `::test_run_command_failure_propagates_exit_code` | Non-zero exit codes carry through. |
+| 6.9 | ✅ | `before_workspace_write` deny | `::test_write_file_denied_by_policy_raises_workspace_error` | Policy denies writes with typed error. |
+| 6.10 | ✅ | `before_command` deny | `::test_run_command_denied_by_policy_blocks_executor` | Policy denies commands before executor runs. |
+| 6.11 | ✅ | `before_artifact_export` deny | `::test_artifact_export_policy_gates_snapshot` | Policy denies snapshot export. |
+| 6.12 | ✅ | `require_approval` raises | `::test_write_file_require_approval_raises_approval_error` | Workspace layer surfaces approval gap as `ApprovalError`. |
+| 6.13 | ✅ | Snapshot artifact | `::test_snapshot_creates_artifact_and_emits_event` | Snapshots produce typed `Artifact`. |
+| 6.14 | ✅ | Artifact pagination | `::test_apply_patch_emits_per_change_events_and_creates_patch_artifact` (uses `list_artifacts`) | `ArtifactPage` returned by filter. |
+| 6.15 | ⏳ | Command timeout | not yet — default executor honors `timeout` but no test fixture | Long commands fail with `timed_out=True`. |
+| 6.16 | ⏳ | AgentLoop integration | reserved | Workspace ops invocable from agent tools with approval flow wired in. |
 
 ---
 

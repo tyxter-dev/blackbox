@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Slice 12 — M2 workspace primitives + policy hooks
+
+First cut of the workspace layer (PRD §15, M2). Builds the data contracts
+and a local-directory runtime that emits canonical workspace events and
+honors the workspace-relevant `Policy` checkpoints.
+
+- New data classes in `agent_runtime.workspaces`:
+  - `WorkspaceRef` (stable handle for an opened workspace),
+  - `WorkspaceMount` (workspace mounted into an agent's environment),
+  - `CommandSpec` / `CommandResult`,
+  - `PatchArtifact` (typed patch with `.to_artifact()` interop).
+- New `WorkspaceRuntime` (`workspaces/runtime.py`) for `WorkspaceSpec.kind ==
+  "local"`. Surface: `open`, `read_file`, `write_file`, `delete_file`,
+  `apply_patch`, `run_command`, `snapshot`, `list_artifacts`, `drain_events`.
+- Emits canonical events: `WORKSPACE_FILE_READ`, `WORKSPACE_FILE_CHANGED`,
+  `WORKSPACE_COMMAND_STARTED`, `WORKSPACE_COMMAND_COMPLETED`,
+  `WORKSPACE_PATCH_CREATED`, `ARTIFACT_CREATED`.
+- Wires three M2 policy checkpoints: `before_workspace_write`,
+  `before_command`, `before_artifact_export`. `deny` raises
+  `WorkspaceError`; `require_approval` raises `ApprovalError` (the workspace
+  layer has no approval channel yet — integration with the `AgentLoop`
+  approval flow lands in a later slice).
+- Path-escape protection: every relative path is resolved and verified to
+  stay under the workspace root.
+- File I/O runs on `asyncio.to_thread` so async callers don't block.
+- Default `CommandExecutor` uses `asyncio.create_subprocess_shell` /
+  `_exec`; an injected executor fully replaces it for tests and sandboxes.
+- 16 unit tests in `tests/unit/test_workspace_runtime.py` cover open
+  validation, read/write/delete events, policy deny + require_approval,
+  path-escape, patch application + artifact lifecycle, command success +
+  failure + denial, snapshot + artifact export gating, and event drain.
+- 79 → 95 passing offline tests; ruff + mypy --strict clean.
+
+Deferred to later slices: AgentLoop integration (workspace ops as a tool
+backend), git/sandbox/cloud workspace kinds, real archive-backed snapshots,
+approval-channel wiring at workspace checkpoints.
+
 ### Slice 9 — Anthropic Messages-native model provider (P1-R2)
 
 Second real `ModelProvider`, mirroring the M1 OpenAI Responses pattern.

@@ -179,6 +179,36 @@ async for event in runtime.models.stream(
         print(event.data["delta"], end="")
 ```
 
+## Workspace runtime (M2 local)
+
+`WorkspaceRuntime` backs `"local"` workspaces with file read/write/delete,
+patch application, command execution, and snapshotting. It emits canonical
+workspace events (`WORKSPACE_FILE_READ`, `WORKSPACE_FILE_CHANGED`,
+`WORKSPACE_COMMAND_STARTED/_COMPLETED`, `WORKSPACE_PATCH_CREATED`,
+`ARTIFACT_CREATED`) and consults a `Policy` at three M2 checkpoints:
+`before_workspace_write`, `before_command`, `before_artifact_export`.
+
+```python
+from agent_runtime.workspaces import (
+    CommandSpec, Patch, FileChange, WorkspaceRuntime, WorkspaceSpec,
+)
+
+ws_runtime = WorkspaceRuntime()
+ws = await ws_runtime.open(WorkspaceSpec.local("/path/to/repo"))
+
+await ws_runtime.write_file(ws, "notes.md", "# scratch")
+result = await ws_runtime.run_command(ws, CommandSpec(command="pytest -q"))
+patch = await ws_runtime.apply_patch(ws, Patch(
+    summary="add greeting",
+    diff="--- a\n+++ b\n",
+    changes=[FileChange(path="hello.txt", type="create", content="hi")],
+))
+```
+
+Path traversal is blocked (relative paths cannot escape the workspace
+root). Cloud/sandbox/git workspace kinds raise `WorkspaceError` until their
+adapters land.
+
 ## Tests
 
 ```bash
@@ -195,5 +225,6 @@ pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
 3. Claude Code `AgentProvider`.
 4. Vertex AI Agent Engine `AgentProvider`.
 5. MCP local connector + provider-native remote MCP wiring.
-6. Workspace abstraction for repo/sandbox/cloud workspaces and patches.
+6. AgentLoop integration of workspace ops as a tool backend with approval
+   flow wired through.
 
