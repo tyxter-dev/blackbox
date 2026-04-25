@@ -36,7 +36,7 @@ src/agent_runtime/
   agents/           # cloud/local agent provider adapters; LocalAgentProvider included
   tools/            # local tool registry/runtime/context injection
   workspaces/       # workspace abstractions for files, patches, repos, sandboxes
-  mcp/              # MCP server specs and connector placeholder
+  mcp/              # MCP server specs, connector, and stdio/HTTP transports
   observability/    # traces and event sink placeholders
 ```
 
@@ -447,9 +447,10 @@ result = await runtime.run(
 
 ## MCP local connector
 
-`MCPConnector` provides the first local MCP dispatch slice: register
-discovered tools against a server spec, list stable namespaced refs, call
-tools through a policy gate, and drain canonical MCP events.
+`MCPConnector` can either register in-process MCP tools or manage an MCP
+transport for a configured server. Managed servers are initialized with
+JSON-RPC, listed through `tools/list`, cached, called through `tools/call`,
+policy-gated, and surfaced as canonical MCP events.
 
 ```python
 from agent_runtime.mcp import MCPConnector, MCPServerSpec
@@ -460,6 +461,29 @@ connector.register_tool("tickets", "lookup", lambda ticket_id: {"id": ticket_id}
 tools = await connector.list_tools()
 result = await connector.call_tool("tickets", "mcp:tickets.lookup", {"ticket_id": "T-1"})
 events = connector.drain_events()
+```
+
+For a managed stdio server, provide the command:
+
+```python
+connector = MCPConnector([
+    MCPServerSpec(
+        name="tickets",
+        transport="stdio",
+        command="python",
+        args=["-m", "ticket_mcp"],
+    )
+])
+
+tools = await connector.list_tools("tickets")
+result = await connector.call_tool("tickets", "lookup", {"ticket_id": "T-1"})
+await connector.stop()
+```
+
+Discovered MCP tools can also be bridged into a local `ToolRegistry`:
+
+```python
+await connector.register_runtime_tools(runtime.tools.registry)
 ```
 
 ## Tests
@@ -476,6 +500,6 @@ pytest -m integration_gemini      # network-gated, requires GOOGLE_API_KEY
 ## Next implementation targets
 
 1. OpenAI cloud / Codex-style `AgentProvider`.
-2. Claude Code `AgentProvider`.
+2. Production Claude Code SDK wrapper for `ClaudeCodeAgentProvider`.
 3. Vertex AI Agent Engine `AgentProvider`.
-4. MCP stdio/HTTP transport management + provider-native remote MCP wiring.
+4. Approval resume channel for managed MCP transports.

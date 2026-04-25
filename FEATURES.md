@@ -130,7 +130,7 @@ Status legend:
 | Cancel session | Supported | `runtime.agents.cancel(...)` | Cancellation is honored between turns for local sessions. |
 | List session artifacts | Supported | `runtime.agents.list_artifacts(...)` | Local provider returns an `ArtifactPage`; no artifact-producing workspace flow yet. |
 | Session approval pause/resume/deny | Supported | `runtime.agents.approve(...)` | Local sessions can wait for approval and continue or skip denied tools. |
-| Cloud agent providers | Partial | `OpenAICloudAgentProvider`, `ClaudeCodeAgentProvider`, `VertexAIAgentEngineProvider` | Provider shells/stubs exist; full cloud execution is not implemented. |
+| Cloud agent providers | Partial | `OpenAICloudAgentProvider`, `ClaudeCodeAgentProvider`, `VertexAIAgentEngineProvider` | `ClaudeCodeAgentProvider` supports a real client-backed lifecycle when constructed with `client=...`; OpenAI and Vertex remain honest stubs. |
 
 ## Artifacts, Workspaces, MCP, and Observability
 
@@ -139,15 +139,16 @@ Status legend:
 | Artifact data contracts | Supported | `Artifact`, `ArtifactRef`, `ArtifactPage` | Typed artifact models exist. |
 | Local workspace runtime | Supported | `WorkspaceRuntime` | Local workspaces support file read/write/delete, patch artifacts, command execution, snapshots, policy gates, and canonical events. |
 | Workspace data contracts | Supported | `workspaces.spec`, `workspaces.changes` | Workspace refs, mounts, file changes, patch artifacts, commands, and command results exist. |
-| MCP server spec | Supported | `MCPServerSpec` | Server configuration model exists for `stdio`, `http`, `sse`, and `streamable_http`; process/client management remains planned. |
-| Local MCP dispatch connector | Supported | `MCPConnector` | Registers local MCP tools, lists namespaced `mcp:<server>.<tool>` refs, gates calls through policy, and emits MCP events. |
+| MCP server spec | Supported | `MCPServerSpec` | Server configuration model exists for `stdio`, `http`, `sse`, and `streamable_http`, including environment, timeout, and cache controls. |
+| Local MCP dispatch connector | Supported | `MCPConnector` | Registers in-process MCP tools, starts managed stdio/HTTP transports, lists namespaced `mcp:<server>.<tool>` refs, gates calls through policy, and emits MCP events. |
+| MCP runtime tool bridge | Supported | `MCPConnector.register_runtime_tools(...)` | Exposes discovered MCP tools to a `ToolRegistry` while preserving MCP metadata and routing calls through the connector. |
 | Observability sink protocol | Partial | `observability.sinks` | Event sink abstractions exist; full tracing/export integrations are not implemented. |
 | Trace data contracts | Partial | `observability.traces` | Trace/span models exist; no full tracing backend yet. |
 
 ## Explicitly Not Supported Yet
 
 - OpenAI cloud/Codex-style agent execution.
-- Claude Code or Vertex Agent Engine execution.
-- MCP stdio/HTTP transport process management.
+- Vertex Agent Engine execution.
+- Built-in production Claude Code SDK wrapper without an injected client.
 - Provider cache controls beyond preserving native continuation state.
 - Provider-breadth routing through LiteLLM.

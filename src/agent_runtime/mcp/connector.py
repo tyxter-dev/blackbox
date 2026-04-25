@@ -8,7 +8,12 @@ from typing import Any
 from agent_runtime.core.errors import ApprovalError, MCPError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
+from agent_runtime.mcp.auth import MCPAuthProvider
+from agent_runtime.mcp.cache import MCPToolCacheEntry
+from agent_runtime.mcp.client import MCPClient
 from agent_runtime.mcp.spec import MCPServerSpec
+from agent_runtime.mcp.transports import MCPTransportClient, transport_for_spec
+from agent_runtime.tools.registry import ToolDefinition, ToolRegistry
 
 MCPToolCallable = Callable[..., Any]
 
@@ -17,7 +22,7 @@ MCPToolCallable = Callable[..., Any]
 class MCPToolDefinition:
     server: str
     name: str
-    function: MCPToolCallable
+    function: MCPToolCallable | None = None
     description: str = ""
     parameters: dict[str, Any] = field(default_factory=lambda: {"type": "object"})
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -30,6 +35,7 @@ class MCPToolDefinition:
         return {
             "type": "mcp_tool",
             "server": self.server,
+            "server_label": self.server,
             "name": self.name,
             "ref": self.ref,
             "description": self.description,
@@ -40,18 +46,21 @@ class MCPToolDefinition:
 
 @dataclass(slots=True)
 class MCPConnector:
-    """Minimal local MCP dispatch connector.
+    """MCP dispatch connector.
 
-    This first slice does not open stdio or HTTP transports itself. It gives the
-    runtime a typed connector surface for registering discovered local MCP tools,
-    listing them with stable ``mcp:<server>.<tool>`` refs, policy-gating calls,
-    and emitting the canonical MCP event taxonomy.
+    In-process registered tools remain supported for tests and embedded
+    servers. Specs with a command or URL are managed through stdio/HTTP
+    transports that speak MCP JSON-RPC.
     """
 
     servers: list[MCPServerSpec]
     policy: Policy | None = None
+    auth_provider: MCPAuthProvider | None = None
+    transports: dict[str, MCPTransportClient] = field(default_factory=dict)
     events: list[AgentEvent] = field(default_factory=list)
     _tools: dict[str, MCPToolDefinition] = field(default_factory=dict)
+    _clients: dict[str, MCPClient] = field(default_factory=dict)
+    _tool_cache: dict[str, MCPToolCacheEntry] = field(default_factory=dict)
 
     def register_tool(
         self,
@@ -77,6 +86,11 @@ class MCPConnector:
         return definition
 
     async def list_tools(self, server: str | None = None) -> list[dict[str, Any]]:
+        if server is not None:
+            await self._ensure_discovered(server)
+        else:
+            for spec in self.servers:
+                await self._ensure_discovered(spec.name)
         tools = [
             tool.to_descriptor()
             for tool in self._tools.values()
@@ -84,9 +98,27 @@ class MCPConnector:
         ]
         self._emit(
             EventTypes.MCP_LIST_TOOLS_COMPLETED,
-            data={"server": server, "tools": tools},
+            data={"server": server, "server_label": server, "tools": tools},
         )
         return tools
+
+    async def start(self) -> None:
+        for spec in self.servers:
+            if self._is_managed(spec):
+                await self._client_for(spec.name).start()
+
+    async def stop(self) -> None:
+        for client in self._clients.values():
+            await client.stop()
+        self._clients.clear()
+        self._tool_cache.clear()
+
+    async def refresh_tools(self, server: str) -> list[dict[str, Any]]:
+        self._tool_cache.pop(server, None)
+        for ref in [ref for ref, definition in self._tools.items() if definition.server == server and definition.function is None]:
+            self._tools.pop(ref, None)
+        await self._discover_tools(server)
+        return await self.list_tools(server)
 
     async def call_tool(
         self,
@@ -94,26 +126,78 @@ class MCPConnector:
         tool: str,
         arguments: dict[str, Any] | None = None,
     ) -> Any:
+        await self._ensure_discovered(server)
         definition = self._resolve(server, tool)
         args = dict(arguments or {})
         await self._policy_gate(definition, args)
         self._emit(
             EventTypes.MCP_CALL_STARTED,
-            data={"server": definition.server, "tool": definition.name, "ref": definition.ref},
+            data={
+                "server": definition.server,
+                "server_label": definition.server,
+                "tool": definition.name,
+                "name": definition.name,
+                "ref": definition.ref,
+                "arguments": args,
+            },
         )
-        result = definition.function(**args)
-        if inspect.isawaitable(result):
-            result = await result
+        if definition.function is None:
+            result = await self._client_for(definition.server).call_tool(definition.name, args)
+        else:
+            result = definition.function(**args)
+            if inspect.isawaitable(result):
+                result = await result
         self._emit(
             EventTypes.MCP_CALL_COMPLETED,
             data={
                 "server": definition.server,
+                "server_label": definition.server,
                 "tool": definition.name,
+                "name": definition.name,
                 "ref": definition.ref,
                 "result": result,
+                "output": result,
             },
         )
         return result
+
+    async def to_runtime_tools(self) -> list[dict[str, Any]]:
+        return await self.list_tools()
+
+    async def register_runtime_tools(
+        self,
+        registry: ToolRegistry,
+        *,
+        server: str | None = None,
+    ) -> list[ToolDefinition]:
+        definitions: list[ToolDefinition] = []
+        for descriptor in await self.list_tools(server):
+            ref = str(descriptor["ref"])
+            tool_server = str(descriptor["server"])
+            tool_name = str(descriptor["name"])
+
+            async def call_mcp_tool(
+                _server: str = tool_server,
+                _tool: str = tool_name,
+                **arguments: Any,
+            ) -> Any:
+                return await self.call_tool(_server, _tool, arguments)
+
+            definitions.append(
+                registry.register(
+                    call_mcp_tool,
+                    name=ref,
+                    description=str(descriptor.get("description") or ref),
+                    parameters=dict(descriptor.get("parameters") or {"type": "object"}),
+                    metadata={
+                        "mcp": True,
+                        "server": tool_server,
+                        "tool": tool_name,
+                        "ref": ref,
+                    },
+                )
+            )
+        return definitions
 
     def drain_events(self) -> list[AgentEvent]:
         drained = list(self.events)
@@ -121,6 +205,8 @@ class MCPConnector:
         return drained
 
     def _resolve(self, server: str, tool: str) -> MCPToolDefinition:
+        # Remote discovery is async. Callers should list tools first for managed
+        # transports; this keeps the sync resolver simple for hot-path calls.
         if tool.startswith("mcp:"):
             ref = tool
         else:
@@ -154,7 +240,9 @@ class MCPConnector:
             EventTypes.MCP_APPROVAL_REQUIRED,
             data={
                 "server": definition.server,
+                "server_label": definition.server,
                 "tool": definition.name,
+                "name": definition.name,
                 "ref": definition.ref,
                 "reason": decision.reason,
             },
@@ -166,3 +254,61 @@ class MCPConnector:
 
     def _emit(self, type_: str, *, data: dict[str, Any]) -> None:
         self.events.append(AgentEvent(type=type_, provider="mcp", data=data))
+
+    async def _ensure_discovered(self, server: str) -> None:
+        spec = self._server_spec(server)
+        if not self._is_managed(spec):
+            return
+        cached = self._tool_cache.get(server)
+        if cached is not None and not cached.expired():
+            return
+        await self._discover_tools(server)
+
+    async def _discover_tools(self, server: str) -> None:
+        spec = self._server_spec(server)
+        tools = await self._client_for(server).list_tools()
+        definitions: dict[str, MCPToolDefinition] = {}
+        for tool in tools:
+            name = str(tool.get("name", ""))
+            if not name:
+                continue
+            definition = MCPToolDefinition(
+                server=server,
+                name=name,
+                description=str(tool.get("description", "")),
+                parameters=dict(
+                    tool.get("inputSchema")
+                    or tool.get("input_schema")
+                    or tool.get("parameters")
+                    or {"type": "object"}
+                ),
+                metadata={"raw": tool, "transport": spec.transport},
+            )
+            definitions[definition.ref] = definition
+            self._tools[definition.ref] = definition
+        self._tool_cache[server] = MCPToolCacheEntry(
+            tools=definitions,
+            ttl_seconds=spec.tool_cache_ttl_seconds,
+        )
+
+    def _client_for(self, server: str) -> MCPClient:
+        existing = self._clients.get(server)
+        if existing is not None:
+            return existing
+        spec = self._server_spec(server)
+        transport = self.transports.get(server)
+        if transport is None:
+            transport = transport_for_spec(spec, auth_provider=self.auth_provider)
+        client = MCPClient(spec=spec, transport=transport)
+        self._clients[server] = client
+        return client
+
+    def _server_spec(self, server: str) -> MCPServerSpec:
+        for spec in self.servers:
+            if spec.name == server:
+                return spec
+        raise MCPError(f"Unknown MCP server: {server}")
+
+    @staticmethod
+    def _is_managed(spec: MCPServerSpec) -> bool:
+        return bool(spec.command or spec.url)

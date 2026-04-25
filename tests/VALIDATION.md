@@ -158,6 +158,7 @@ await runtime.agents.list_artifacts(...)
 | 4.9 | ✅ | Provider raw data | `golden/openai/test_responses_event_mapping.py` | Provider data is preserved. |
 | 4.10 | ✅ | Capability enforcement | `contracts/test_capability_honesty.py` | Unsupported actions raise typed errors. |
 | 4.11 | ✅ | Cloud-agent scaffold guardrails | `contracts/test_capability_honesty.py::test_cloud_agent_stub_operations_raise_unsupported_when_configured` | Configured cloud-agent scaffolds raise typed unsupported errors until real lifecycle support lands. |
+| 4.12 | ✅ | Client-backed Claude Code lifecycle | `runtime/test_claude_code_agent_provider.py` | Injected Claude Code clients can create agents, start sessions, stream/resume events, send messages, approve, cancel, and list artifacts. |
 
 ---
 
@@ -235,5 +236,6 @@ connector.call_tool(...)
 | 7.2 | ✅ | Local MCP call dispatch | `::test_mcp_connector_calls_registered_tool_and_emits_events` | Registered tools execute and emit started/completed events. |
 | 7.3 | ✅ | `before_mcp_call` deny | `::test_mcp_connector_gates_calls_with_policy` | Policy can block MCP calls with typed `MCPError`. |
 | 7.4 | ✅ | MCP approval required | `::test_mcp_connector_surfaces_required_approval` | Required approval emits `MCP_APPROVAL_REQUIRED` and raises `ApprovalError`. |
-| 7.5 | ⏳ | MCP transports | `unit/test_mcp_connector.py::test_mcp_server_spec_represents_prd_transport_names` covers spec names only | stdio + HTTP/SSE + streamable HTTP process/client management. |
+| 7.5 | ✅ | MCP transports | `unit/test_mcp_connector.py::test_mcp_connector_discovers_and_calls_managed_transport`, `::test_mcp_connector_refreshes_cache_and_stops_transport` | Managed transports initialize, list tools, cache/refresh definitions, call tools, and stop cleanly. |
 | 7.6 | ✅ | Provider-native remote MCP | `unit/test_hosted_tools.py::test_remote_mcp_serializes_for_openai`, `::test_remote_mcp_serializes_for_anthropic`, `unit/test_model_request_controls.py::test_openai_responses_maps_remote_mcp_to_tool`, `::test_anthropic_maps_remote_mcp_to_server_and_toolset` | Provider adapters receive remote MCP server configuration. |
+| 7.7 | ✅ | MCP runtime tool bridge | `unit/test_mcp_connector.py::test_mcp_connector_registers_runtime_tool_bridge` | Discovered MCP tools can be registered into a `ToolRegistry` while calls still route through MCP policy/audit handling. |
