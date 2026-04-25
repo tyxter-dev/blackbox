@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import ArtifactPage
 from agent_runtime.core.capabilities import AgentCapabilities
-from agent_runtime.core.errors import ProviderNotConfiguredError
+from agent_runtime.core.errors import ProviderNotConfiguredError, UnsupportedFeatureError
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.providers.base import AgentSpec, TaskSpec
@@ -29,26 +29,17 @@ class ClaudeCodeAgentProvider:
         self.api_key = api_key
 
     def capabilities(self) -> AgentCapabilities:
-        return AgentCapabilities(
-            supports_sessions=True,
-            supports_streaming_events=True,
-            supports_artifacts=True,
-            supports_workspace=True,
-            supports_approvals=True,
-            supports_mcp=True,
-            supports_cancellation=True,
-            supports_resume=True,
-        )
+        return AgentCapabilities(supports_sessions=False, supports_streaming_events=False)
 
     async def create_agent(self, spec: AgentSpec) -> AgentRef:
         if not self.api_key:
             raise ProviderNotConfiguredError("ClaudeCodeAgentProvider requires an api_key.")
-        raise NotImplementedError("Claude Code agent adapter scaffold only.")
+        raise UnsupportedFeatureError("Claude Code agent adapter scaffold only.")
 
     async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> AgentSession:
         if not self.api_key:
             raise ProviderNotConfiguredError("ClaudeCodeAgentProvider requires an api_key.")
-        raise NotImplementedError("Claude Code agent adapter scaffold only.")
+        raise UnsupportedFeatureError("Claude Code agent adapter scaffold only.")
 
     async def stream_events(
         self,
@@ -56,19 +47,19 @@ class ClaudeCodeAgentProvider:
         *,
         after_event_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
-        raise NotImplementedError("Claude Code agent adapter scaffold only.")
+        raise UnsupportedFeatureError("Claude Code agent adapter scaffold only.")
         yield  # pragma: no cover
 
     async def send_message(
         self, session: SessionRef | AgentSession, message: str
     ) -> InvocationRef:
-        raise NotImplementedError("Claude Code agent adapter scaffold only.")
+        raise UnsupportedFeatureError("Claude Code agent adapter scaffold only.")
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
-        raise NotImplementedError("Claude Code agent adapter scaffold only.")
+        raise UnsupportedFeatureError("Claude Code agent adapter scaffold only.")
 
     async def cancel(self, session: SessionRef | AgentSession) -> None:
-        raise NotImplementedError("Claude Code agent adapter scaffold only.")
+        raise UnsupportedFeatureError("Claude Code agent adapter scaffold only.")
 
     async def list_artifacts(
         self,
@@ -78,7 +69,7 @@ class ClaudeCodeAgentProvider:
         after: str | None = None,
         limit: int = 100,
     ) -> ArtifactPage:
-        raise NotImplementedError("Claude Code agent adapter scaffold only.")
+        raise UnsupportedFeatureError("Claude Code agent adapter scaffold only.")
 
 
 # Deprecated alias preserved temporarily so existing imports keep working.

@@ -21,11 +21,17 @@ from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
 from agent_runtime.agents.vertex_agent_engine import VertexAIAgentEngineProvider
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities
-from agent_runtime.core.errors import ApprovalError, ProviderNotConfiguredError, SessionError
+from agent_runtime.core.errors import (
+    ApprovalError,
+    ProviderNotConfiguredError,
+    SessionError,
+    UnsupportedFeatureError,
+)
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.echo import EchoModelProvider
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.base import TurnRequest
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
 from tests.fixtures.scripted_model import ScriptedModelProvider, tool_call_turn
@@ -60,9 +66,7 @@ def test_anthropic_messages_capabilities_match_prd() -> None:
 
 def test_gemini_capabilities_match_prd() -> None:
     caps = GeminiGenerateContentProvider(api_key="x").capabilities()
-    assert caps.supports_function_tools
-    assert caps.supports_parallel_tool_calls
-    assert caps.supports_remote_mcp is False  # native MCP not supported per PRD
+    assert caps == ModelCapabilities()
 
 
 def test_local_agent_capabilities_default_no_approvals() -> None:
@@ -81,24 +85,27 @@ def test_local_agent_capabilities_with_approval_policy() -> None:
     assert provider.capabilities().supports_approvals is True
 
 
-def test_cloud_agent_stub_capabilities_advertise_full_lifecycle() -> None:
+def test_cloud_agent_stub_capabilities_do_not_advertise_unimplemented_lifecycle() -> None:
     for provider in (
         OpenAICloudAgentProvider(api_key="x"),
         ClaudeCodeAgentProvider(api_key="x"),
         VertexAIAgentEngineProvider(project="p"),
     ):
         caps = provider.capabilities()
-        assert caps.supports_sessions
-        assert caps.supports_artifacts
-        assert caps.supports_workspace
-        assert caps.supports_approvals
-        assert caps.supports_cancellation
+        assert caps.supports_sessions is False
+        assert caps.supports_streaming_events is False
+        assert caps.supports_artifacts is False
+        assert caps.supports_workspace is False
+        assert caps.supports_approvals is False
+        assert caps.supports_mcp is False
+        assert caps.supports_cancellation is False
+        assert caps.supports_resume is False
 
 
-def test_vertex_agent_engine_advertises_deployments_and_evals() -> None:
+def test_vertex_agent_engine_does_not_advertise_unimplemented_lifecycle() -> None:
     caps = VertexAIAgentEngineProvider(project="p").capabilities()
-    assert caps.supports_deployments
-    assert caps.supports_evals
+    assert caps.supports_deployments is False
+    assert caps.supports_evals is False
 
 
 # --- negative: a False flag must error, not silently succeed ---------------
@@ -152,3 +159,16 @@ async def test_cloud_agent_stub_create_agent_requires_credentials() -> None:
     provider = OpenAICloudAgentProvider()
     with pytest.raises(ProviderNotConfiguredError):
         await provider.create_agent(AgentSpec(name="x"))
+
+
+async def test_cloud_agent_stub_create_agent_raises_unsupported_when_configured() -> None:
+    provider = OpenAICloudAgentProvider(api_key="x")
+    with pytest.raises(UnsupportedFeatureError):
+        await provider.create_agent(AgentSpec(name="x"))
+
+
+async def test_gemini_scaffold_raises_unsupported_when_configured() -> None:
+    provider = GeminiGenerateContentProvider(api_key="x")
+    with pytest.raises(UnsupportedFeatureError):
+        async for _ in provider.stream_turn(TurnRequest(model="gemini-test", input="hi")):
+            pass
