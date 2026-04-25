@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from agent_runtime.core.results import OutputSpec
-from agent_runtime.hosted_tools import FileSearch, HostedToolRaw, WebSearch
+from agent_runtime.hosted_tools import FileSearch, HostedToolRaw, RemoteMCP, WebSearch
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
@@ -223,6 +223,71 @@ def test_openai_responses_maps_hosted_tools_to_tools_and_include() -> None:
         {"type": "file_search", "vector_store_ids": ["vs_1"]},
     ]
     assert kwargs["include"] == ["file_search_call.results"]
+
+
+def test_openai_responses_maps_remote_mcp_to_tool() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        hosted_tools=[
+            RemoteMCP(
+                server_label="github",
+                server_url="https://mcp.example.com/sse",
+                allowed_tools=["list_issues"],
+                require_approval="never",
+            )
+        ],
+    )
+
+    kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["tools"] == [
+        {
+            "type": "mcp",
+            "server_label": "github",
+            "server_url": "https://mcp.example.com/sse",
+            "allowed_tools": ["list_issues"],
+            "require_approval": "never",
+        }
+    ]
+
+
+def test_anthropic_maps_remote_mcp_to_server_and_toolset() -> None:
+    request = TurnRequest(
+        model="claude-test",
+        input="hi",
+        hosted_tools=[
+            RemoteMCP(
+                server_label="github",
+                server_url="https://mcp.example.com/sse",
+                authorization="token",
+                allowed_tools=["list_issues"],
+            )
+        ],
+    )
+
+    kwargs = AnthropicMessagesProvider._build_request_kwargs(
+        request,
+        [{"role": "user", "content": "hi"}],
+    )
+
+    assert kwargs["mcp_servers"] == [
+        {
+            "type": "url",
+            "url": "https://mcp.example.com/sse",
+            "name": "github",
+            "authorization_token": "token",
+        }
+    ]
+    assert kwargs["tools"] == [
+        {
+            "type": "mcp_toolset",
+            "mcp_server_name": "github",
+            "default_config": {"enabled": False},
+            "configs": {"list_issues": {"enabled": True}},
+        }
+    ]
+    assert kwargs["betas"] == ["mcp-client-2025-11-20"]
 
 
 def test_gemini_maps_web_search_hosted_tool_to_config() -> None:

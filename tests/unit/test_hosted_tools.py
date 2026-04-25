@@ -7,8 +7,12 @@ from agent_runtime.hosted_tools import (
     CodeInterpreter,
     FileSearch,
     HostedToolRaw,
+    RemoteMCP,
     WebSearch,
+    anthropic_beta_values,
+    anthropic_mcp_servers,
     openai_include_values,
+    to_anthropic_tool,
     to_gemini_tool,
     to_openai_tool,
     to_raw_hosted_tool,
@@ -52,6 +56,71 @@ def test_raw_hosted_tool_passthrough() -> None:
 
     assert to_openai_tool(raw) == {"type": "future_tool", "x": 1}
     assert to_raw_hosted_tool(raw, provider="xAI") == {"type": "future_tool", "x": 1}
+
+
+def test_remote_mcp_serializes_for_openai() -> None:
+    spec = RemoteMCP(
+        server_label="github",
+        server_url="https://mcp.example.com/sse",
+        server_description="GitHub MCP server",
+        authorization="token",
+        allowed_tools=["list_issues"],
+        require_approval="never",
+    )
+
+    assert to_openai_tool(spec) == {
+        "type": "mcp",
+        "server_label": "github",
+        "server_url": "https://mcp.example.com/sse",
+        "server_description": "GitHub MCP server",
+        "authorization": "token",
+        "allowed_tools": ["list_issues"],
+        "require_approval": "never",
+    }
+
+
+def test_remote_mcp_rejects_openai_denylist() -> None:
+    spec = RemoteMCP(
+        server_label="github",
+        server_url="https://mcp.example.com/sse",
+        denied_tools=["delete_repo"],
+    )
+
+    with pytest.raises(UnsupportedFeatureError):
+        to_openai_tool(spec)
+
+
+def test_remote_mcp_serializes_for_anthropic() -> None:
+    spec = RemoteMCP(
+        server_label="github",
+        server_url="https://mcp.example.com/sse",
+        authorization="token",
+        allowed_tools=["list_issues"],
+        denied_tools=["delete_repo"],
+        defer_loading=True,
+        tool_configs={"list_issues": {"defer_loading": False}},
+        cache_control={"type": "ephemeral"},
+    )
+
+    assert anthropic_mcp_servers([spec]) == [
+        {
+            "type": "url",
+            "url": "https://mcp.example.com/sse",
+            "name": "github",
+            "authorization_token": "token",
+        }
+    ]
+    assert to_anthropic_tool(spec) == {
+        "type": "mcp_toolset",
+        "mcp_server_name": "github",
+        "default_config": {"enabled": False, "defer_loading": True},
+        "configs": {
+            "list_issues": {"defer_loading": False, "enabled": True},
+            "delete_repo": {"enabled": False},
+        },
+        "cache_control": {"type": "ephemeral"},
+    }
+    assert anthropic_beta_values([spec]) == ["mcp-client-2025-11-20"]
 
 
 def test_gemini_web_search_and_unsupported_tools() -> None:

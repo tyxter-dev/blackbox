@@ -28,7 +28,11 @@ from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfigu
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import to_anthropic_tool
+from agent_runtime.hosted_tools import (
+    anthropic_beta_values,
+    anthropic_mcp_servers,
+    to_anthropic_tool,
+)
 from agent_runtime.providers.base import TurnRequest
 
 
@@ -131,6 +135,13 @@ class AnthropicMessagesProvider:
             tools = tools_from_extra
         if tools:
             kwargs["tools"] = _convert_tools(tools)
+        mcp_servers = anthropic_mcp_servers(request.hosted_tools)
+        if mcp_servers:
+            kwargs["mcp_servers"] = mcp_servers
+        beta_values = anthropic_beta_values(request.hosted_tools)
+        if beta_values:
+            existing_betas = extra.pop("betas", []) or []
+            kwargs["betas"] = [*existing_betas, *beta_values]
         controls = request.controls
         if controls.instructions is not None:
             kwargs["system"] = controls.instructions
