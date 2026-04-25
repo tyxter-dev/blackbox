@@ -8,6 +8,26 @@ from agent_runtime.core.policy import PolicyDecision, PolicyRequest
 from agent_runtime.mcp import MCPConnector, MCPServerSpec
 
 
+def test_mcp_server_spec_represents_prd_transport_names() -> None:
+    specs = [
+        MCPServerSpec(name="local", transport="stdio", command="mcp-server"),
+        MCPServerSpec(name="http-api", transport="http", url="https://example.test/mcp"),
+        MCPServerSpec(name="events", transport="sse", url="https://example.test/sse"),
+        MCPServerSpec(
+            name="stream",
+            transport="streamable_http",
+            url="https://example.test/stream",
+        ),
+    ]
+
+    assert {spec.transport for spec in specs} == {
+        "stdio",
+        "http",
+        "sse",
+        "streamable_http",
+    }
+
+
 class _ScriptedPolicy:
     def __init__(self, decision: PolicyDecision) -> None:
         self.decision = decision

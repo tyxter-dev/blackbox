@@ -120,7 +120,7 @@ Status legend:
 | Artifact data contracts | Supported | `Artifact`, `ArtifactRef`, `ArtifactPage` | Typed artifact models exist. |
 | Local workspace runtime | Supported | `WorkspaceRuntime` | Local workspaces support file read/write/delete, patch artifacts, command execution, snapshots, policy gates, and canonical events. |
 | Workspace data contracts | Supported | `workspaces.spec`, `workspaces.changes` | Workspace refs, mounts, file changes, patch artifacts, commands, and command results exist. |
-| MCP server spec | Supported | `MCPServerSpec` | Server configuration model exists. |
+| MCP server spec | Supported | `MCPServerSpec` | Server configuration model exists for `stdio`, `http`, `sse`, and `streamable_http`; process/client management remains planned. |
 | Local MCP dispatch connector | Supported | `MCPConnector` | Registers local MCP tools, lists namespaced `mcp:<server>.<tool>` refs, gates calls through policy, and emits MCP events. |
 | Observability sink protocol | Partial | `observability.sinks` | Event sink abstractions exist; full tracing/export integrations are not implemented. |
 | Trace data contracts | Partial | `observability.traces` | Trace/span models exist; no full tracing backend yet. |

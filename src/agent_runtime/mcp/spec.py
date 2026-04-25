@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-MCPTransport = Literal["stdio", "http"]
+MCPTransport = Literal["stdio", "http", "sse", "streamable_http"]
 
 
 @dataclass(slots=True, frozen=True)

@@ -145,6 +145,7 @@ await runtime.agents.list_artifacts(...)
 | 4.8 | ✅ | Agent approval | `runtime/test_local_agent_provider.py::test_approval_pause_and_approve` | Sessions pause/resume for approval. |
 | 4.9 | ✅ | Provider raw data | `golden/openai/test_responses_event_mapping.py` | Provider data is preserved. |
 | 4.10 | ✅ | Capability enforcement | `contracts/test_capability_honesty.py` | Unsupported actions raise typed errors. |
+| 4.11 | ✅ | Cloud-agent scaffold guardrails | `contracts/test_capability_honesty.py::test_cloud_agent_stub_operations_raise_unsupported_when_configured` | Configured cloud-agent scaffolds raise typed unsupported errors until real lifecycle support lands. |
 
 ---
 
@@ -222,5 +223,5 @@ connector.call_tool(...)
 | 7.2 | ✅ | Local MCP call dispatch | `::test_mcp_connector_calls_registered_tool_and_emits_events` | Registered tools execute and emit started/completed events. |
 | 7.3 | ✅ | `before_mcp_call` deny | `::test_mcp_connector_gates_calls_with_policy` | Policy can block MCP calls with typed `MCPError`. |
 | 7.4 | ✅ | MCP approval required | `::test_mcp_connector_surfaces_required_approval` | Required approval emits `MCP_APPROVAL_REQUIRED` and raises `ApprovalError`. |
-| 7.5 | ⏳ | MCP transports | not yet | stdio + HTTP/SSE + streamable HTTP process/client management. |
+| 7.5 | ⏳ | MCP transports | `unit/test_mcp_connector.py::test_mcp_server_spec_represents_prd_transport_names` covers spec names only | stdio + HTTP/SSE + streamable HTTP process/client management. |
 | 7.6 | ⏳ | Provider-native remote MCP | not yet | Provider adapters receive remote MCP server configuration. |

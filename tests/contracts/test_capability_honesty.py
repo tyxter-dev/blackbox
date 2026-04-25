@@ -27,11 +27,12 @@ from agent_runtime.core.errors import (
     SessionError,
     UnsupportedFeatureError,
 )
+from agent_runtime.core.sessions import SessionRef
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.echo import EchoModelProvider
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
-from agent_runtime.providers.base import TurnRequest
+from agent_runtime.providers.base import AgentProvider, TaskSpec, TurnRequest
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
 from tests.fixtures.scripted_model import ScriptedModelProvider, tool_call_turn
@@ -115,6 +116,36 @@ def test_vertex_agent_engine_does_not_advertise_unimplemented_lifecycle() -> Non
     caps = VertexAIAgentEngineProvider(project="p").capabilities()
     assert caps.supports_deployments is False
     assert caps.supports_evals is False
+
+
+@pytest.mark.parametrize(
+    "provider",
+    [
+        OpenAICloudAgentProvider(api_key="x"),
+        ClaudeCodeAgentProvider(api_key="x"),
+        VertexAIAgentEngineProvider(project="p"),
+    ],
+)
+async def test_cloud_agent_stub_operations_raise_unsupported_when_configured(
+    provider: AgentProvider,
+) -> None:
+    session = SessionRef(provider=provider.provider_id, id="sess_test")
+
+    with pytest.raises(UnsupportedFeatureError):
+        await provider.create_agent(AgentSpec(name="x"))
+    with pytest.raises(UnsupportedFeatureError):
+        await provider.start_session("agent", TaskSpec(prompt="run"))
+    with pytest.raises(UnsupportedFeatureError):
+        async for _ in provider.stream_events(session):
+            pass
+    with pytest.raises(UnsupportedFeatureError):
+        await provider.send_message(session, "continue")
+    with pytest.raises(UnsupportedFeatureError):
+        await provider.approve("approval_1", ApprovalDecision.approve())
+    with pytest.raises(UnsupportedFeatureError):
+        await provider.cancel(session)
+    with pytest.raises(UnsupportedFeatureError):
+        await provider.list_artifacts(session)
 
 
 # --- negative: a False flag must error, not silently succeed ---------------
