@@ -121,8 +121,10 @@ class AgentLoop:
                 )
 
             effective_policy = self._effective_policy()
-            tool_results: list[RunItem] = []
-            for call in pending_calls:
+            tool_runtime = self.tools
+            tool_results: list[RunItem | None] = [None] * len(pending_calls)
+            allowed_calls: list[tuple[int, _PendingToolCall]] = []
+            for index, call in enumerate(pending_calls):
                 if effective_policy is not None:
                     decision = await effective_policy.check(
                         PolicyRequest(
@@ -135,18 +137,16 @@ class AgentLoop:
                     decision = PolicyDecision.allow()
 
                 if decision.verdict == "deny":
-                    tool_results.append(
-                        RunItem(
-                            type=ItemTypes.FUNCTION_RESULT,
-                            provider=provider_id,
-                            status="failed",
-                            data={
-                                "call_id": call.call_id,
-                                "name": call.name,
-                                "error": "denied_by_policy",
-                                "reason": decision.reason,
-                            },
-                        )
+                    tool_results[index] = RunItem(
+                        type=ItemTypes.FUNCTION_RESULT,
+                        provider=provider_id,
+                        status="failed",
+                        data={
+                            "call_id": call.call_id,
+                            "name": call.name,
+                            "error": "denied_by_policy",
+                            "reason": decision.reason,
+                        },
                     )
                     continue
 
@@ -156,21 +156,22 @@ class AgentLoop:
                     ):
                         yield ev
                     if not self._last_decision.approved:
-                        tool_results.append(
-                            RunItem(
-                                type=ItemTypes.FUNCTION_RESULT,
-                                provider=provider_id,
-                                status="failed",
-                                data={
-                                    "call_id": call.call_id,
-                                    "name": call.name,
-                                    "error": "denied_by_approval",
-                                    "reason": self._last_decision.reason,
-                                },
-                            )
+                        tool_results[index] = RunItem(
+                            type=ItemTypes.FUNCTION_RESULT,
+                            provider=provider_id,
+                            status="failed",
+                            data={
+                                "call_id": call.call_id,
+                                "name": call.name,
+                                "error": "denied_by_approval",
+                                "reason": self._last_decision.reason,
+                            },
                         )
                         continue
 
+                allowed_calls.append((index, call))
+
+            for _, call in allowed_calls:
                 yield AgentEvent(
                     type=EventTypes.TOOL_CALL_STARTED,
                     provider=provider_id,
@@ -178,23 +179,29 @@ class AgentLoop:
                     item_id=call.call_id,
                     data={"call_id": call.call_id, "name": call.name},
                 )
-                try:
-                    result = await self.tools.call(call.name, call.arguments, mock=mock_tools)
-                except Exception as exc:
+
+            task_results = await asyncio.gather(
+                *(
+                    tool_runtime.call(call.name, call.arguments, mock=mock_tools)
+                    for _, call in allowed_calls
+                ),
+                return_exceptions=True,
+            )
+
+            for (index, call), result in zip(allowed_calls, task_results, strict=True):
+                if isinstance(result, BaseException):
                     yield AgentEvent(
                         type=EventTypes.TOOL_CALL_FAILED,
                         provider=provider_id,
                         session_id=session_id,
                         item_id=call.call_id,
-                        data={"call_id": call.call_id, "name": call.name, "error": str(exc)},
+                        data={"call_id": call.call_id, "name": call.name, "error": str(result)},
                     )
-                    tool_results.append(
-                        RunItem(
-                            type=ItemTypes.FUNCTION_RESULT,
-                            provider=provider_id,
-                            status="failed",
-                            data={"call_id": call.call_id, "name": call.name, "error": str(exc)},
-                        )
+                    tool_results[index] = RunItem(
+                        type=ItemTypes.FUNCTION_RESULT,
+                        provider=provider_id,
+                        status="failed",
+                        data={"call_id": call.call_id, "name": call.name, "error": str(result)},
                     )
                     continue
 
@@ -228,7 +235,7 @@ class AgentLoop:
                     )
                 )
 
-            turn_input = tool_results
+            turn_input = [item for item in tool_results if item is not None]
         else:
             yield AgentEvent(
                 type=EventTypes.SESSION_FAILED,

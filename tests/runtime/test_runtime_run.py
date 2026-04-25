@@ -6,7 +6,9 @@ items, and provider state.
 """
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -172,6 +174,61 @@ async def test_run_dispatches_three_tools_in_one_turn() -> None:
     assert "alpha-BRAVO-charlie123" in result.output
 
 
+async def test_run_executes_parallel_tool_calls_concurrently() -> None:
+    runtime, scripted = _runtime()
+    active = 0
+    max_active = 0
+
+    def make_tool(part: str) -> Callable[[], Awaitable[ToolResult]]:
+        async def tool() -> ToolResult:
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return ToolResult(content=part)
+
+        return tool
+
+    for name, part in {"part_1": "a", "part_2": "b", "part_3": "c"}.items():
+        runtime.tools.register(
+            make_tool(part),
+            name=name,
+            description=name,
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+    def three_tool_turn(request: Any) -> Any:
+        from agent_runtime.core.events import AgentEvent as Evt
+        from agent_runtime.core.state import ProviderState
+
+        yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
+        for n in (1, 2, 3):
+            yield Evt(
+                type=EventTypes.TOOL_CALL_REQUESTED,
+                provider="scripted",
+                item_id=f"c{n}",
+                data={"call_id": f"c{n}", "name": f"part_{n}", "arguments": {}},
+            )
+        yield Evt(
+            type=EventTypes.MODEL_COMPLETED,
+            provider="scripted",
+            data={"provider_state": ProviderState(provider="scripted")},
+        )
+
+    scripted.queue(three_tool_turn)
+    scripted.queue(text_only_turn("abc"))
+
+    result: AgentResult[str] = await runtime.run(
+        provider="scripted:test",
+        input="combine all parts",
+        tools=["part_1", "part_2", "part_3"],
+    )
+
+    assert max_active == 3
+    assert result.text == "abc"
+
+
 # --- context injection ------------------------------------------------------
 
 async def test_run_injects_tool_execution_context_without_schema_visibility() -> None:
@@ -323,6 +380,40 @@ async def test_policy_deny_short_circuits_tool_dispatch() -> None:
     assert isinstance(sent_back, list)
     assert sent_back[0].data["error"] == "denied_by_policy"
     assert sent_back[0].data["reason"] == "blocked by test policy"
+
+
+class _AllowAll:
+    def __init__(self) -> None:
+        self.seen: list[PolicyRequest] = []
+
+    async def check(self, request: PolicyRequest) -> PolicyDecision:
+        self.seen.append(request)
+        return PolicyDecision.allow("allowed by test policy")
+
+
+async def test_policy_allow_dispatches_tool() -> None:
+    runtime, scripted = _runtime()
+    state = {"called": False}
+
+    def tool() -> ToolResult:
+        state["called"] = True
+        return ToolResult(content="ok")
+
+    runtime.tools.register(
+        tool, name="t",
+        parameters={"type": "object", "properties": {}, "required": []},
+    )
+    scripted.queue(tool_call_turn(call_id="c1", name="t", arguments={}))
+    scripted.queue(text_only_turn("done"))
+
+    policy = _AllowAll()
+    result: AgentResult[str] = await runtime.run(
+        provider="scripted:test", input="x", tools=["t"], policy=policy,
+    )
+
+    assert state["called"] is True
+    assert policy.seen[0].checkpoint == "before_tool_call"
+    assert result.text == "done"
 
 
 async def test_workspace_tools_run_through_agent_loop(tmp_path: Path) -> None:

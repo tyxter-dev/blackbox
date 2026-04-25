@@ -80,6 +80,30 @@ async def test_local_agent_streams_model_events_inside_session() -> None:
     assert events[-1].session_id == session.id
 
 
+async def test_send_message_updates_session_and_returns_invocation_ref() -> None:
+    runtime = AgentRuntime()
+    runtime.registry.register_model(EchoModelProvider())
+    runtime.registry.register_agent(LocalAgentProvider(runtime.models))
+
+    await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="default"))
+    session = await runtime.agents.create_session(
+        provider="local",
+        agent="default",
+        task="initial task",
+        model="echo/echo-mini",
+    )
+
+    invocation = await runtime.agents.send_message(
+        session,
+        "follow-up request",
+    )
+
+    assert invocation.provider == "local"
+    assert invocation.session_id == session.id
+    assert invocation.id.startswith("inv_")
+    assert session.task == "initial task\n\nUser: follow-up request"
+
+
 # --- tool dispatch loop -----------------------------------------------------
 
 async def test_tool_call_loop_dispatches_and_feeds_results_back() -> None:

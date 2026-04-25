@@ -54,7 +54,7 @@ await runtime.models.stream(...)
 | 1.3 | ✅ | Tool call request | scripted-model fixture in `runtime/` | Provider emits a normalized `tool.call.requested` event. |
 | 1.4 | ✅ | Single tool call loop | `runtime/test_runtime_run.py::test_run_dispatches_a_single_tool_and_returns_final_text` | Runtime detects one tool call, executes it, sends result back, finishes. |
 | 1.5 | ✅ | Multiple tool calls | `runtime/test_runtime_run.py::test_run_dispatches_three_tools_in_one_turn` | Runtime executes multiple tool calls in one turn. |
-| 1.6 | 🟡 | Parallel tool calls | covered as 1.5 (sequential dispatch) | True concurrent execution awaits an OpenAI Responses path with `parallel_tool_calls=True`. |
+| 1.6 | ✅ | Parallel tool calls | `runtime/test_runtime_run.py::test_run_executes_parallel_tool_calls_concurrently` | Multiple tool calls from one model turn execute concurrently and feed results back in request order. |
 | 1.7 | ✅ | Tool-call error | `runtime/test_local_agent_provider.py` (denial path) | Tool failures convert into typed runtime/tool events. |
 | 1.8 | ✅ | Structured output | `runtime/test_runtime_run.py::test_run_validates_pydantic_output_type` | Runtime validates final output against a schema. |
 | 1.9 | ✅ | Structured output retry | `runtime/test_runtime_retry.py` (5 tests) | Runtime can repair invalid structured output via repair prompt up to `max_validation_retries`. |
@@ -86,7 +86,7 @@ runtime.tools.get(...)
 | 2.8 | ✅ | Tool timeout | `unit/test_tool_runtime.py::test_timeout_raises` | Long-running tools fail safely. |
 | 2.9 | ✅ | Tool concurrency | `unit/test_tool_runtime.py::test_concurrency_cap_serializes_calls` | Multiple tools can run safely together. |
 | 2.10 | ✅ | Mock execution | `unit/test_tool_runtime.py::test_mock_call_short_circuits_real_function` | Tests can run without real side effects. |
-| 2.11 | 🟡 | Tool policy allow | implicit (no policy = allow) | Policy layer allows safe tool execution. |
+| 2.11 | ✅ | Tool policy allow | `runtime/test_runtime_run.py::test_policy_allow_dispatches_tool` | Policy layer allows safe tool execution after explicit allow verdict. |
 | 2.12 | ✅ | Tool policy deny | `runtime/test_runtime_run.py::test_policy_deny_short_circuits_tool_dispatch` | Policy layer blocks dangerous calls. |
 | 2.13 | ✅ | Tool approval required | `runtime/test_local_agent_provider.py::test_approval_pause_and_approve` | Runtime pauses before sensitive tools. |
 
@@ -138,7 +138,7 @@ await runtime.agents.list_artifacts(...)
 | 4.2 | ✅ | Create session | same | Agent sessions are first-class objects. |
 | 4.3 | ✅ | Session starts running | same | Session status transitions work. |
 | 4.4 | ✅ | Stream session events | same | Agent emits normalized events. |
-| 4.5 | 🟡 | Send message creates invocation | `send_message → InvocationRef` is wired but no dedicated test yet | Existing sessions can receive more work. |
+| 4.5 | ✅ | Send message creates invocation | `runtime/test_local_agent_provider.py::test_send_message_updates_session_and_returns_invocation_ref` | Existing sessions can receive more work and return an `InvocationRef`. |
 | 4.6 | ✅ | Cancel session | `runtime/test_local_agent_provider.py::test_cancel_between_turns` | Cancellation changes state and emits event. |
 | 4.7 | ✅ | List artifacts | `contracts/test_capability_honesty.py::test_local_agent_artifacts_default_empty_page` | Artifacts attached to sessions. |
 | 4.8 | ✅ | Agent approval | `runtime/test_local_agent_provider.py::test_approval_pause_and_approve` | Sessions pause/resume for approval. |
