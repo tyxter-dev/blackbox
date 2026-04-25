@@ -1,10 +1,8 @@
-"""High-level AgentRuntime.run / .stream tests.
+"""High-level AgentRuntime.run() product surface tests.
 
-These tests are the offline analogues of the llm_factory_toolkit v1 tests in
-``llm_toolkit/tests/`` (test_llmcall, test_llmcall_pydantic_response,
-test_llmcall_tools, test_llmcall_multiple_tools, test_llmcall_tools_with_context,
-test_llmcall_deferred_payload, test_mock_tools). They exercise the same
-product contract: the runtime owns the tool loop and returns a typed result.
+Offline analogues of the llm_factory_toolkit v1 contract: the runtime owns
+the loop and returns a typed AgentResult[T] with text, payloads, events,
+items, and provider state.
 """
 from __future__ import annotations
 
@@ -16,6 +14,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from agent_runtime import AgentResult, AgentRuntime, EventTypes, OutputValidationError
+from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
 from agent_runtime.tools import ToolResult
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,
@@ -31,14 +30,14 @@ def _runtime() -> tuple[AgentRuntime, ScriptedModelProvider]:
     return runtime, scripted
 
 
-# --- text-only ---------------------------------------------------------------
+# --- text-only --------------------------------------------------------------
 
 async def test_run_returns_text_when_no_output_type() -> None:
     runtime, scripted = _runtime()
     scripted.queue(text_only_turn("Paris is the capital of France."))
 
     result: AgentResult[str] = await runtime.run(
-        provider="scripted/test", input="What is the capital of France?",
+        provider="scripted:test", input="What is the capital of France?",
     )
 
     assert isinstance(result, AgentResult)
@@ -47,7 +46,7 @@ async def test_run_returns_text_when_no_output_type() -> None:
     assert any(e.type == EventTypes.MODEL_TEXT_DELTA for e in result.events)
 
 
-# --- pydantic structured output ---------------------------------------------
+# --- structured output ------------------------------------------------------
 
 class ExtractedInfo(BaseModel):
     name: str = Field(description="Main person's name")
@@ -58,18 +57,12 @@ class ExtractedInfo(BaseModel):
 
 async def test_run_validates_pydantic_output_type() -> None:
     runtime, scripted = _runtime()
-    payload = {
-        "name": "Sarah",
-        "age": 35,
-        "location": "Paris",
-        "sentiment": "positive",
-    }
-    scripted.queue(text_only_turn(json.dumps(payload)))
+    scripted.queue(text_only_turn(json.dumps({
+        "name": "Sarah", "age": 35, "location": "Paris", "sentiment": "positive",
+    })))
 
     result = await runtime.run(
-        provider="scripted/test",
-        input="Extract info.",
-        output_type=ExtractedInfo,
+        provider="scripted:test", input="Extract info.", output_type=ExtractedInfo,
     )
 
     assert isinstance(result.output, ExtractedInfo)
@@ -84,9 +77,7 @@ async def test_run_raises_output_validation_error_on_pydantic_mismatch() -> None
 
     with pytest.raises(OutputValidationError) as info:
         await runtime.run(
-            provider="scripted/test",
-            input="x",
-            output_type=ExtractedInfo,
+            provider="scripted:test", input="x", output_type=ExtractedInfo,
         )
     assert info.value.raw_text == "not even json"
 
@@ -101,13 +92,13 @@ async def test_run_validates_dataclass_output_type() -> None:
     scripted.queue(text_only_turn(json.dumps({"priority": "high", "notes": "x"})))
 
     result = await runtime.run(
-        provider="scripted/test", input="x", output_type=Decision,
+        provider="scripted:test", input="x", output_type=Decision,
     )
     assert isinstance(result.output, Decision)
     assert result.output.priority == "high"
 
 
-# --- single tool -------------------------------------------------------------
+# --- tool dispatch ----------------------------------------------------------
 
 async def test_run_dispatches_a_single_tool_and_returns_final_text() -> None:
     runtime, scripted = _runtime()
@@ -121,19 +112,16 @@ async def test_run_dispatches_a_single_tool_and_returns_final_text() -> None:
             "required": ["data_id"],
         },
     )
-
     scripted.queue(tool_call_turn(call_id="c1", name="get_secret", arguments={"data_id": "abc"}))
     scripted.queue(text_only_turn("Final answer: secret=abc-XYZ"))
 
     result = await runtime.run(
-        provider="scripted/test", input="get me the secret", tools=["get_secret"],
+        provider="scripted:test", input="get me the secret", tools=["get_secret"],
     )
 
     assert "secret=abc-XYZ" in result.output
     assert any(e.type == EventTypes.TOOL_CALL_COMPLETED for e in result.events)
 
-
-# --- multiple tools in one turn ---------------------------------------------
 
 async def test_run_dispatches_three_tools_in_one_turn() -> None:
     runtime, scripted = _runtime()
@@ -173,7 +161,7 @@ async def test_run_dispatches_three_tools_in_one_turn() -> None:
     scripted.queue(text_only_turn("alpha-BRAVO-charlie123"))
 
     result = await runtime.run(
-        provider="scripted/test", input="combine all parts",
+        provider="scripted:test", input="combine all parts",
         tools=["part_1", "part_2", "part_3"],
     )
 
@@ -201,12 +189,11 @@ async def test_run_injects_tool_execution_context_without_schema_visibility() ->
         description="Retrieve a user's password.",
         parameters={"type": "object", "properties": {}, "required": []},
     )
-
     scripted.queue(tool_call_turn(call_id="c1", name="get_user_password", arguments={}))
     scripted.queue(text_only_turn("Password retrieved (snippet): gam***"))
 
     result = await runtime.run(
-        provider="scripted/test",
+        provider="scripted:test",
         input="I need the password.",
         tools=["get_user_password"],
         tool_execution_context={"user_id": "user_gamma"},
@@ -223,7 +210,7 @@ async def test_run_injects_tool_execution_context_without_schema_visibility() ->
     assert "user_id" not in schema["parameters"]["properties"]
 
 
-# --- deferred payload pattern -----------------------------------------------
+# --- deferred payload -------------------------------------------------------
 
 async def test_run_collects_deferred_payloads_from_each_tool() -> None:
     runtime, scripted = _runtime()
@@ -240,8 +227,7 @@ async def test_run_collects_deferred_payloads_from_each_tool() -> None:
     for n in (1, 2, 3):
         runtime.tools.register(
             make(n),
-            name=f"part_{n}",
-            description=f"part {n}",
+            name=f"part_{n}", description=f"part {n}",
             parameters={"type": "object", "properties": {}, "required": []},
         )
 
@@ -251,8 +237,7 @@ async def test_run_collects_deferred_payloads_from_each_tool() -> None:
         yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
         for n in (1, 2, 3):
             yield Evt(type=EventTypes.TOOL_CALL_REQUESTED, provider="scripted",
-                      item_id=f"c{n}", data={"call_id": f"c{n}", "name": f"part_{n}",
-                                              "arguments": {}})
+                      item_id=f"c{n}", data={"call_id": f"c{n}", "name": f"part_{n}", "arguments": {}})
         yield Evt(type=EventTypes.MODEL_COMPLETED, provider="scripted",
                   data={"provider_state": ProviderState(provider="scripted")})
 
@@ -260,8 +245,7 @@ async def test_run_collects_deferred_payloads_from_each_tool() -> None:
     scripted.queue(text_only_turn("All three parts retrieved; assembled externally."))
 
     result = await runtime.run(
-        provider="scripted/test",
-        input="get all three parts",
+        provider="scripted:test", input="get all three parts",
         tools=["part_1", "part_2", "part_3"],
     )
 
@@ -271,11 +255,10 @@ async def test_run_collects_deferred_payloads_from_each_tool() -> None:
         for p in sorted(result.payloads, key=lambda p: p.payload["part_number"])
     )
     assert assembled == "Alpha-BRAVO-Charlie123"
-    # Final text deliberately does NOT contain the assembled secret
     assert "Alpha-BRAVO-Charlie123" not in result.output
 
 
-# --- mock tools --------------------------------------------------------------
+# --- mock tools -------------------------------------------------------------
 
 async def test_run_with_mock_tools_does_not_invoke_real_function() -> None:
     runtime, scripted = _runtime()
@@ -293,7 +276,7 @@ async def test_run_with_mock_tools_does_not_invoke_real_function() -> None:
     scripted.queue(text_only_turn("done"))
 
     result = await runtime.run(
-        provider="scripted/test", input="x", tools=["real"], mock_tools=True,
+        provider="scripted:test", input="x", tools=["real"], mock_tools=True,
     )
 
     assert state["called"] is False
@@ -301,25 +284,39 @@ async def test_run_with_mock_tools_does_not_invoke_real_function() -> None:
     assert "Mocked execution" in completed.data["content"]
 
 
-# --- stream parity -----------------------------------------------------------
+# --- policy gate ------------------------------------------------------------
 
-async def test_stream_yields_same_events_as_run_collects() -> None:
+class _DenyAll:
+    async def check(self, request: PolicyRequest) -> PolicyDecision:
+        if request.checkpoint == "before_tool_call":
+            return PolicyDecision.deny("blocked by test policy")
+        return PolicyDecision.allow()
+
+
+async def test_policy_deny_short_circuits_tool_dispatch() -> None:
     runtime, scripted = _runtime()
+    state = {"called": False}
+
+    def tool() -> ToolResult:
+        state["called"] = True
+        return ToolResult(content="ok")
+
     runtime.tools.register(
-        lambda x: ToolResult(content=f"r{x}"),
-        name="t",
-        parameters={"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]},
+        tool, name="t",
+        parameters={"type": "object", "properties": {}, "required": []},
     )
-    scripted.queue(tool_call_turn(call_id="c1", name="t", arguments={"x": 1}))
+    scripted.queue(tool_call_turn(call_id="c1", name="t", arguments={}))
     scripted.queue(text_only_turn("done"))
 
-    streamed = [
-        e async for e in runtime.stream(
-            provider="scripted/test", input="x", tools=["t"],
-        )
-    ]
-    types = [e.type for e in streamed]
-    assert EventTypes.TOOL_CALL_REQUESTED in types
-    assert EventTypes.TOOL_CALL_STARTED in types
-    assert EventTypes.TOOL_CALL_COMPLETED in types
-    assert EventTypes.MODEL_TEXT_DELTA in types
+    policy: Policy = _DenyAll()
+    result = await runtime.run(
+        provider="scripted:test", input="x", tools=["t"], policy=policy,
+    )
+
+    assert state["called"] is False
+    started = [e for e in result.events if e.type == EventTypes.TOOL_CALL_STARTED]
+    assert started == []
+
+    sent_back = scripted.calls[1].input
+    assert sent_back[0].data["error"] == "denied_by_policy"
+    assert sent_back[0].data["reason"] == "blocked by test policy"

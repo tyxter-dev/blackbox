@@ -7,6 +7,36 @@ import pytest
 from agent_runtime.core.errors import ToolExecutionError
 from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
 
+# --- context injection ------------------------------------------------------
+
+def greet(name: str, user_id: str) -> ToolResult:
+    return ToolResult(content=f"hello {name}", payload={"user_id": user_id})
+
+
+async def test_tool_runtime_injects_context_without_schema_visibility() -> None:
+    registry = ToolRegistry()
+    definition = registry.register(
+        greet,
+        name="greet",
+        description="Greet a user.",
+        parameters={
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    )
+
+    runtime = ToolRuntime(registry, context={"user_id": "u_123"})
+    result = await runtime.call("greet", {"name": "Diego"})
+
+    assert result.content == "hello Diego"
+    assert result.payload == {"user_id": "u_123"}
+    provider_tools = registry.to_provider_tools()
+    assert provider_tools[0]["parameters"] == definition.parameters
+    assert "user_id" not in provider_tools[0]["parameters"]["properties"]
+
+
+# --- error handling and result coercion -------------------------------------
 
 def test_unknown_tool_raises_tool_execution_error() -> None:
     runtime = ToolRuntime(ToolRegistry())
@@ -28,6 +58,8 @@ async def test_arbitrary_return_value_becomes_payload() -> None:
     result = await ToolRuntime(registry).call("data")
     assert result.payload == {"x": 1}
 
+
+# --- execution policies -----------------------------------------------------
 
 async def test_timeout_raises() -> None:
     async def slow() -> str:
@@ -72,3 +104,19 @@ async def test_concurrency_cap_serializes_calls() -> None:
 
     await runtime.call_many([("t", {}) for _ in range(6)])
     assert in_flight["max"] <= 2
+
+
+async def test_mock_call_short_circuits_real_function() -> None:
+    state = {"called": False}
+
+    def real() -> ToolResult:
+        state["called"] = True
+        return ToolResult(content="real")
+
+    registry = ToolRegistry()
+    registry.register(real, name="real", description="r")
+    result = await ToolRuntime(registry).call("real", mock=True)
+
+    assert state["called"] is False
+    assert "Mocked execution" in result.content
+    assert result.metadata == {"mock": True, "tool_name": "real"}

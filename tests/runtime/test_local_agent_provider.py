@@ -1,3 +1,10 @@
+"""LocalAgentProvider session lifecycle and tool/approval/cancel loop tests.
+
+Combines the formerly separate test_local_agent.py (basic streaming) and
+test_local_agent_tools.py (tool/approval flow) into one provider-focused
+suite. Tests for the high-level runtime.run/.stream surface live in
+test_runtime_run.py / test_runtime_stream.py.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -5,6 +12,7 @@ import asyncio
 from agent_runtime import AgentRuntime, AgentSpec, EventTypes
 from agent_runtime.agents.local import LocalAgentProvider
 from agent_runtime.core.approvals import ApprovalDecision
+from agent_runtime.models.echo import EchoModelProvider
 from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,
@@ -40,6 +48,34 @@ async def _drive_session(runtime: AgentRuntime, model: str = "scripted/test") ->
     return [event async for event in runtime.agents.stream(session)], session
 
 
+# --- basic streaming through the agent facade -------------------------------
+
+async def test_local_agent_streams_model_events_inside_session() -> None:
+    runtime = AgentRuntime()
+    runtime.registry.register_model(EchoModelProvider())
+    runtime.registry.register_agent(LocalAgentProvider(runtime.models))
+
+    agent = await runtime.agents.create_agent(
+        provider="local",
+        spec=AgentSpec(name="default", instructions="Echo tasks."),
+    )
+    session = await runtime.agents.create_session(
+        provider="local",
+        agent=agent,
+        task="hello agent",
+        model="echo/echo-mini",
+    )
+
+    events = [event async for event in runtime.agents.stream(session)]
+
+    assert events[0].type == EventTypes.SESSION_STARTED
+    assert any(event.type == EventTypes.MODEL_TEXT_DELTA for event in events)
+    assert events[-1].type == EventTypes.SESSION_COMPLETED
+    assert events[-1].session_id == session.id
+
+
+# --- tool dispatch loop -----------------------------------------------------
+
 async def test_tool_call_loop_dispatches_and_feeds_results_back() -> None:
     registry = ToolRegistry()
     registry.register(
@@ -63,7 +99,6 @@ async def test_tool_call_loop_dispatches_and_feeds_results_back() -> None:
     assert types[-1] == EventTypes.SESSION_COMPLETED
     assert session.status == "completed"
 
-    # Second turn was driven with tool result items as input
     assert len(scripted.calls) == 2
     follow_up_input = scripted.calls[1].input
     assert isinstance(follow_up_input, list) and len(follow_up_input) == 1
@@ -86,6 +121,8 @@ async def test_tool_call_without_tool_runtime_raises() -> None:
     else:
         raise AssertionError("expected SessionError")
 
+
+# --- approval pause / resume ------------------------------------------------
 
 async def test_approval_pause_and_approve() -> None:
     registry = ToolRegistry()
@@ -113,7 +150,6 @@ async def test_approval_pause_and_approve() -> None:
 
     task = asyncio.create_task(collector())
 
-    # Wait until the runtime registers the approval future
     for _ in range(100):
         if local._approvals:
             break
@@ -171,10 +207,12 @@ async def test_approval_denial_skips_tool_and_records_failure() -> None:
     await task
     types = [e.type for e in events]
     assert EventTypes.APPROVAL_DENIED in types
-    assert EventTypes.TOOL_CALL_STARTED not in types  # never executed
+    assert EventTypes.TOOL_CALL_STARTED not in types
     follow_up_input = scripted.calls[1].input
     assert follow_up_input[0].data["error"] == "denied_by_approval"
 
+
+# --- safety nets ------------------------------------------------------------
 
 async def test_max_iterations_fails_session() -> None:
     registry = ToolRegistry()
@@ -182,7 +220,6 @@ async def test_max_iterations_fails_session() -> None:
     tools = ToolRuntime(registry)
 
     runtime, scripted, _ = _build_runtime(tool_runtime=tools, max_iterations=2)
-    # Three tool-call turns; max_iterations=2 should trip on the 3rd request
     for _ in range(3):
         scripted.queue(tool_call_turn(call_id="x", name="loop", arguments={}))
 
