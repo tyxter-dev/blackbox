@@ -4,6 +4,7 @@ from typing import Any
 
 from agent_runtime.core.capabilities import ModelCapabilities
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.base import TurnRequest
 
 
 class XAIResponsesProvider(OpenAIResponsesProvider):
@@ -38,3 +39,9 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
             supports_provider_state=True,
             supports_structured_output=False,
         )
+
+    @staticmethod
+    def _build_request_kwargs(request: TurnRequest) -> dict[str, Any]:
+        kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
+        kwargs.pop("instructions", None)
+        return kwargs

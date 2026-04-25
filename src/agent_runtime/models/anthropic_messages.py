@@ -123,6 +123,17 @@ class AnthropicMessagesProvider:
         tools = request.tools or tools_from_extra
         if tools:
             kwargs["tools"] = _convert_tools(tools)
+        controls = request.controls
+        if controls.instructions is not None:
+            kwargs["system"] = controls.instructions
+        if controls.temperature is not None:
+            kwargs["temperature"] = controls.temperature
+        if controls.top_p is not None:
+            kwargs["top_p"] = controls.top_p
+        if controls.max_output_tokens is not None:
+            kwargs["max_tokens"] = controls.max_output_tokens
+        if controls.tool_choice is not None:
+            kwargs["tool_choice"] = controls.tool_choice
         kwargs.update(extra)
         return kwargs
 

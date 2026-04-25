@@ -15,7 +15,13 @@ from agent_runtime.core.results import AgentResult, OutputSpec, ToolPayload
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
-from agent_runtime.providers.base import AgentSpec, TaskSpec, TurnRequest, TurnResult
+from agent_runtime.providers.base import (
+    AgentSpec,
+    ModelRequestControls,
+    TaskSpec,
+    TurnRequest,
+    TurnResult,
+)
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
 from agent_runtime.tools.results import ToolResult
@@ -35,6 +41,14 @@ class ModelRuntime:
         model: str | None = None,
         input: str | Sequence[object],
         provider_state: ProviderState | None = None,
+        tools: list[Any] | None = None,
+        instructions: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_output_tokens: int | None = None,
+        tool_choice: Any | None = None,
+        parallel_tool_calls: bool | None = None,
+        reasoning_effort: str | None = None,
         run_id: str | None = None,
         **kwargs: object,
     ) -> AsyncIterator[AgentEvent]:
@@ -47,6 +61,16 @@ class ModelRuntime:
             model=model_name,
             input=input if isinstance(input, str) else list(input),
             provider_state=provider_state,
+            tools=list(tools or []),
+            controls=ModelRequestControls(
+                instructions=instructions,
+                temperature=temperature,
+                top_p=top_p,
+                max_output_tokens=max_output_tokens,
+                tool_choice=tool_choice,
+                parallel_tool_calls=parallel_tool_calls,
+                reasoning_effort=reasoning_effort,
+            ),
             extra=dict(kwargs),
         )
         effective_run_id = run_id or f"run_{uuid4().hex}"
@@ -66,6 +90,14 @@ class ModelRuntime:
         model: str | None = None,
         input: str | Sequence[object],
         provider_state: ProviderState | None = None,
+        tools: list[Any] | None = None,
+        instructions: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        max_output_tokens: int | None = None,
+        tool_choice: Any | None = None,
+        parallel_tool_calls: bool | None = None,
+        reasoning_effort: str | None = None,
         run_id: str | None = None,
         **kwargs: object,
     ) -> TurnResult:
@@ -77,6 +109,14 @@ class ModelRuntime:
             model=model,
             input=input,
             provider_state=provider_state,
+            tools=tools,
+            instructions=instructions,
+            temperature=temperature,
+            top_p=top_p,
+            max_output_tokens=max_output_tokens,
+            tool_choice=tool_choice,
+            parallel_tool_calls=parallel_tool_calls,
+            reasoning_effort=reasoning_effort,
             run_id=run_id,
             **kwargs,
         ):

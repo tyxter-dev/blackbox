@@ -174,6 +174,26 @@ result = await runtime.models.run(
 )
 ```
 
+## Provider-native request controls
+
+Direct model calls and the high-level loop accept common controls and map them
+to provider-native request fields where supported:
+
+```python
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Summarize the incident.",
+    instructions="Use concise operational language.",
+    temperature=0.2,
+    max_output_tokens=400,
+    reasoning_effort="low",
+)
+```
+
+Pass additional keyword arguments to `runtime.models.run(...)` for
+provider-specific fields that are not part of the common controls. Those
+provider-specific values override the common controls.
+
 ## Anthropic Messages-native model provider
 
 The second real `ModelProvider` is implemented and wires the Messages API

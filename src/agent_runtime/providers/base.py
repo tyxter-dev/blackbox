@@ -13,6 +13,24 @@ from agent_runtime.core.state import ProviderState
 
 
 @dataclass(slots=True)
+class ModelRequestControls:
+    """Provider-native controls for a single model turn.
+
+    Adapters map these fields to their native API shape when supported. The
+    lower-level ``extra`` request payload remains available for provider
+    fields that are not part of this common surface.
+    """
+
+    instructions: str | None = None
+    temperature: float | None = None
+    top_p: float | None = None
+    max_output_tokens: int | None = None
+    tool_choice: Any | None = None
+    parallel_tool_calls: bool | None = None
+    reasoning_effort: str | None = None
+
+
+@dataclass(slots=True)
 class TurnRequest:
     """Request for a single model-provider turn."""
 
@@ -20,6 +38,7 @@ class TurnRequest:
     input: str | list[Any]
     provider_state: ProviderState | None = None
     tools: list[Any] = field(default_factory=list)
+    controls: ModelRequestControls = field(default_factory=ModelRequestControls)
     artifacts: list[ArtifactRef] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)

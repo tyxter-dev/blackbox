@@ -128,6 +128,21 @@ class OpenAIResponsesProvider:
         }
         if request.tools:
             kwargs["tools"] = list(request.tools)
+        controls = request.controls
+        if controls.instructions is not None:
+            kwargs["instructions"] = controls.instructions
+        if controls.temperature is not None:
+            kwargs["temperature"] = controls.temperature
+        if controls.top_p is not None:
+            kwargs["top_p"] = controls.top_p
+        if controls.max_output_tokens is not None:
+            kwargs["max_output_tokens"] = controls.max_output_tokens
+        if controls.tool_choice is not None:
+            kwargs["tool_choice"] = controls.tool_choice
+        if controls.parallel_tool_calls is not None:
+            kwargs["parallel_tool_calls"] = controls.parallel_tool_calls
+        if controls.reasoning_effort is not None:
+            kwargs["reasoning"] = {"effort": controls.reasoning_effort}
         if request.provider_state:
             previous = (
                 request.provider_state.previous_response_id

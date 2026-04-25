@@ -113,6 +113,15 @@ class GeminiGenerateContentProvider:
         tools = request.tools or config.get("tools")
         if tools:
             config["tools"] = _convert_tools(tools)
+        controls = request.controls
+        if controls.instructions is not None:
+            config.setdefault("system_instruction", controls.instructions)
+        if controls.temperature is not None:
+            config.setdefault("temperature", controls.temperature)
+        if controls.top_p is not None:
+            config.setdefault("top_p", controls.top_p)
+        if controls.max_output_tokens is not None:
+            config.setdefault("max_output_tokens", controls.max_output_tokens)
         if config:
             kwargs["config"] = config
         kwargs.update(extra)
