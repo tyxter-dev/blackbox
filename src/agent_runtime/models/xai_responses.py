@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from agent_runtime.core.capabilities import ModelCapabilities
@@ -25,7 +26,7 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
         retry_min_delay: float = 0.5,
     ) -> None:
         super().__init__(
-            api_key=api_key,
+            api_key=api_key or os.environ.get("XAI_API_KEY"),
             client=client,
             base_url=base_url or self.default_base_url,
             timeout=timeout,

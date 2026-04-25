@@ -1,4 +1,11 @@
 from agent_runtime.compat.chat import ChatMessage
+from agent_runtime.compat.providers import (
+    ModelRoute,
+    create_runtime_with_default_providers,
+    provider_ref_for_model,
+    register_default_model_providers,
+    resolve_model_route,
+)
 from agent_runtime.core.accounting import ModelCatalog, ModelPricing, ModelUsage
 from agent_runtime.core.approvals import ApprovalDecision, ApprovalRequest
 from agent_runtime.core.artifacts import Artifact, ArtifactRef
@@ -56,6 +63,7 @@ __all__ = [
     "ModelPricing",
     "ModelProvider",
     "ModelRequestControls",
+    "ModelRoute",
     "ModelRuntime",
     "ModelUsage",
     "OutputSchema",
@@ -73,4 +81,8 @@ __all__ = [
     "TurnRequest",
     "TurnResult",
     "WebSearch",
+    "create_runtime_with_default_providers",
+    "provider_ref_for_model",
+    "register_default_model_providers",
+    "resolve_model_route",
 ]
