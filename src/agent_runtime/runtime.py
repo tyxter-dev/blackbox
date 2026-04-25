@@ -18,6 +18,7 @@ from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRu
 from agent_runtime.providers.base import AgentSpec, TaskSpec, TurnRequest, TurnResult
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
+from agent_runtime.tools.results import ToolResult
 from agent_runtime.tools.runtime import ToolRuntime
 
 T = TypeVar("T")
@@ -224,6 +225,193 @@ class ToolRuntimeFacade:
         self, name: str, arguments: dict[str, Any] | None = None, *, mock: bool = False
     ) -> Any:
         return await self.default_runtime.call(name, arguments, mock=mock)
+
+    def register_workspace(
+        self,
+        workspace: Any,
+        ref: Any,
+        *,
+        prefix: str = "workspace",
+    ) -> list[ToolDefinition]:
+        """Register local workspace operations as model-callable tools.
+
+        The returned tool names can be passed to ``AgentRuntime.run(...,
+        tools=[...])`` so the existing local tool loop can read/write files,
+        run commands, create snapshots, and emit the workspace runtime's
+        canonical events.
+        """
+        from agent_runtime.workspaces.changes import CommandSpec, FileChange, Patch
+
+        async def read_file(path: str) -> ToolResult:
+            content = await workspace.read_file(ref, path)
+            return ToolResult(
+                content=content,
+                payload={"path": path, "content": content},
+                metadata={"workspace_id": ref.id},
+            )
+
+        async def write_file(path: str, content: str) -> ToolResult:
+            change = await workspace.write_file(ref, path, content)
+            return ToolResult(
+                content=f"Wrote {path}.",
+                payload={"change": change},
+                metadata={"workspace_id": ref.id},
+            )
+
+        async def delete_file(path: str) -> ToolResult:
+            change = await workspace.delete_file(ref, path)
+            return ToolResult(
+                content=f"Deleted {path}.",
+                payload={"change": change},
+                metadata={"workspace_id": ref.id},
+            )
+
+        async def apply_patch(
+            summary: str,
+            diff: str,
+            changes: list[dict[str, Any]],
+        ) -> ToolResult:
+            patch = Patch(
+                summary=summary,
+                diff=diff,
+                changes=[
+                    FileChange(
+                        path=str(change["path"]),
+                        type=change["type"],
+                        content=change.get("content"),
+                        old_path=change.get("old_path"),
+                    )
+                    for change in changes
+                ],
+            )
+            artifact = await workspace.apply_patch(ref, patch)
+            return ToolResult(
+                content=f"Created patch artifact {artifact.id}.",
+                payload={"artifact": artifact},
+                metadata={"workspace_id": ref.id},
+            )
+
+        async def run_command(
+            command: str,
+            cwd: str | None = None,
+            timeout_seconds: float | None = None,
+        ) -> ToolResult:
+            result = await workspace.run_command(
+                ref, CommandSpec(command=command, cwd=cwd, timeout=timeout_seconds)
+            )
+            return ToolResult(
+                content=result.stdout or result.stderr or f"Command exited {result.exit_code}.",
+                payload={"result": result},
+                metadata={"workspace_id": ref.id, "exit_code": result.exit_code},
+            )
+
+        async def snapshot(name: str | None = None) -> ToolResult:
+            artifact = await workspace.snapshot(ref, name=name)
+            return ToolResult(
+                content=f"Created workspace snapshot {artifact.id}.",
+                payload={"artifact": artifact},
+                metadata={"workspace_id": ref.id},
+            )
+
+        tool_specs: list[tuple[ToolCallable, str, str, dict[str, Any]]] = [
+            (
+                read_file,
+                f"{prefix}_read_file",
+                "Read a text file from the current workspace.",
+                {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            ),
+            (
+                write_file,
+                f"{prefix}_write_file",
+                "Write a text file in the current workspace.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "content": {"type": "string"},
+                    },
+                    "required": ["path", "content"],
+                },
+            ),
+            (
+                delete_file,
+                f"{prefix}_delete_file",
+                "Delete a file from the current workspace.",
+                {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            ),
+            (
+                apply_patch,
+                f"{prefix}_apply_patch",
+                "Apply a structured patch to the current workspace.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "summary": {"type": "string"},
+                        "diff": {"type": "string"},
+                        "changes": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "path": {"type": "string"},
+                                    "type": {
+                                        "type": "string",
+                                        "enum": ["create", "update", "delete"],
+                                    },
+                                    "content": {"type": "string"},
+                                    "old_path": {"type": "string"},
+                                },
+                                "required": ["path", "type"],
+                            },
+                        },
+                    },
+                    "required": ["summary", "diff", "changes"],
+                },
+            ),
+            (
+                run_command,
+                f"{prefix}_run_command",
+                "Run a command in the current workspace.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "command": {"type": "string"},
+                        "cwd": {"type": "string"},
+                        "timeout_seconds": {"type": "number"},
+                    },
+                    "required": ["command"],
+                },
+            ),
+            (
+                snapshot,
+                f"{prefix}_snapshot",
+                "Create a snapshot artifact for the current workspace.",
+                {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                },
+            ),
+        ]
+        return [
+            self.register(
+                function,
+                name=name,
+                description=description,
+                parameters=parameters,
+                category="workspace",
+                tags=["workspace"],
+                metadata={"workspace_id": ref.id},
+            )
+            for function, name, description, parameters in tool_specs
+        ]
 
 
 class AgentRuntime:

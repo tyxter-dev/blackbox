@@ -291,6 +291,18 @@ Path traversal is blocked (relative paths cannot escape the workspace
 root). Cloud/sandbox/git workspace kinds raise `WorkspaceError` until their
 adapters land.
 
+Workspace operations can also be exposed to the high-level agent loop as
+ordinary local tools:
+
+```python
+workspace_tools = runtime.tools.register_workspace(ws_runtime, ws)
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Read notes.md and summarize it.",
+    tools=[tool.name for tool in workspace_tools],
+)
+```
+
 ## Tests
 
 ```bash
@@ -306,5 +318,3 @@ pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
 2. Claude Code `AgentProvider`.
 3. Vertex AI Agent Engine `AgentProvider`.
 4. MCP local connector + provider-native remote MCP wiring.
-5. AgentLoop integration of workspace ops as a tool backend with approval
-   flow wired through.

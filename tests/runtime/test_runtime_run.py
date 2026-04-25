@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from agent_runtime import AgentResult, AgentRuntime, EventTypes, OutputValidationError
 from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
 from agent_runtime.tools import ToolResult
+from agent_runtime.workspaces import WorkspaceRuntime, WorkspaceSpec
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,
     text_only_turn,
@@ -320,3 +321,36 @@ async def test_policy_deny_short_circuits_tool_dispatch() -> None:
     sent_back = scripted.calls[1].input
     assert sent_back[0].data["error"] == "denied_by_policy"
     assert sent_back[0].data["reason"] == "blocked by test policy"
+
+
+async def test_workspace_tools_run_through_agent_loop(tmp_path) -> None:
+    (tmp_path / "notes.txt").write_text("ship it")
+    runtime, scripted = _runtime()
+    workspace_runtime = WorkspaceRuntime()
+    workspace = await workspace_runtime.open(WorkspaceSpec.local(tmp_path))
+    registered = runtime.tools.register_workspace(workspace_runtime, workspace)
+
+    scripted.queue(
+        tool_call_turn(
+            call_id="ws_1",
+            name="workspace_read_file",
+            arguments={"path": "notes.txt"},
+        )
+    )
+    scripted.queue(text_only_turn("done"))
+
+    result = await runtime.run(
+        provider="scripted:test",
+        input="read notes",
+        tools=[tool.name for tool in registered],
+    )
+
+    assert result.text == "done"
+    assert len(result.payloads) == 1
+    payload = result.payloads[0]
+    assert payload.tool_name == "workspace_read_file"
+    assert payload.call_id == "ws_1"
+    assert payload.payload == {"path": "notes.txt", "content": "ship it"}
+    assert [event.type for event in workspace_runtime.drain_events()] == [
+        EventTypes.WORKSPACE_FILE_READ
+    ]

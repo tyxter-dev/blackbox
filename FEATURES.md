@@ -51,6 +51,7 @@ Status legend:
 | Context injection | Supported | `tool_execution_context={...}` / `ToolRuntime(context=...)` | Private runtime values are injected by parameter name. |
 | Context schema privacy | Supported | Injected context parameters are not added to provider tool schemas. |
 | Tool catalog search | Supported | `ToolCatalog` | Simple relevance-scored catalog/search layer for registered/cataloged tools. |
+| Workspace tool backend | Supported | `runtime.tools.register_workspace(...)` | Registers local workspace operations as normal tools for the high-level agent loop. |
 | Namespaced `ToolRef` IDs | Not supported yet | Planned for MCP | Current high-level API references tools by simple name. |
 
 ## Policy, Approvals, and Safety
@@ -129,6 +130,5 @@ Status legend:
 - OpenAI cloud/Codex-style agent execution.
 - Claude Code or Vertex Agent Engine execution.
 - Local MCP transport dispatch or provider-native remote MCP wiring.
-- AgentLoop integration of workspace operations as a tool backend.
 - Provider cache controls beyond preserving native continuation state.
 - Provider-breadth routing through LiteLLM.
