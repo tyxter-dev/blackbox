@@ -32,6 +32,7 @@ from agent_runtime.tools.runtime import ToolRuntime
 from agent_runtime.tools.session import ToolSession
 
 T = TypeVar("T")
+_FINALIZER_TOOL_NAME = "submit_final_output"
 
 
 @dataclass(slots=True)
@@ -595,6 +596,8 @@ class AgentRuntime:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
 
         tool_definitions = self._tool_payload(tools, tool_session=tool_session)
+        if output_schema is not None and output_strategy == "finalizer_tool":
+            tool_definitions.append(_finalizer_tool_payload(output_schema))
         tool_runtime = self._tool_runtime_for(
             tool_execution_context,
             tool_session=tool_session,
@@ -623,6 +626,11 @@ class AgentRuntime:
             approval_policy=approval_policy,
             policy=policy,
             max_iterations=max_iterations,
+            finalizer_tool_name=(
+                _FINALIZER_TOOL_NAME
+                if output_schema is not None and output_strategy == "finalizer_tool"
+                else None
+            ),
         )
         run_id = f"run_{uuid4().hex}"
         sequence = 0
@@ -672,19 +680,29 @@ class AgentRuntime:
         spec = _resolve_output_spec(output_type, output_spec)
         output_schema = build_output_schema(spec)
         provider_ref = ProviderRef.parse(provider)
-        if spec.strategy == "provider_native":
-            adapter = self.registry.get_model(provider_ref.provider_key)
+        adapter = self.registry.get_model(provider_ref.provider_key)
+        effective_strategy: OutputStrategy | None = spec.strategy
+        if spec.strategy == "provider_native" and output_schema is not None:
             if not adapter.capabilities(model or provider_ref.resource).supports_structured_output:
                 if spec.fallback == "posthoc_parse":
                     output_schema = None
+                    effective_strategy = "posthoc_parse"
+                elif spec.fallback == "finalizer_tool":
+                    effective_strategy = "finalizer_tool"
                 else:
                     raise UnsupportedFeatureError(
                         f"Provider '{provider_ref.provider_key}' does not support "
                         "provider-native structured output."
                     )
+        if effective_strategy == "finalizer_tool" and output_schema is not None:
+            if not adapter.capabilities(model or provider_ref.resource).supports_function_tools:
+                raise UnsupportedFeatureError(
+                    f"Provider '{provider_ref.provider_key}' does not support "
+                    "finalizer_tool structured output."
+                )
         attempts_allowed = (
             1 + spec.max_validation_retries
-            if spec.strategy == "posthoc_parse_with_retry"
+            if effective_strategy == "posthoc_parse_with_retry"
             else 1
         )
 
@@ -697,6 +715,7 @@ class AgentRuntime:
         completed_provider: str | None = None
         completed_model: str | None = None
         last_text = ""
+        finalizer_output: dict[str, Any] | None = None
         last_error: OutputValidationError | None = None
         current_input = input
 
@@ -717,7 +736,7 @@ class AgentRuntime:
                 mock_tools=mock_tools,
                 provider_state=captured_state,
                 output_schema=output_schema,
-                output_strategy=spec.strategy if output_schema is not None else None,
+                output_strategy=effective_strategy if output_schema is not None else None,
                 **kwargs,
             ):
                 events.append(event)
@@ -737,6 +756,15 @@ class AgentRuntime:
                 item = event.data.get("item")
                 if isinstance(item, RunItem):
                     items.append(item)
+                event_metadata = event.data.get("metadata")
+                if (
+                    event.type == EventTypes.TOOL_CALL_COMPLETED
+                    and isinstance(event_metadata, dict)
+                    and event_metadata.get("purpose") == "final_output"
+                ):
+                    arguments = event.data.get("arguments")
+                    if isinstance(arguments, dict):
+                        finalizer_output = arguments
                 maybe_state = event.data.get("provider_state")
                 if isinstance(maybe_state, ProviderState):
                     captured_state = maybe_state
@@ -747,12 +775,16 @@ class AgentRuntime:
                     if isinstance(model_value, str):
                         completed_model = model_value
 
-            last_text = "".join(text_parts)
+            last_text = (
+                json.dumps(finalizer_output)
+                if finalizer_output is not None
+                else "".join(text_parts)
+            )
             try:
                 output = _validate_output(
                     last_text,
                     spec.schema,
-                    allow_dict_schema=spec.strategy in {"provider_native", "finalizer_tool"},
+                    allow_dict_schema=effective_strategy in {"provider_native", "finalizer_tool"},
                 )
             except OutputValidationError as exc:
                 last_error = exc
@@ -831,6 +863,21 @@ def _resolve_output_spec(
     if output_spec is not None:
         return output_spec
     return OutputSpec(schema=output_type, strategy="posthoc_parse")
+
+
+def _finalizer_tool_payload(output_schema: OutputSchema) -> dict[str, Any]:
+    description = output_schema.description or "Submit the final structured output."
+    return {
+        "type": "function",
+        "name": _FINALIZER_TOOL_NAME,
+        "description": description,
+        "parameters": output_schema.schema,
+        "metadata": {
+            "agent_runtime_hidden": True,
+            "purpose": "final_output",
+            "schema_name": output_schema.name,
+        },
+    }
 
 
 def _build_repair_prompt(

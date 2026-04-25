@@ -30,6 +30,7 @@ Status legend:
 | String output | Supported | `runtime.run(output_type=str)` | Explicit or implicit default. |
 | Fail-fast validation errors | Supported | `OutputValidationError` | Carries `raw_text` and the original validation/JSON error when available. |
 | Provider-native structured output | Supported | `OutputSpec.strategy="provider_native"` | Runtime builds JSON Schema contracts and wires them into OpenAI Responses `text.format` and Gemini `response_json_schema`; unsupported providers raise unless an explicit fallback is selected. |
+| Finalizer tool structured output | Supported | `OutputSpec.strategy="finalizer_tool"` | Runtime injects a hidden `submit_final_output` tool, terminates when the model calls it, and validates the tool arguments as final output. |
 | Structured output retry/repair | Supported | `OutputSpec.strategy="posthoc_parse_with_retry"` | On validation failure, the runtime feeds a repair prompt back to the model up to `max_validation_retries`. |
 
 ## Local Tools

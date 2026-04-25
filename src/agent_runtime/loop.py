@@ -11,6 +11,7 @@ API) delegate their loop body to this class.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -58,6 +59,7 @@ class AgentLoop:
     approval_policy: ApprovalPolicy | None = None
     policy: Policy | None = None
     max_iterations: int = 8
+    finalizer_tool_name: str | None = None
 
     _approvals: dict[str, asyncio.Future[ApprovalDecision]] = field(default_factory=dict)
     _cancelled: bool = False
@@ -113,6 +115,39 @@ class AgentLoop:
             provider_state = last_state
 
             if not pending_calls:
+                return
+
+            finalizer_call = self._find_finalizer_call(pending_calls)
+            if finalizer_call is not None:
+                content = json.dumps(finalizer_call.arguments)
+                item = RunItem(
+                    type=ItemTypes.FUNCTION_RESULT,
+                    provider=provider_id,
+                    status="completed",
+                    data={
+                        "call_id": finalizer_call.call_id,
+                        "name": finalizer_call.name,
+                        "content": content,
+                        "arguments": dict(finalizer_call.arguments),
+                    },
+                )
+                yield AgentEvent(
+                    type=EventTypes.TOOL_CALL_COMPLETED,
+                    provider=provider_id,
+                    session_id=session_id,
+                    item_id=finalizer_call.call_id,
+                    data={
+                        "call_id": finalizer_call.call_id,
+                        "name": finalizer_call.name,
+                        "arguments": dict(finalizer_call.arguments),
+                        "content": content,
+                        "item": item,
+                        "metadata": {
+                            "agent_runtime_hidden": True,
+                            "purpose": "final_output",
+                        },
+                    },
+                )
                 return
 
             if self.tools is None:
@@ -240,6 +275,16 @@ class AgentLoop:
                 session_id=session_id,
                 data={"reason": "max_iterations_reached", "limit": self.max_iterations},
             )
+
+    def _find_finalizer_call(
+        self, pending_calls: list[_PendingToolCall]
+    ) -> _PendingToolCall | None:
+        if self.finalizer_tool_name is None:
+            return None
+        for call in pending_calls:
+            if call.name == self.finalizer_tool_name:
+                return call
+        return None
 
     async def _await_approval(
         self,
