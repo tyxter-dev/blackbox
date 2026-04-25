@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -180,6 +181,27 @@ async def test_run_command_failure_propagates_exit_code(tmp_path: Path) -> None:
         e for e in runtime.events if e.type == EventTypes.WORKSPACE_COMMAND_COMPLETED
     )
     assert completed.data["exit_code"] == 1
+
+
+async def test_run_command_timeout_sets_timed_out(tmp_path: Path) -> None:
+    runtime = WorkspaceRuntime()
+    ws = await runtime.open(WorkspaceSpec.local(tmp_path))
+
+    result = await runtime.run_command(
+        ws,
+        CommandSpec(
+            command=[sys.executable, "-c", "import time; time.sleep(1)"],
+            shell=False,
+            timeout=0.01,
+        ),
+    )
+
+    assert not result.succeeded
+    assert result.timed_out is True
+    completed = next(
+        e for e in runtime.events if e.type == EventTypes.WORKSPACE_COMMAND_COMPLETED
+    )
+    assert completed.data["timed_out"] is True
 
 
 async def test_run_command_denied_by_policy_blocks_executor(tmp_path: Path) -> None:

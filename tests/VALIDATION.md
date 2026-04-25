@@ -201,8 +201,8 @@ await runtime.snapshot(ws)
 | 6.12 | ✅ | `require_approval` raises | `::test_write_file_require_approval_raises_approval_error` | Workspace layer surfaces approval gap as `ApprovalError`. |
 | 6.13 | ✅ | Snapshot artifact | `::test_snapshot_creates_artifact_and_emits_event` | Snapshots produce typed `Artifact`. |
 | 6.14 | ✅ | Artifact pagination | `::test_apply_patch_emits_per_change_events_and_creates_patch_artifact` (uses `list_artifacts`) | `ArtifactPage` returned by filter. |
-| 6.15 | ⏳ | Command timeout | not yet — default executor honors `timeout` but no test fixture | Long commands fail with `timed_out=True`. |
-| 6.16 | 🟡 | AgentLoop integration | `runtime/test_runtime_run.py::test_workspace_tools_run_through_agent_loop` | Workspace tools can be registered and invoked through the high-level loop; write/command/snapshot coverage is still being expanded. |
+| 6.15 | ✅ | Command timeout | `unit/test_workspace_runtime.py::test_run_command_timeout_sets_timed_out` | Long commands fail with `timed_out=True`. |
+| 6.16 | ✅ | AgentLoop integration | `runtime/test_runtime_run.py::test_workspace_tools_run_through_agent_loop`, `::test_workspace_write_command_and_snapshot_tools_run_through_agent_loop` | Workspace read/write/command/snapshot tools can be registered and invoked through the high-level loop. |
 
 ---
 

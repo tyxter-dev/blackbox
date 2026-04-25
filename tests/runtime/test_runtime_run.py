@@ -19,7 +19,13 @@ from pydantic import BaseModel, Field
 from agent_runtime import AgentResult, AgentRuntime, EventTypes, OutputValidationError
 from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
 from agent_runtime.tools import ToolResult
-from agent_runtime.workspaces import WorkspaceRuntime, WorkspaceSpec
+from agent_runtime.workspaces import (
+    CommandResult,
+    CommandSpec,
+    WorkspaceRef,
+    WorkspaceRuntime,
+    WorkspaceSpec,
+)
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,
     text_only_turn,
@@ -447,3 +453,78 @@ async def test_workspace_tools_run_through_agent_loop(tmp_path: Path) -> None:
     assert [event.type for event in workspace_runtime.drain_events()] == [
         EventTypes.WORKSPACE_FILE_READ
     ]
+
+
+async def test_workspace_write_command_and_snapshot_tools_run_through_agent_loop(
+    tmp_path: Path,
+) -> None:
+    async def executor(spec: CommandSpec, ws: WorkspaceRef) -> CommandResult:
+        return CommandResult(exit_code=0, stdout=f"ran:{spec.display}")
+
+    runtime, scripted = _runtime()
+    workspace_runtime = WorkspaceRuntime(executor=executor)
+    workspace = await workspace_runtime.open(WorkspaceSpec.local(tmp_path))
+    registered = runtime.tools.register_workspace(workspace_runtime, workspace)
+
+    def workspace_turn(request: Any) -> Any:
+        from agent_runtime.core.events import AgentEvent as Evt
+        from agent_runtime.core.state import ProviderState
+
+        yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
+        yield Evt(
+            type=EventTypes.TOOL_CALL_REQUESTED,
+            provider="scripted",
+            item_id="ws_write",
+            data={
+                "call_id": "ws_write",
+                "name": "workspace_write_file",
+                "arguments": {"path": "notes.txt", "content": "ship it"},
+            },
+        )
+        yield Evt(
+            type=EventTypes.TOOL_CALL_REQUESTED,
+            provider="scripted",
+            item_id="ws_cmd",
+            data={
+                "call_id": "ws_cmd",
+                "name": "workspace_run_command",
+                "arguments": {"command": "echo ok"},
+            },
+        )
+        yield Evt(
+            type=EventTypes.TOOL_CALL_REQUESTED,
+            provider="scripted",
+            item_id="ws_snapshot",
+            data={
+                "call_id": "ws_snapshot",
+                "name": "workspace_snapshot",
+                "arguments": {"name": "after-write"},
+            },
+        )
+        yield Evt(
+            type=EventTypes.MODEL_COMPLETED,
+            provider="scripted",
+            data={"provider_state": ProviderState(provider="scripted")},
+        )
+
+    scripted.queue(workspace_turn)
+    scripted.queue(text_only_turn("done"))
+
+    result: AgentResult[str] = await runtime.run(
+        provider="scripted:test",
+        input="update workspace",
+        tools=[tool.name for tool in registered],
+    )
+
+    assert result.text == "done"
+    assert (tmp_path / "notes.txt").read_text() == "ship it"
+    assert [payload.tool_name for payload in result.payloads] == [
+        "workspace_write_file",
+        "workspace_run_command",
+        "workspace_snapshot",
+    ]
+    event_types = [event.type for event in workspace_runtime.drain_events()]
+    assert EventTypes.WORKSPACE_FILE_CHANGED in event_types
+    assert EventTypes.WORKSPACE_COMMAND_STARTED in event_types
+    assert EventTypes.WORKSPACE_COMMAND_COMPLETED in event_types
+    assert EventTypes.ARTIFACT_CREATED in event_types
