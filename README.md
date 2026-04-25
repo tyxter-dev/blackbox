@@ -194,6 +194,26 @@ Pass additional keyword arguments to `runtime.models.run(...)` for
 provider-specific fields that are not part of the common controls. Those
 provider-specific values override the common controls.
 
+## Usage accounting
+
+Provider adapters normalize token usage onto `result.metadata["usage"]` when
+the provider returns usage data. Register prices in `runtime.model_catalog` to
+also receive `result.metadata["cost"]`:
+
+```python
+from agent_runtime import ModelPricing
+
+runtime.model_catalog.register_pricing(ModelPricing(
+    provider="openai",
+    model="gpt-5.4",
+    input_per_million=1.25,
+    output_per_million=10.00,
+))
+```
+
+The runtime does not ship hard-coded prices; applications should register the
+current prices they want to account against.
+
 ## Anthropic Messages-native model provider
 
 The second real `ModelProvider` is implemented and wires the Messages API

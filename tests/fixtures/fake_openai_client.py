@@ -66,5 +66,7 @@ def item(type_: str, *, id_: str | None = None, **fields: Any) -> SimpleNamespac
     return SimpleNamespace(type=type_, id=id_, **fields)
 
 
-def final_response(*, id_: str, output: list[Any] | None = None) -> SimpleNamespace:
-    return SimpleNamespace(id=id_, output=output or [])
+def final_response(
+    *, id_: str, output: list[Any] | None = None, **fields: Any
+) -> SimpleNamespace:
+    return SimpleNamespace(id=id_, output=output or [], **fields)

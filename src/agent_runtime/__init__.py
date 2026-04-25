@@ -1,3 +1,4 @@
+from agent_runtime.core.accounting import ModelCatalog, ModelPricing, ModelUsage
 from agent_runtime.core.approvals import ApprovalDecision, ApprovalRequest
 from agent_runtime.core.artifacts import Artifact, ArtifactRef
 from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities
@@ -36,9 +37,12 @@ __all__ = [
     "EventTypes",
     "ItemTypes",
     "ModelCapabilities",
+    "ModelCatalog",
+    "ModelPricing",
     "ModelProvider",
     "ModelRequestControls",
     "ModelRuntime",
+    "ModelUsage",
     "OutputValidationError",
     "ProviderRef",
     "ProviderRegistry",

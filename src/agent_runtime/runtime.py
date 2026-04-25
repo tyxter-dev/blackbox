@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, TypeVar, cast
 from uuid import uuid4
 
+from agent_runtime.core.accounting import ModelCatalog, add_usage, usage_to_dict
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
 from agent_runtime.core.errors import OutputValidationError
@@ -33,6 +34,7 @@ T = TypeVar("T")
 @dataclass(slots=True)
 class ModelRuntime:
     registry: ProviderRegistry
+    model_catalog: ModelCatalog = field(default_factory=ModelCatalog)
 
     async def stream(
         self,
@@ -104,6 +106,9 @@ class ModelRuntime:
         events: list[AgentEvent] = []
         text_parts: list[str] = []
         captured_state: ProviderState | None = None
+        usage = None
+        completed_provider: str | None = None
+        completed_model: str | None = None
         async for event in self.stream(
             provider=provider,
             model=model,
@@ -128,10 +133,27 @@ class ModelRuntime:
             maybe_state = event.data.get("provider_state")
             if isinstance(maybe_state, ProviderState):
                 captured_state = maybe_state
+            if event.type == EventTypes.MODEL_COMPLETED:
+                usage = add_usage(usage, event.data.get("usage"))
+                completed_provider = event.provider or completed_provider
+                model_value = event.data.get("model")
+                if isinstance(model_value, str):
+                    completed_model = model_value
+        metadata: dict[str, Any] = {}
+        usage_dict = usage_to_dict(usage)
+        if usage_dict is not None:
+            metadata["usage"] = usage_dict
+        if usage is not None and completed_provider is not None and completed_model is not None:
+            cost = self.model_catalog.estimate_cost(
+                provider=completed_provider, model=completed_model, usage=usage
+            )
+            if cost is not None:
+                metadata["cost"] = cost
         return TurnResult(
             text="".join(text_parts),
             events=events,
             provider_state=captured_state,
+            metadata=metadata,
         )
 
 
@@ -475,9 +497,10 @@ class AgentRuntime:
         run_store: RunStore | None = None,
     ) -> None:
         self.registry = registry or ProviderRegistry()
+        self.model_catalog = ModelCatalog()
         self.event_store: EventStore = event_store or InMemoryEventStore()
         self.run_store: RunStore = run_store or InMemoryRunStore()
-        self.models = ModelRuntime(self.registry)
+        self.models = ModelRuntime(self.registry, model_catalog=self.model_catalog)
         self.agents = AgentRuntimeFacade(self.registry)
         self.tools = ToolRuntimeFacade()
 
@@ -589,6 +612,9 @@ class AgentRuntime:
         artifacts: list[Artifact] = []
         payloads: list[ToolPayload] = []
         captured_state: ProviderState | None = provider_state
+        usage = None
+        completed_provider: str | None = None
+        completed_model: str | None = None
         last_text = ""
         last_error: OutputValidationError | None = None
         current_input = input
@@ -628,6 +654,12 @@ class AgentRuntime:
                 maybe_state = event.data.get("provider_state")
                 if isinstance(maybe_state, ProviderState):
                     captured_state = maybe_state
+                if event.type == EventTypes.MODEL_COMPLETED:
+                    usage = add_usage(usage, event.data.get("usage"))
+                    completed_provider = event.provider or completed_provider
+                    model_value = event.data.get("model")
+                    if isinstance(model_value, str):
+                        completed_model = model_value
 
             last_text = "".join(text_parts)
             try:
@@ -642,6 +674,15 @@ class AgentRuntime:
                 continue
 
             metadata: dict[str, Any] = {"validation_attempts": attempt + 1}
+            usage_dict = usage_to_dict(usage)
+            if usage_dict is not None:
+                metadata["usage"] = usage_dict
+            if usage is not None and completed_provider is not None and completed_model is not None:
+                cost = self.model_catalog.estimate_cost(
+                    provider=completed_provider, model=completed_model, usage=usage
+                )
+                if cost is not None:
+                    metadata["cost"] = cost
             return AgentResult(
                 output=cast(T, output),
                 text=last_text,

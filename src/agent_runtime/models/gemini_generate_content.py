@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
+from agent_runtime.core.accounting import add_usage, usage_from_gemini_chunk
 from agent_runtime.core.capabilities import ModelCapabilities
 from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
 from agent_runtime.core.events import AgentEvent, EventTypes
@@ -70,10 +71,12 @@ class GeminiGenerateContentProvider:
         assistant_parts: list[dict[str, Any]] = []
         thought_signatures: list[Any] = []
         tool_call_ids: list[str] = []
+        usage = None
 
         try:
             async for chunk in client.aio.models.generate_content_stream(**kwargs):
                 response_id = _attr(chunk, "response_id") or response_id
+                usage = add_usage(usage, usage_from_gemini_chunk(chunk))
                 for event in _map_chunk(
                     chunk,
                     provider=self.provider_id,
@@ -96,10 +99,13 @@ class GeminiGenerateContentProvider:
             thought_signatures=thought_signatures,
             tool_call_ids=tool_call_ids,
         )
+        data: dict[str, Any] = {"model": request.model, "provider_state": provider_state}
+        if usage is not None:
+            data["usage"] = usage.to_dict()
         yield AgentEvent(
             type=EventTypes.MODEL_COMPLETED,
             provider=self.provider_id,
-            data={"model": request.model, "provider_state": provider_state},
+            data=data,
         )
 
     @staticmethod

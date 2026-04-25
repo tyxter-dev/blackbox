@@ -51,10 +51,16 @@ class FakeGeminiClient:
         return stream
 
 
-def chunk(*, response_id: str | None = None, parts: list[Any] | None = None) -> SimpleNamespace:
+def chunk(
+    *,
+    response_id: str | None = None,
+    parts: list[Any] | None = None,
+    **fields: Any,
+) -> SimpleNamespace:
     return SimpleNamespace(
         response_id=response_id,
         candidates=[SimpleNamespace(content=SimpleNamespace(parts=parts or []))],
+        **fields,
     )
 
 

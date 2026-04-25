@@ -79,6 +79,7 @@ Status legend:
 | Provider-native continuation state | Supported | `ProviderState` | Preserves provider continuation IDs and native state outside chat history. |
 | OpenAI previous response continuation | Supported | `ProviderState.previous_response_id` | OpenAI Responses adapter round-trips `previous_response_id`. |
 | Provider-native request controls | Supported | `ModelRequestControls` / `TurnRequest.controls` | Common controls such as instructions, sampling, output token caps, tool choice, parallel tool calls, and reasoning effort are mapped by adapters where native support exists; `extra` remains the escape hatch. |
+| Model usage accounting | Supported | `ModelUsage`, `ModelCatalog`, `ModelPricing` | Provider adapters normalize token usage; applications can register current pricing to add cost estimates to result metadata. |
 | Native provider caching | Partial | `ProviderState` only | The library preserves provider state for continuation. It does not yet expose provider cache controls, cache eviction, or persistent cache backends. |
 | Raw provider payload preservation | Supported | `AgentEvent.raw`, `RawEnvelope` | Provider adapters can keep original SDK payloads; `RawEnvelope` supports sensitivity tagging/redaction. |
 | Resume run from persisted state | Supported | `provider_state=...`, `RunStore` | `RunState` can be saved, reloaded in a fresh runtime, and passed back into `AgentRuntime.run`. |

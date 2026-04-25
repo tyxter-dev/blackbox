@@ -65,6 +65,7 @@ await runtime.models.stream(...)
 | 1.14 | ✅ | Gemini GenerateContent adapter parity | `golden/gemini/test_generate_content_event_mapping.py`, `integration/gemini/test_generate_content_smoke.py` | Third real provider maps streaming events without flattening to chat; live smoke is gated by `GOOGLE_API_KEY`. |
 | 1.15 | ✅ | xAI Responses adapter parity | `golden/openai/test_responses_event_mapping.py::test_openai_compatible_subclass_preserves_provider_identity`, `integration/xai/test_responses_smoke.py` | OpenAI-compatible xAI Responses maps events and provider state under the `xai` provider identity; live smoke is gated by `XAI_API_KEY`. |
 | 1.16 | ✅ | Provider-native request controls | `unit/test_model_request_controls.py` | Common request controls map to OpenAI/xAI/Anthropic/Gemini native kwargs while provider `extra` remains an override escape hatch. |
+| 1.17 | ✅ | Model usage and cost accounting | `unit/test_model_accounting.py` | Provider usage payloads normalize into result metadata and optional catalog pricing produces cost estimates without hard-coded prices. |
 
 ---
 

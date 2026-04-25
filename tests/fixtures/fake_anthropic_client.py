@@ -106,5 +106,7 @@ def input_json_delta(partial_json: str) -> SimpleNamespace:
     return SimpleNamespace(type="input_json_delta", partial_json=partial_json)
 
 
-def final_message(*, id_: str, content: list[Any] | None = None) -> SimpleNamespace:
-    return SimpleNamespace(id=id_, content=content or [], role="assistant")
+def final_message(
+    *, id_: str, content: list[Any] | None = None, **fields: Any
+) -> SimpleNamespace:
+    return SimpleNamespace(id=id_, content=content or [], role="assistant", **fields)

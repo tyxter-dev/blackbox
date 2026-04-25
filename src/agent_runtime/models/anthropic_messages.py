@@ -22,6 +22,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from agent_runtime.core.accounting import usage_from_anthropic_message
 from agent_runtime.core.capabilities import ModelCapabilities
 from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
 from agent_runtime.core.events import AgentEvent, EventTypes
@@ -102,10 +103,14 @@ class AnthropicMessagesProvider:
             ) from exc
 
         provider_state = _build_provider_state(messages, final_message)
+        usage = usage_from_anthropic_message(final_message)
+        data: dict[str, Any] = {"model": request.model, "provider_state": provider_state}
+        if usage is not None:
+            data["usage"] = usage.to_dict()
         yield AgentEvent(
             type=EventTypes.MODEL_COMPLETED,
             provider=self.provider_id,
-            data={"model": request.model, "provider_state": provider_state},
+            data=data,
             raw=final_message,
         )
 
