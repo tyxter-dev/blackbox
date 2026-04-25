@@ -30,7 +30,7 @@ Status legend:
 | String output | Supported | `runtime.run(output_type=str)` | Explicit or implicit default. |
 | Fail-fast validation errors | Supported | `OutputValidationError` | Carries `raw_text` and the original validation/JSON error when available. |
 | Provider-native structured output | Contract only | `OutputSpec.strategy="provider_native"` | Strategy is reserved; full provider-native wiring is not implemented yet. |
-| Structured output retry/repair | Not supported yet | `OutputSpec.strategy="posthoc_parse_with_retry"` | Strategy is reserved; v0.1/v0.2 fail fast and let the application retry. |
+| Structured output retry/repair | Supported | `OutputSpec.strategy="posthoc_parse_with_retry"` | On validation failure, the runtime feeds a repair prompt back to the model up to `max_validation_retries`. |
 
 ## Local Tools
 
@@ -79,8 +79,8 @@ Status legend:
 | OpenAI previous response continuation | Supported | `ProviderState.previous_response_id` | OpenAI Responses adapter round-trips `previous_response_id`. |
 | Native provider caching | Partial | `ProviderState` only | The library preserves provider state for continuation. It does not yet expose provider cache controls, cache eviction, or persistent cache backends. |
 | Raw provider payload preservation | Supported | `AgentEvent.raw`, `RawEnvelope` | Provider adapters can keep original SDK payloads; `RawEnvelope` supports sensitivity tagging/redaction. |
-| Resume run from persisted state | Not supported yet | Planned | Stores exist, but replay/resume orchestration is not implemented. |
-| JSONL/SQLite stores | Not supported yet | Planned | Only in-memory stores are implemented. |
+| Resume run from persisted state | Supported | `provider_state=...`, `RunStore` | `RunState` can be saved, reloaded in a fresh runtime, and passed back into `AgentRuntime.run`. |
+| JSONL/SQLite stores | Supported | `JSONLEventStore`, `SQLiteRunStore` | JSONL event logs and SQLite run-state persistence are implemented and covered by tests. |
 
 ## Provider Runtime
 
@@ -95,7 +95,7 @@ Status legend:
 | Direct model stream | Supported | `runtime.models.stream(...)` | Streams provider-normalized events. |
 | Echo model provider | Supported | `EchoModelProvider` | Dependency-free provider for tests/examples. |
 | OpenAI Responses model provider | Supported | `OpenAIResponsesProvider` | Native Responses streaming adapter with typed event mapping and raw payload preservation. |
-| Anthropic Messages model provider | Partial | `AnthropicMessagesProvider` | Stub/provider shell with capabilities; full API integration is not implemented. |
+| Anthropic Messages model provider | Supported | `AnthropicMessagesProvider` | Native Messages streaming adapter with typed event mapping, tool conversion, reasoning deltas, provider state, and raw payload preservation. |
 | Gemini GenerateContent model provider | Partial | `GeminiGenerateContentProvider` | Stub/provider shell with capabilities; full API integration is not implemented. |
 
 ## Agent Sessions
@@ -117,7 +117,8 @@ Status legend:
 | Feature | Status | Public surface | Notes |
 |---|---|---|---|
 | Artifact data contracts | Supported | `Artifact`, `ArtifactRef`, `ArtifactPage` | Typed artifact models exist. |
-| Workspace data contracts | Contract only | `workspaces.spec`, `workspaces.changes` | Specs/change models exist; runtime file/command behavior is not implemented yet. |
+| Local workspace runtime | Supported | `WorkspaceRuntime` | Local workspaces support file read/write/delete, patch artifacts, command execution, snapshots, policy gates, and canonical events. |
+| Workspace data contracts | Supported | `workspaces.spec`, `workspaces.changes` | Workspace refs, mounts, file changes, patch artifacts, commands, and command results exist. |
 | MCP server spec | Contract only | `MCPServerSpec` | Server configuration model exists. |
 | MCP connector placeholder | Contract only | `MCPConnector` | Placeholder methods exist; no real MCP transport/runtime yet. |
 | Observability sink protocol | Partial | `observability.sinks` | Event sink abstractions exist; full tracing/export integrations are not implemented. |
@@ -125,13 +126,10 @@ Status legend:
 
 ## Explicitly Not Supported Yet
 
-- Full Anthropic Messages API integration.
 - Full Gemini GenerateContent API integration.
 - OpenAI cloud/Codex-style agent execution.
 - Claude Code or Vertex Agent Engine execution.
 - Local MCP transport dispatch or provider-native remote MCP wiring.
-- Workspace file read/write, command execution, patch creation, or snapshots.
+- AgentLoop integration of workspace operations as a tool backend.
 - Provider cache controls beyond preserving native continuation state.
-- Automatic structured-output repair/retry.
-- Persistent JSONL/SQLite event/run stores.
 - Provider-breadth routing through LiteLLM.

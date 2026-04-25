@@ -30,7 +30,7 @@ actual product loop.
 7. ✅ `runtime/test_runtime_run.py::test_run_validates_pydantic_output_type`
 8. ✅ `runtime/test_runtime_stream.py::test_run_and_stream_yield_correlated_run_ids`
 9. ✅ `runtime/test_local_agent_provider.py::test_approval_pause_and_approve`
-10. ⏳ `runtime/test_resume_run_from_saved_state` — needs persistence beyond in-memory store
+10. ✅ `runtime/test_resume_run_from_saved_state.py` — proves persisted state can resume a fresh runtime
 
 That sequence proves: call model → detect tool calls → execute tools →
 inject private context → continue model → validate typed output → emit
