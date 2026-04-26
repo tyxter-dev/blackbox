@@ -587,9 +587,8 @@ async def test_workspace_tools_run_through_agent_loop(tmp_path: Path) -> None:
     assert payload.tool_name == "workspace_read_file"
     assert payload.call_id == "ws_1"
     assert payload.payload == {"path": "notes.txt", "content": "ship it"}
-    assert [event.type for event in workspace_runtime.drain_events()] == [
-        EventTypes.WORKSPACE_FILE_READ
-    ]
+    assert any(event.type == EventTypes.WORKSPACE_FILE_READ for event in result.events)
+    assert workspace_runtime.drain_events() == []
 
 
 async def test_workspace_write_command_and_snapshot_tools_run_through_agent_loop(
@@ -660,8 +659,9 @@ async def test_workspace_write_command_and_snapshot_tools_run_through_agent_loop
         "workspace_run_command",
         "workspace_snapshot",
     ]
-    event_types = [event.type for event in workspace_runtime.drain_events()]
+    event_types = [event.type for event in result.events]
     assert EventTypes.WORKSPACE_FILE_CHANGED in event_types
     assert EventTypes.WORKSPACE_COMMAND_STARTED in event_types
     assert EventTypes.WORKSPACE_COMMAND_COMPLETED in event_types
     assert EventTypes.ARTIFACT_CREATED in event_types
+    assert workspace_runtime.drain_events() == []

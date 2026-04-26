@@ -29,6 +29,7 @@ claude-agent = ["claude-agent-sdk>=0.2,<1"]
 google = ["google-genai>=1,<2"]
 mcp = ["mcp>=1,<2"]
 validate = ["pydantic>=2,<3"]
+sandbox = []
 otel = [
   "opentelemetry-api>=1.28,<2",
   "opentelemetry-sdk>=1.28,<2",
@@ -67,6 +68,9 @@ markers = [
   "integration_google_platform: requires Google Agent Platform credentials",
   "integration_cloud_agent: requires cloud-agent provider credentials",
   "integration_mcp: requires a reachable MCP server",
+  "integration_sandbox: requires a sandbox backend",
+  "integration_docker: requires Docker CLI and a runnable Docker daemon",
+  "integration_openai_sandbox: requires OpenAI sandbox credentials and optional extra",
 ]
 
 [tool.mypy]

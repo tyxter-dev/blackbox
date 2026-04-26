@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from agent_runtime.core.artifacts import Artifact
+from agent_runtime.core.events import AgentEvent
+
 
 @dataclass(slots=True, frozen=True)
 class ToolResult:
@@ -16,6 +19,8 @@ class ToolResult:
     payload: Any | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    events: list[AgentEvent] = field(default_factory=list)
+    artifacts: list[Artifact] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:

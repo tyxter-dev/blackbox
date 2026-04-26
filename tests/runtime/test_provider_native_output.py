@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from pydantic import BaseModel
 
 from agent_runtime import AgentResult, AgentRuntime
@@ -9,9 +11,10 @@ from agent_runtime.core.errors import (
     ProviderExecutionError,
     UnsupportedFeatureError,
 )
-from agent_runtime.core.events import EventTypes
+from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes
 from agent_runtime.core.results import OutputSpec
+from agent_runtime.providers.base import TurnRequest
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn, tool_call_turn
 
 
@@ -30,7 +33,7 @@ class StructuredScriptedModelProvider(ScriptedModelProvider):
         )
 
 
-def provider_rejects_schema_turn(request: object) -> object:
+def provider_rejects_schema_turn(request: TurnRequest) -> Iterable[AgentEvent]:
     raise ProviderExecutionError("provider rejected structured output schema")
     yield  # pragma: no cover
 

@@ -17,6 +17,8 @@ from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
 from agent_runtime.core.capabilities import ModelCapabilityProfile, get_model_capability_profile
 from agent_runtime.core.errors import (
+    ApprovalError,
+    ConfigurationError,
     OutputValidationError,
     ProviderExecutionError,
 )
@@ -45,7 +47,6 @@ from agent_runtime.providers.base import (
 )
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
-from agent_runtime.tools.results import ToolResult
 from agent_runtime.tools.runtime import ToolRuntime
 from agent_runtime.tools.session import ToolSession
 
@@ -257,6 +258,9 @@ class ModelRuntime:
         hosted_metadata = _hosted_tool_metadata_from_events(events)
         if hosted_metadata:
             metadata["hosted_tools"] = hosted_metadata
+        workspace_metadata = _workspace_metadata_from_events(events)
+        if workspace_metadata:
+            metadata["workspaces"] = workspace_metadata
         trace_metadata = trace_metadata_from_events(events, metadata=metadata)
         if trace_metadata["spans"]:
             metadata["trace"] = trace_metadata
@@ -450,185 +454,10 @@ class ToolRuntimeFacade:
         *,
         prefix: str = "workspace",
     ) -> list[ToolDefinition]:
-        """Register local workspace operations as model-callable tools.
+        """Register provider-backed workspace operations as model-callable tools."""
+        from agent_runtime.workspaces.tools import register_workspace_tools
 
-        The returned tool names can be passed to ``AgentRuntime.run(...,
-        tools=[...])`` so the existing local tool loop can read/write files,
-        run commands, create snapshots, and emit the workspace runtime's
-        canonical events.
-        """
-        from agent_runtime.workspaces.changes import CommandSpec, FileChange, Patch
-
-        async def read_file(path: str) -> ToolResult:
-            content = await workspace.read_file(ref, path)
-            return ToolResult(
-                content=content,
-                payload={"path": path, "content": content},
-                metadata={"workspace_id": ref.id},
-            )
-
-        async def write_file(path: str, content: str) -> ToolResult:
-            change = await workspace.write_file(ref, path, content)
-            return ToolResult(
-                content=f"Wrote {path}.",
-                payload={"change": change},
-                metadata={"workspace_id": ref.id},
-            )
-
-        async def delete_file(path: str) -> ToolResult:
-            change = await workspace.delete_file(ref, path)
-            return ToolResult(
-                content=f"Deleted {path}.",
-                payload={"change": change},
-                metadata={"workspace_id": ref.id},
-            )
-
-        async def apply_patch(
-            summary: str,
-            diff: str,
-            changes: list[dict[str, Any]],
-        ) -> ToolResult:
-            patch = Patch(
-                summary=summary,
-                diff=diff,
-                changes=[
-                    FileChange(
-                        path=str(change["path"]),
-                        type=change["type"],
-                        content=change.get("content"),
-                        old_path=change.get("old_path"),
-                    )
-                    for change in changes
-                ],
-            )
-            artifact = await workspace.apply_patch(ref, patch)
-            return ToolResult(
-                content=f"Created patch artifact {artifact.id}.",
-                payload={"artifact": artifact},
-                metadata={"workspace_id": ref.id},
-            )
-
-        async def run_command(
-            command: str,
-            cwd: str | None = None,
-            timeout_seconds: float | None = None,
-        ) -> ToolResult:
-            result = await workspace.run_command(
-                ref, CommandSpec(command=command, cwd=cwd, timeout=timeout_seconds)
-            )
-            return ToolResult(
-                content=result.stdout or result.stderr or f"Command exited {result.exit_code}.",
-                payload={"result": result},
-                metadata={"workspace_id": ref.id, "exit_code": result.exit_code},
-            )
-
-        async def snapshot(name: str | None = None) -> ToolResult:
-            artifact = await workspace.snapshot(ref, name=name)
-            return ToolResult(
-                content=f"Created workspace snapshot {artifact.id}.",
-                payload={"artifact": artifact},
-                metadata={"workspace_id": ref.id},
-            )
-
-        tool_specs: list[tuple[ToolCallable, str, str, dict[str, Any]]] = [
-            (
-                read_file,
-                f"{prefix}_read_file",
-                "Read a text file from the current workspace.",
-                {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                    "required": ["path"],
-                },
-            ),
-            (
-                write_file,
-                f"{prefix}_write_file",
-                "Write a text file in the current workspace.",
-                {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string"},
-                        "content": {"type": "string"},
-                    },
-                    "required": ["path", "content"],
-                },
-            ),
-            (
-                delete_file,
-                f"{prefix}_delete_file",
-                "Delete a file from the current workspace.",
-                {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                    "required": ["path"],
-                },
-            ),
-            (
-                apply_patch,
-                f"{prefix}_apply_patch",
-                "Apply a structured patch to the current workspace.",
-                {
-                    "type": "object",
-                    "properties": {
-                        "summary": {"type": "string"},
-                        "diff": {"type": "string"},
-                        "changes": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "path": {"type": "string"},
-                                    "type": {
-                                        "type": "string",
-                                        "enum": ["create", "update", "delete"],
-                                    },
-                                    "content": {"type": "string"},
-                                    "old_path": {"type": "string"},
-                                },
-                                "required": ["path", "type"],
-                            },
-                        },
-                    },
-                    "required": ["summary", "diff", "changes"],
-                },
-            ),
-            (
-                run_command,
-                f"{prefix}_run_command",
-                "Run a command in the current workspace.",
-                {
-                    "type": "object",
-                    "properties": {
-                        "command": {"type": "string"},
-                        "cwd": {"type": "string"},
-                        "timeout_seconds": {"type": "number"},
-                    },
-                    "required": ["command"],
-                },
-            ),
-            (
-                snapshot,
-                f"{prefix}_snapshot",
-                "Create a snapshot artifact for the current workspace.",
-                {
-                    "type": "object",
-                    "properties": {"name": {"type": "string"}},
-                },
-            ),
-        ]
-        return [
-            self.register(
-                function,
-                name=name,
-                description=description,
-                parameters=parameters,
-                category="workspace",
-                tags=["workspace"],
-                metadata={"workspace_id": ref.id},
-            )
-            for function, name, description, parameters in tool_specs
-        ]
+        return register_workspace_tools(self.register, workspace, ref, prefix=prefix)
 
 
 class AgentRuntime:
@@ -659,10 +488,19 @@ class AgentRuntime:
         self.chat = ChatRuntimeFacade(self.models)
         self.agents = AgentRuntimeFacade(self.registry)
         self.tools = ToolRuntimeFacade()
+        self._active_loops: dict[str, Any] = {}
 
     async def close(self) -> None:
         """Release resources held by registered provider adapters."""
         await self.registry.close()
+
+    async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
+        """Approve a pending high-level ``runtime.run/stream`` operation."""
+        for loop in list(self._active_loops.values()):
+            if approval_id in loop._approvals:
+                await loop.approve(approval_id, decision)
+                return
+        raise ApprovalError(f"No pending approval with id '{approval_id}'.")
 
     def model_capabilities(
         self,
@@ -696,6 +534,11 @@ class AgentRuntime:
         tool_search: ToolSearchControl | None = None,
         compaction: CompactionControl | None = None,
         modalities: list[str] | None = None,
+        workspace: Any | None = None,
+        workspace_provider: Any | None = None,
+        workspace_policy: Any = None,
+        workspace_prefix: str = "workspace",
+        workspace_preserve: bool = False,
         **kwargs: Any,
     ) -> AsyncIterator[AgentEvent]:
         """Stream events from a complete agent loop driven by the registered model.
@@ -714,12 +557,34 @@ class AgentRuntime:
         if not model_name:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
 
-        tool_definitions = self._tool_payload(tools, tool_session=tool_session)
+        effective_tool_session = tool_session
+        effective_tools = list(tools or [])
+        opened_workspace: tuple[Any, Any, bool] | None = None
+        if workspace is not None:
+            effective_tool_session = (
+                ToolSession.from_registry(tool_session.registry)
+                if tool_session is not None
+                else self.tools.session()
+            )
+            workspace_provider_obj, workspace_ref, should_close = await self._open_runtime_workspace(
+                workspace,
+                provider=workspace_provider,
+                policy=workspace_policy or policy,
+            )
+            opened_workspace = (workspace_provider_obj, workspace_ref, should_close)
+            registered_workspace_tools = effective_tool_session.register_workspace(
+                workspace_provider_obj,
+                workspace_ref,
+                prefix=workspace_prefix,
+            )
+            effective_tools.extend(tool.name for tool in registered_workspace_tools)
+
+        tool_definitions = self._tool_payload(effective_tools, tool_session=effective_tool_session)
         if output_schema is not None and output_strategy == "finalizer_tool":
             tool_definitions.append(_finalizer_tool_payload(output_schema))
         tool_runtime = self._tool_runtime_for(
             tool_execution_context,
-            tool_session=tool_session,
+            tool_session=effective_tool_session,
             max_concurrent=tool_max_concurrent,
             timeout=tool_timeout,
         )
@@ -752,7 +617,12 @@ class AgentRuntime:
 
         loop = AgentLoop(
             stream_factory=stream_factory,
-            tools=tool_runtime if tools else None,
+            tools=(
+                tool_runtime
+                if effective_tools
+                or (output_schema is not None and output_strategy == "finalizer_tool")
+                else None
+            ),
             hosted_tools=list(hosted_tools or []),
             hosted_tool_handlers=hosted_tool_handlers or HostedToolHandlers(),
             approval_policy=approval_policy,
@@ -764,7 +634,21 @@ class AgentRuntime:
                 else None
             ),
         )
+        self._active_loops[run_id] = loop
         sequence = 0
+        if opened_workspace is not None:
+            workspace_provider_obj, _, _ = opened_workspace
+            for event in workspace_provider_obj.drain_events():
+                stamped = trace_context.stamp(
+                    event,
+                    run_id=run_id,
+                    sequence=sequence,
+                    preserve_sequence=False,
+                )
+                sequence += 1
+                await self.event_store.append(stamped)
+                yield stamped
+
         async for event in loop.run(
             input=input,
             provider_state=provider_state,
@@ -780,6 +664,21 @@ class AgentRuntime:
             sequence += 1
             await self.event_store.append(stamped)
             yield stamped
+        if opened_workspace is not None and not workspace_preserve:
+            workspace_provider_obj, workspace_ref, should_close = opened_workspace
+            if should_close:
+                await workspace_provider_obj.close(workspace_ref)
+                for event in workspace_provider_obj.drain_events():
+                    stamped = trace_context.stamp(
+                        event,
+                        run_id=run_id,
+                        sequence=sequence,
+                        preserve_sequence=False,
+                    )
+                    sequence += 1
+                    await self.event_store.append(stamped)
+                    yield stamped
+        self._active_loops.pop(run_id, None)
 
     async def run(
         self,
@@ -805,6 +704,11 @@ class AgentRuntime:
         tool_search: ToolSearchControl | None = None,
         compaction: CompactionControl | None = None,
         modalities: list[str] | None = None,
+        workspace: Any | None = None,
+        workspace_provider: Any | None = None,
+        workspace_policy: Any = None,
+        workspace_prefix: str = "workspace",
+        workspace_preserve: bool = False,
         **kwargs: Any,
     ) -> AgentResult[T]:
         """Run the complete agent loop and return a typed AgentResult.
@@ -886,6 +790,11 @@ class AgentRuntime:
                         tool_search=tool_search,
                         compaction=compaction,
                         modalities=modalities,
+                        workspace=workspace,
+                        workspace_provider=workspace_provider,
+                        workspace_policy=workspace_policy,
+                        workspace_prefix=workspace_prefix,
+                        workspace_preserve=workspace_preserve,
                         **kwargs,
                     ):
                         events.append(event)
@@ -988,6 +897,9 @@ class AgentRuntime:
             hosted_metadata = _hosted_tool_metadata_from_events(events)
             if hosted_metadata:
                 metadata["hosted_tools"] = hosted_metadata
+            workspace_metadata = _workspace_metadata_from_events(events)
+            if workspace_metadata:
+                metadata["workspaces"] = workspace_metadata
             trace_metadata = trace_metadata_from_events(events, metadata=metadata)
             if trace_metadata["spans"]:
                 metadata["trace"] = trace_metadata
@@ -1039,6 +951,41 @@ class AgentRuntime:
             max_concurrent=max_concurrent,
             timeout=timeout,
         )
+
+    async def _open_runtime_workspace(
+        self,
+        workspace: Any,
+        *,
+        provider: Any | None,
+        policy: Any,
+    ) -> tuple[Any, Any, bool]:
+        from agent_runtime.workspaces import (
+            LocalWorkspaceProvider,
+            WorkspaceRef,
+            WorkspaceSpec,
+        )
+
+        if isinstance(workspace, WorkspaceRef):
+            if provider is None:
+                raise ConfigurationError(
+                    "workspace_provider is required when workspace is an existing WorkspaceRef."
+                )
+            return provider, workspace, False
+
+        if not isinstance(workspace, WorkspaceSpec):
+            raise ConfigurationError(
+                "workspace must be a WorkspaceSpec or WorkspaceRef when passed to runtime.run/stream."
+            )
+
+        workspace_provider = provider
+        if workspace_provider is None:
+            if workspace.kind == "local":
+                workspace_provider = LocalWorkspaceProvider(policy=policy)
+            else:
+                raise ConfigurationError(
+                    f"workspace_provider is required for {workspace.kind!r} workspaces."
+                )
+        return workspace_provider, await workspace_provider.open(workspace), True
 
 
 def _resolve_output_spec(
@@ -1157,6 +1104,48 @@ def _hosted_tool_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any
             }
         ),
     }
+
+
+def _workspace_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
+    workspaces: dict[str, dict[str, Any]] = {}
+    for event in events:
+        data = event.data
+        metadata = data.get("metadata")
+        metadata_dict = metadata if isinstance(metadata, dict) else {}
+        workspace_id = data.get("workspace_id") or metadata_dict.get("workspace_id")
+        if not isinstance(workspace_id, str):
+            artifact = data.get("artifact")
+            if isinstance(artifact, Artifact):
+                artifact_workspace_id = artifact.metadata.get("workspace_id")
+                if isinstance(artifact_workspace_id, str):
+                    workspace_id = artifact_workspace_id
+        if not isinstance(workspace_id, str):
+            continue
+
+        entry = workspaces.setdefault(
+            workspace_id,
+            {"artifacts": [], "snapshots": []},
+        )
+        provider = data.get("workspace_provider") or metadata_dict.get("workspace_provider")
+        if isinstance(provider, str):
+            entry["provider"] = provider
+        kind = data.get("workspace_kind") or metadata_dict.get("workspace_kind")
+        if isinstance(kind, str):
+            entry["kind"] = kind
+        session_state = data.get("session_state") or metadata_dict.get("workspace_session_state")
+        if isinstance(session_state, dict):
+            entry["session_state"] = session_state
+
+        artifact = data.get("artifact")
+        if isinstance(artifact, Artifact):
+            artifacts = cast(list[str], entry.setdefault("artifacts", []))
+            if artifact.id not in artifacts:
+                artifacts.append(artifact.id)
+            if artifact.type == "workspace_snapshot":
+                snapshots = cast(list[str], entry.setdefault("snapshots", []))
+                if artifact.id not in snapshots:
+                    snapshots.append(artifact.id)
+    return workspaces
 
 
 def _event_usage(event: AgentEvent) -> Any:

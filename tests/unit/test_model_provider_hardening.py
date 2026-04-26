@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 from agent_runtime import AgentRuntime, EventTypes
 from agent_runtime.models.anthropic_messages import _compose_messages
@@ -99,7 +99,7 @@ class ClosableProvider:
 async def test_runtime_close_closes_registered_providers_once() -> None:
     provider = ClosableProvider()
     runtime = AgentRuntime()
-    runtime.registry.register_model(provider, "alias")
+    runtime.registry.register_model(cast(Any, provider), "alias")
 
     await runtime.close()
 

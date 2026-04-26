@@ -78,6 +78,8 @@ class CommandResult:
     stderr: str = ""
     duration_seconds: float | None = None
     timed_out: bool = False
+    command_id: str | None = None
+    artifacts: list[Artifact] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property

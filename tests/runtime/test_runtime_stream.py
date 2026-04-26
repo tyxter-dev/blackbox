@@ -122,7 +122,7 @@ async def test_result_metadata_includes_workflow_trace_tree() -> None:
     scripted.queue(tool_call_turn(call_id="c1", name="t", arguments={"x": 1}))
     scripted.queue(text_only_turn("done"))
 
-    result = await runtime.run(provider="scripted:test", input="x", tools=["t"])
+    result: AgentResult[str] = await runtime.run(provider="scripted:test", input="x", tools=["t"])
 
     trace = result.metadata["trace"]
     assert trace["trace_id"] == result.events[0].run_id

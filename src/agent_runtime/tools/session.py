@@ -53,6 +53,17 @@ class ToolSession:
     def to_provider_tools(self) -> list[dict[str, Any]]:
         return self.registry.to_provider_tools()
 
+    def register_workspace(
+        self,
+        workspace: Any,
+        ref: Any,
+        *,
+        prefix: str = "workspace",
+    ) -> list[ToolDefinition]:
+        from agent_runtime.workspaces.tools import register_workspace_tools
+
+        return register_workspace_tools(self.register, workspace, ref, prefix=prefix)
+
     def runtime(
         self,
         *,

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
 
-from agent_runtime import AgentRuntime, ModelPricing
-from agent_runtime.core.events import EventTypes
+from agent_runtime import AgentResult, AgentRuntime, ModelPricing
+from agent_runtime.core.capabilities import ModelCapabilities
+from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.base import TurnRequest
 from tests.fixtures.fake_openai_client import FakeOpenAIClient, evt, final_response, item
 
 
@@ -50,7 +53,7 @@ async def test_agent_runtime_trace_span_uses_stream_run_id() -> None:
     scripted = _SingleTurnProvider()
     runtime.registry.register_model(scripted)
 
-    result = await runtime.run(provider="single:test", input="ping")
+    result: AgentResult[str] = await runtime.run(provider="single:test", input="ping")
 
     span = result.metadata["trace"]["spans"][0]
     assert span["run_id"] == result.events[0].run_id
@@ -60,13 +63,10 @@ async def test_agent_runtime_trace_span_uses_stream_run_id() -> None:
 class _SingleTurnProvider:
     provider_id = "single"
 
-    def capabilities(self, model: str | None = None) -> object:
-        from agent_runtime.core.capabilities import ModelCapabilities
-
+    def capabilities(self, model: str | None = None) -> ModelCapabilities:
         return ModelCapabilities(supports_streaming_events=True)
 
-    async def stream_turn(self, request: object) -> object:
-        from agent_runtime.core.events import AgentEvent
+    async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         from agent_runtime.core.state import ProviderState
 
         yield AgentEvent(type=EventTypes.MODEL_REQUEST_STARTED, provider="single")

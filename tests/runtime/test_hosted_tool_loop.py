@@ -4,9 +4,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from agent_runtime import AgentRuntime, EventTypes
+from agent_runtime import AgentResult, AgentRuntime, EventTypes
 from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.items import ItemTypes
+from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.hosted_tools import ApplyPatch, ComputerUse, HostedToolHandlers, Shell
 from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext, HostedToolOutput
@@ -85,7 +85,7 @@ async def test_runtime_executes_hosted_shell_through_handler_and_continues() -> 
     calls: list[HostedToolCall] = []
     handler = RecordingHostedHandler("shell", "hi", calls)
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test",
         input="run shell",
         hosted_tools=[Shell(execution="local")],
@@ -94,8 +94,10 @@ async def test_runtime_executes_hosted_shell_through_handler_and_continues() -> 
 
     assert result.text == "done"
     assert calls[0].arguments == {"command": "echo hi"}
-    assert scripted.calls[1].input
-    continuation = scripted.calls[1].input[0]
+    continuation_input = scripted.calls[1].input
+    assert isinstance(continuation_input, list)
+    continuation = continuation_input[0]
+    assert isinstance(continuation, RunItem)
     assert continuation.type == ItemTypes.HOSTED_TOOL_RESULT
     assert continuation.data["provider_input_item"]["type"] == "shell_call_output"
     assert EventTypes.HOSTED_TOOL_CALL_STARTED in [event.type for event in result.events]
@@ -116,7 +118,7 @@ async def test_runtime_executes_apply_patch_through_handler_and_continues() -> N
     calls: list[HostedToolCall] = []
     handler = RecordingHostedHandler("apply_patch", "applied", calls)
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test",
         input="patch",
         hosted_tools=[ApplyPatch(workspace_id="ws_1")],
@@ -124,7 +126,10 @@ async def test_runtime_executes_apply_patch_through_handler_and_continues() -> N
     )
 
     assert result.text == "patched"
-    continuation = scripted.calls[1].input[0]
+    continuation_input = scripted.calls[1].input
+    assert isinstance(continuation_input, list)
+    continuation = continuation_input[0]
+    assert isinstance(continuation, RunItem)
     assert continuation.data["provider_input_item"]["type"] == "apply_patch_call_output"
     assert result.items[-1].type == ItemTypes.HOSTED_TOOL_RESULT
 
@@ -143,7 +148,7 @@ async def test_runtime_executes_computer_use_through_handler_and_continues() -> 
     calls: list[HostedToolCall] = []
     handler = RecordingHostedHandler("computer", "screen", calls)
 
-    result = await runtime.run(
+    result: AgentResult[str] = await runtime.run(
         provider="scripted:test",
         input="inspect screen",
         hosted_tools=[ComputerUse(display_width=1024, display_height=768)],
@@ -152,5 +157,8 @@ async def test_runtime_executes_computer_use_through_handler_and_continues() -> 
 
     assert result.text == "observed"
     assert calls[0].hosted_tool_type == "computer"
-    continuation = scripted.calls[1].input[0]
+    continuation_input = scripted.calls[1].input
+    assert isinstance(continuation_input, list)
+    continuation = continuation_input[0]
+    assert isinstance(continuation, RunItem)
     assert continuation.data["provider_input_item"]["type"] == "computer_call_output"

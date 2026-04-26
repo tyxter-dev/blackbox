@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
 from agent_runtime.core.approvals import ApprovalDecision
@@ -32,7 +32,7 @@ async def test_openai_agents_sdk_lifecycle_streams_and_resumes() -> None:
         EventTypes.TOOL_CALL_COMPLETED,
         EventTypes.SESSION_COMPLETED,
     ]
-    assert session.status == "completed"
+    assert str(session.status) == "completed"
     assert [artifact.name for artifact in artifacts.items] == ["final_output.txt"]
 
     resumed = [event async for event in provider.stream_events(session, after_event_id=events[1].id)]
@@ -76,7 +76,7 @@ async def test_openai_agents_sdk_approval_resume() -> None:
     assert resumed[0].type == EventTypes.APPROVAL_APPROVED
     assert resumed[-1].type == EventTypes.SESSION_COMPLETED
     assert sdk.state.approved is True
-    assert session.status == "completed"
+    assert cast(str, session.status) == "completed"
 
 
 @dataclass(slots=True)

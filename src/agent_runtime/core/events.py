@@ -99,9 +99,18 @@ class EventTypes:
 
     WORKSPACE_FILE_READ = "workspace.file.read"
     WORKSPACE_FILE_CHANGED = "workspace.file.changed"
+    WORKSPACE_OPENED = "workspace.opened"
+    WORKSPACE_CLOSED = "workspace.closed"
+    WORKSPACE_FILE_LISTED = "workspace.file.listed"
     WORKSPACE_COMMAND_STARTED = "workspace.command.started"
+    WORKSPACE_COMMAND_OUTPUT = "workspace.command.output"
     WORKSPACE_COMMAND_COMPLETED = "workspace.command.completed"
     WORKSPACE_PATCH_CREATED = "workspace.patch.created"
+    WORKSPACE_SNAPSHOT_CREATED = "workspace.snapshot.created"
+    WORKSPACE_SNAPSHOT_RESTORED = "workspace.snapshot.restored"
+    WORKSPACE_PORT_EXPOSED = "workspace.port.exposed"
+    WORKSPACE_PORT_CLOSED = "workspace.port.closed"
+    WORKSPACE_ARTIFACT_EXPORTED = "workspace.artifact.exported"
 
     APPROVAL_REQUESTED = "approval.requested"
     APPROVAL_APPROVED = "approval.approved"

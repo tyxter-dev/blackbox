@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agent_runtime.core.approvals import ApprovalDecision
+from agent_runtime.core.artifacts import Artifact
 from agent_runtime.core.errors import ApprovalError, SessionError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
@@ -37,6 +38,7 @@ from agent_runtime.hosted_tools import (
 from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext
 from agent_runtime.tools.hosted_runtime import HostedToolRunner
 from agent_runtime.tools.runtime import ToolRuntime
+from agent_runtime.workspaces.provider import PendingWorkspaceOperation, WorkspaceApprovalRequired
 
 ApprovalPolicy = Callable[[str, dict[str, Any]], bool]
 
@@ -344,6 +346,33 @@ class AgentLoop:
             )
 
             for (index, call), result in zip(allowed_calls, task_results, strict=True):
+                if isinstance(result, WorkspaceApprovalRequired):
+                    async for ev in self._await_workspace_approval(
+                        result.pending,
+                        session_id=session_id,
+                        provider_id=provider_id,
+                    ):
+                        yield ev
+                    await result.approve(self._last_decision)
+                    if not self._last_decision.approved:
+                        tool_results[index] = RunItem(
+                            type=ItemTypes.FUNCTION_RESULT,
+                            provider=provider_id,
+                            status="failed",
+                            data={
+                                "call_id": call.call_id,
+                                "name": call.name,
+                                "error": "denied_by_approval",
+                                "reason": self._last_decision.reason,
+                            },
+                        )
+                        continue
+                    result = await tool_runtime.call(
+                        call.name,
+                        call.arguments,
+                        mock=mock_tools,
+                    )
+
                 if isinstance(result, BaseException):
                     yield AgentEvent(
                         type=EventTypes.TOOL_CALL_FAILED,
@@ -360,6 +389,40 @@ class AgentLoop:
                     )
                     continue
 
+                artifact_ids_from_events: set[str] = set()
+                for tool_event in result.events:
+                    if tool_event.type == EventTypes.ARTIFACT_CREATED:
+                        event_artifact = tool_event.data.get("artifact")
+                        if isinstance(event_artifact, Artifact):
+                            artifact_ids_from_events.add(event_artifact.id)
+                    yield AgentEvent(
+                        type=tool_event.type,
+                        run_id=tool_event.run_id,
+                        sequence=tool_event.sequence,
+                        trace_id=tool_event.trace_id,
+                        span_id=tool_event.span_id,
+                        parent_span_id=tool_event.parent_span_id,
+                        span_kind=tool_event.span_kind,
+                        provider=tool_event.provider,
+                        session_id=session_id,
+                        item_id=tool_event.item_id,
+                        provider_trace_id=tool_event.provider_trace_id,
+                        provider_span_id=tool_event.provider_span_id,
+                        provider_request_id=tool_event.provider_request_id,
+                        data=tool_event.data,
+                        raw=tool_event.raw,
+                    )
+                for artifact in result.artifacts:
+                    if artifact.id in artifact_ids_from_events:
+                        continue
+                    yield AgentEvent(
+                        type=EventTypes.ARTIFACT_CREATED,
+                        provider=provider_id,
+                        session_id=session_id,
+                        item_id=artifact.id,
+                        data={"artifact": artifact},
+                    )
+
                 completed_data: dict[str, Any] = {
                     "call_id": call.call_id,
                     "name": call.name,
@@ -369,6 +432,8 @@ class AgentLoop:
                     completed_data["payload"] = result.payload
                 if result.metadata:
                     completed_data["metadata"] = dict(result.metadata)
+                if result.artifacts:
+                    completed_data["artifact_ids"] = [artifact.id for artifact in result.artifacts]
 
                 yield AgentEvent(
                     type=EventTypes.TOOL_CALL_COMPLETED,
@@ -434,6 +499,46 @@ class AgentLoop:
         # Register the future after the yield so the consumer can observe
         # APPROVAL_REQUESTED and update session status before the test/app
         # sees the approval id appear in the pending dict.
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[ApprovalDecision] = loop.create_future()
+        self._approvals[approval_id] = future
+        decision = await future
+        self._last_decision = decision
+        yield AgentEvent(
+            type=(
+                EventTypes.APPROVAL_APPROVED
+                if decision.approved
+                else EventTypes.APPROVAL_DENIED
+            ),
+            provider=provider_id,
+            session_id=session_id,
+            item_id=approval_id,
+            data={"approval_id": approval_id, "reason": decision.reason},
+        )
+
+    async def _await_workspace_approval(
+        self,
+        pending: PendingWorkspaceOperation,
+        *,
+        session_id: str | None,
+        provider_id: str,
+    ) -> AsyncIterator[AgentEvent]:
+        approval_id = pending.id
+        yield AgentEvent(
+            type=EventTypes.APPROVAL_REQUESTED,
+            provider=provider_id,
+            session_id=session_id,
+            item_id=approval_id,
+            data={
+                "approval_id": approval_id,
+                "action": pending.operation,
+                "arguments": pending.arguments,
+                "workspace_id": pending.workspace_id,
+                "workspace_provider": pending.provider,
+                "reason": pending.reason,
+                "metadata": dict(pending.metadata),
+            },
+        )
         loop = asyncio.get_running_loop()
         future: asyncio.Future[ApprovalDecision] = loop.create_future()
         self._approvals[approval_id] = future

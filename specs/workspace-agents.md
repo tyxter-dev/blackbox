@@ -58,18 +58,17 @@ The runtime may prepare, validate, serialize, and execute a package through
 existing providers. It must not assume any particular business workspace,
 database, scheduler, identity provider, or deployment platform.
 
-## Future WorkspaceProvider
+## Workspace Execution Backends
 
-The current implementation has `WorkspaceRuntime` for local workspaces and
-workspace-agent package contracts. A future `WorkspaceProvider` protocol should
-make workspace backends pluggable in the same spirit as `ModelProvider` and
-`AgentProvider`.
+Workspace execution backends are specified separately in
+`specs/workspace-execution-backends.md`. Workspace agent packages may declare
+workspace requirements, but sandbox execution is not a fourth workflow profile
+and is not owned by the package layer.
 
-Candidate responsibilities:
+The runtime-centered rule is:
 
-- open or attach to local, git, sandbox, or cloud workspaces,
-- read/write/delete files under policy gates,
-- run commands under policy gates,
-- create patch and snapshot artifacts,
-- list/export artifacts,
-- preserve provider-native workspace references for cloud backends.
+```text
+Agent workflow profile = how the task is supervised.
+Workspace backend = where actions happen.
+Sandbox = one workspace backend.
+```
