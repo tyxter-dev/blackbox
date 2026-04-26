@@ -174,6 +174,8 @@ def add_usage(
     left: ModelUsage | dict[str, Any] | None,
     right: ModelUsage | dict[str, Any] | None,
 ) -> ModelUsage | None:
+    if left is None and right is None:
+        return None
     if left is None:
         return right if isinstance(right, ModelUsage) else usage_from_mapping(right)
     if right is None:

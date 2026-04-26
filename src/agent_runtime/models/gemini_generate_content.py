@@ -93,6 +93,10 @@ class GeminiGenerateContentProvider:
     async def close(self) -> None:
         if self._client is None or not self._owns_client:
             return
+        aio = getattr(self._client, "aio", None)
+        aio_close = getattr(aio, "aclose", None)
+        if callable(aio_close):
+            await aio_close()
         close = getattr(self._client, "close", None)
         if callable(close):
             result = close()

@@ -199,6 +199,12 @@ def test_usage_accumulates_and_estimates_cached_input_cost() -> None:
     assert estimate["total"] == 0.000183
 
 
+def test_add_usage_keeps_missing_usage_absent() -> None:
+    from agent_runtime.core.accounting import add_usage
+
+    assert add_usage(None, None) is None
+
+
 def test_usage_accumulates_split_cache_fields_and_estimates_split_cost() -> None:
     usage = ModelUsage(
         input_tokens=100,
