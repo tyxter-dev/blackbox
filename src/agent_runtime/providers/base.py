@@ -15,6 +15,7 @@ from agent_runtime.hosted_tools import HostedToolSpec
 from agent_runtime.output.schema import OutputSchema
 
 CacheStrategy = Literal["auto", "ephemeral", "provider_managed", "bypass"]
+CompactionStrategy = Literal["auto", "disabled", "aggressive"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -31,6 +32,30 @@ class ModelCacheControl:
     ttl: str | None = None
     cached_content: str | None = None
     breakpoints: list[dict[str, Any]] = field(default_factory=list)
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True, frozen=True)
+class ToolSearchControl:
+    """Provider-native tool-search controls.
+
+    This is distinct from hosted ``ToolSearch`` specs that expose concrete
+    searchable namespaces. Controls request or tune provider-side tool search
+    behavior for a turn.
+    """
+
+    enabled: bool = True
+    max_results: int | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True, frozen=True)
+class CompactionControl:
+    """Context compaction/truncation controls for providers that expose them."""
+
+    strategy: CompactionStrategy = "auto"
+    max_context_tokens: int | None = None
+    preserve_recent_turns: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -57,6 +82,9 @@ class ModelRequestControls:
     background: bool | None = None
     store: bool | None = None
     include: list[str] | None = None
+    tool_search: ToolSearchControl | None = None
+    compaction: CompactionControl | None = None
+    modalities: list[str] | None = None
 
 
 @dataclass(slots=True)

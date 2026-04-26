@@ -161,6 +161,9 @@ class AnthropicMessagesProvider:
                     status="unsupported",
                     reason="Current adapter does not map thinking/adaptive thinking controls.",
                 ),
+                "tool_search": CapabilityDetail(status="unsupported"),
+                "compaction": CapabilityDetail(status="unsupported"),
+                "modalities": CapabilityDetail(status="unsupported"),
                 "extra": CapabilityDetail(status="passthrough"),
             },
             state_modes={

@@ -81,6 +81,8 @@ ControlName: TypeAlias = Literal[
     "modalities",
     "top_logprobs",
     "safety_settings",
+    "tool_search",
+    "compaction",
     "extra",
 ]
 

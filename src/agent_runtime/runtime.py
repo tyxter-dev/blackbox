@@ -35,9 +35,11 @@ from agent_runtime.observability.traces import model_turn_span_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
     AgentSpec,
+    CompactionControl,
     ModelCacheControl,
     ModelRequestControls,
     TaskSpec,
+    ToolSearchControl,
     TurnRequest,
     TurnResult,
 )
@@ -93,6 +95,9 @@ class ModelRuntime:
         background: bool | None = None,
         store: bool | None = None,
         include: list[str] | None = None,
+        tool_search: ToolSearchControl | None = None,
+        compaction: CompactionControl | None = None,
+        modalities: list[str] | None = None,
         run_id: str | None = None,
         **kwargs: object,
     ) -> AsyncIterator[AgentEvent]:
@@ -124,6 +129,9 @@ class ModelRuntime:
                 background=background,
                 store=store,
                 include=include,
+                tool_search=tool_search,
+                compaction=compaction,
+                modalities=modalities,
             ),
             extra=dict(kwargs),
         )
@@ -164,11 +172,15 @@ class ModelRuntime:
         background: bool | None = None,
         store: bool | None = None,
         include: list[str] | None = None,
+        tool_search: ToolSearchControl | None = None,
+        compaction: CompactionControl | None = None,
+        modalities: list[str] | None = None,
         run_id: str | None = None,
         **kwargs: object,
     ) -> TurnResult:
         events: list[AgentEvent] = []
         text_parts: list[str] = []
+        artifacts: list[Artifact] = []
         captured_state: ProviderState | None = None
         usage = None
         completed_provider: str | None = None
@@ -197,6 +209,9 @@ class ModelRuntime:
             background=background,
             store=store,
             include=include,
+            tool_search=tool_search,
+            compaction=compaction,
+            modalities=modalities,
             run_id=run_id,
             **kwargs,
         ):
@@ -205,6 +220,9 @@ class ModelRuntime:
                 delta = event.data.get("delta")
                 if isinstance(delta, str):
                     text_parts.append(delta)
+            artifact = event.data.get("artifact")
+            if isinstance(artifact, Artifact):
+                artifacts.append(artifact)
             maybe_state = event.data.get("provider_state")
             if isinstance(maybe_state, ProviderState):
                 captured_state = maybe_state
@@ -245,6 +263,7 @@ class ModelRuntime:
             text="".join(text_parts),
             events=events,
             provider_state=captured_state,
+            artifacts=artifacts,
             metadata=metadata,
         )
 
@@ -672,6 +691,9 @@ class AgentRuntime:
         hosted_tools: list[HostedToolSpec] | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
+        tool_search: ToolSearchControl | None = None,
+        compaction: CompactionControl | None = None,
+        modalities: list[str] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[AgentEvent]:
         """Stream events from a complete agent loop driven by the registered model.
@@ -713,6 +735,9 @@ class AgentRuntime:
                 output_schema=output_schema,
                 output_strategy=output_strategy,
                 cache=cache,
+                tool_search=tool_search,
+                compaction=compaction,
+                modalities=modalities,
                 **kwargs,
             ):
                 yield event
@@ -765,6 +790,9 @@ class AgentRuntime:
         hosted_tools: list[HostedToolSpec] | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
+        tool_search: ToolSearchControl | None = None,
+        compaction: CompactionControl | None = None,
+        modalities: list[str] | None = None,
         **kwargs: Any,
     ) -> AgentResult[T]:
         """Run the complete agent loop and return a typed AgentResult.
@@ -843,6 +871,9 @@ class AgentRuntime:
                         output_schema=output_schema,
                         output_strategy=effective_strategy if output_schema is not None else None,
                         cache=cache,
+                        tool_search=tool_search,
+                        compaction=compaction,
+                        modalities=modalities,
                         **kwargs,
                     ):
                         events.append(event)
@@ -860,6 +891,10 @@ class AgentRuntime:
                                     )
                                 )
                         elif event.type == EventTypes.ARTIFACT_CREATED:
+                            artifact = event.data.get("artifact")
+                            if isinstance(artifact, Artifact):
+                                artifacts.append(artifact)
+                        else:
                             artifact = event.data.get("artifact")
                             if isinstance(artifact, Artifact):
                                 artifacts.append(artifact)

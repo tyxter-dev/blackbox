@@ -508,6 +508,17 @@ Runtime validation uses the granular profile before provider dispatch:
 - `HostedToolRaw` and request `extra` remain explicit provider-native escape
   hatches and are represented as passthrough capabilities.
 
+Follow-up hardening added typed request controls for tool search,
+compaction/truncation, and modalities:
+
+- `ToolSearchControl` can request OpenAI provider-side tool search without
+  falling back to raw `extra`.
+- `CompactionControl(strategy="auto" | "disabled")` maps to OpenAI Responses
+  `truncation`; aggressive/custom compaction is rejected until a dedicated
+  compaction workflow is implemented.
+- `modalities` is a typed control surface, but adapters currently reject it
+  unless callers use provider-native `extra`.
+
 ### Tests
 
 Unit:

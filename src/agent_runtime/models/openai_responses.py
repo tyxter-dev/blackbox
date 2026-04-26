@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from agent_runtime.core.accounting import usage_from_openai_response
+from agent_runtime.core.artifacts import Artifact
 from agent_runtime.core.capabilities import (
     CapabilityConstraint,
     CapabilityDetail,
@@ -20,7 +21,12 @@ from agent_runtime.core.errors import (
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import openai_include_values, openai_namespace_tools, to_openai_tool
+from agent_runtime.hosted_tools import (
+    ToolSearch,
+    openai_include_values,
+    openai_namespace_tools,
+    to_openai_tool,
+)
 from agent_runtime.models._support import (
     is_retryable_status_error,
     sleep_for_retry,
@@ -178,6 +184,7 @@ class OpenAIResponsesProvider:
                     status="supported", native_name="image_generation"
                 ),
                 "shell": CapabilityDetail(status="supported", native_name="shell"),
+                "bash": CapabilityDetail(status="supported", native_name="shell"),
                 "apply_patch": CapabilityDetail(status="supported", native_name="apply_patch"),
                 "raw": CapabilityDetail(status="passthrough"),
             },
@@ -205,7 +212,7 @@ class OpenAIResponsesProvider:
                 "reasoning_effort": CapabilityDetail(
                     status="supported",
                     native_name="reasoning.effort",
-                    supported_values=("minimal", "low", "medium", "high"),
+                    supported_values=("none", "minimal", "low", "medium", "high", "xhigh"),
                 ),
                 "reasoning_summary": CapabilityDetail(
                     status="supported", native_name="reasoning.summary"
@@ -227,6 +234,13 @@ class OpenAIResponsesProvider:
                 "store": CapabilityDetail(status="supported", native_name="store"),
                 "conversation": CapabilityDetail(
                     status="supported", native_name="conversation"
+                ),
+                "tool_search": CapabilityDetail(status="supported", native_name="tools.tool_search"),
+                "compaction": CapabilityDetail(status="supported", native_name="truncation"),
+                "modalities": CapabilityDetail(
+                    status="unsupported",
+                    reason="Responses text generation does not expose a typed modalities control "
+                    "in this adapter; use extra for provider-native experiments.",
                 ),
                 "extra": CapabilityDetail(status="passthrough"),
             },
@@ -384,6 +398,20 @@ class OpenAIResponsesProvider:
             *openai_namespace_tools(request.hosted_tools),
             *(to_openai_tool(tool) for tool in request.hosted_tools),
         ]
+        if controls.tool_search is not None:
+            has_hosted_tool_search = any(isinstance(tool, ToolSearch) for tool in request.hosted_tools)
+            if not has_hosted_tool_search and controls.tool_search.enabled:
+                tool_search_payload: dict[str, Any] = {"type": "tool_search"}
+                if controls.tool_search.max_results is not None:
+                    tool_search_payload["max_results"] = controls.tool_search.max_results
+                tool_search_payload.update(controls.tool_search.extra)
+                tools.append(tool_search_payload)
+            elif has_hosted_tool_search and (
+                controls.tool_search.max_results is not None or controls.tool_search.extra
+            ):
+                raise ValueError(
+                    "ModelRequestControls.tool_search conflicts with hosted ToolSearch config."
+                )
         if tools:
             kwargs["tools"] = tools
         include_values = openai_include_values(request.hosted_tools)
@@ -417,6 +445,22 @@ class OpenAIResponsesProvider:
             kwargs["store"] = controls.store
         if controls.include is not None:
             kwargs["include"] = [*kwargs.get("include", []), *controls.include]
+        if controls.compaction is not None:
+            if controls.compaction.strategy == "aggressive":
+                raise UnsupportedFeatureError(
+                    "OpenAI Responses compaction control supports 'auto' and 'disabled'; "
+                    "'aggressive' requires an explicit compaction workflow."
+                )
+            if (
+                controls.compaction.max_context_tokens is not None
+                or controls.compaction.preserve_recent_turns is not None
+            ):
+                raise UnsupportedFeatureError(
+                    "OpenAI Responses truncation does not support max_context_tokens or "
+                    "preserve_recent_turns through CompactionControl."
+                )
+            kwargs["truncation"] = controls.compaction.strategy
+            kwargs.update(controls.compaction.extra)
         if controls.cache is not None:
             if controls.cache.strategy == "bypass":
                 raise UnsupportedFeatureError(
@@ -619,6 +663,9 @@ def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
             "item_type": item_type,
             **_hosted_tool_data(item, item_type=item_type),
         }
+        artifact = _hosted_artifact(item, item_type=item_type)
+        if artifact is not None:
+            data["artifact"] = artifact
         requires_continuation = item_type in {
             "shell_call",
             "apply_patch_call",
@@ -742,6 +789,36 @@ def _hosted_tool_data(item: Any, *, item_type: str) -> dict[str, Any]:
         if value is not None:
             data[key] = _parse_arguments(value) if key == "arguments" else value
     return data
+
+
+def _hosted_artifact(item: Any, *, item_type: str) -> Artifact | None:
+    hosted_tool_type = _HOSTED_TOOL_CALL_TYPES.get(item_type)
+    if hosted_tool_type != "image_generation":
+        return None
+    item_id = _attr(item, "id") or _attr(item, "call_id") or "image_generation"
+    url = _attr(item, "url")
+    file_id = _attr(item, "file_id")
+    image = _attr(item, "image")
+    output = _attr(item, "output")
+    b64_json = _attr(item, "b64_json")
+    data = b64_json or image or output
+    uri = url if isinstance(url, str) else None
+    if uri is None and isinstance(file_id, str):
+        uri = f"openai://file/{file_id}"
+    if data is None and uri is None:
+        return None
+    return Artifact(
+        type="image",
+        name=f"{item_id}.image",
+        data=data,
+        uri=uri,
+        metadata={
+            "provider": "openai",
+            "hosted_tool_type": hosted_tool_type,
+            "provider_item_type": item_type,
+            **({"file_id": file_id} if isinstance(file_id, str) else {}),
+        },
+    )
 
 
 def _mcp_item_data(item: Any, *, item_type: str) -> dict[str, Any]:

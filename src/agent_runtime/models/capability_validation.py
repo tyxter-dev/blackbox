@@ -84,6 +84,12 @@ def requested_controls(controls: ModelRequestControls) -> list[ControlName]:
         requested.append("store")
     if controls.include is not None:
         requested.append("include")
+    if controls.tool_search is not None:
+        requested.append("tool_search")
+    if controls.compaction is not None:
+        requested.append("compaction")
+    if controls.modalities is not None:
+        requested.append("modalities")
     if controls.cache is not None:
         requested.append("cache")
         if controls.cache.key is not None:

@@ -44,10 +44,12 @@ from agent_runtime.output.schema import OutputSchema
 from agent_runtime.providers.base import (
     AgentProvider,
     AgentSpec,
+    CompactionControl,
     ModelCacheControl,
     ModelProvider,
     ModelRequestControls,
     TaskSpec,
+    ToolSearchControl,
     TurnRequest,
     TurnResult,
 )
@@ -75,6 +77,7 @@ __all__ = [
     "ChatMessage",
     "ChatRuntimeFacade",
     "CodeInterpreter",
+    "CompactionControl",
     "ComputerUse",
     "ContainerSpec",
     "EventTypes",
@@ -108,6 +111,7 @@ __all__ = [
     "ToolNamespace",
     "ToolPayload",
     "ToolSearch",
+    "ToolSearchControl",
     "ToolSession",
     "TurnRequest",
     "TurnResult",

@@ -153,6 +153,29 @@ async def test_unknown_hosted_tool_falls_back_to_generic_item_event() -> None:
     assert fallback[0].raw is not None
 
 
+async def test_image_generation_item_extracts_artifact() -> None:
+    client = FakeOpenAIClient()
+    generated = item(
+        "image_generation_call",
+        id_="img_1",
+        call_id="img_1",
+        url="https://cdn.example.com/image.png",
+    )
+    client.queue(
+        events=[evt("response.output_item.done", item=generated)],
+        final_response=final_response(id_="resp_img", output=[generated]),
+    )
+
+    runtime = _runtime_with(client)
+    result = await runtime.models.run(provider="openai/gpt-5.4", input="draw")
+
+    completed = next(e for e in result.events if e.item_id == "img_1")
+    assert completed.data["hosted_tool_type"] == "image_generation"
+    assert completed.data["artifact"].type == "image"
+    assert completed.data["artifact"].uri == "https://cdn.example.com/image.png"
+    assert result.artifacts == [completed.data["artifact"]]
+
+
 async def test_mcp_items_include_typed_run_item_data() -> None:
     client = FakeOpenAIClient()
     list_tools = item(

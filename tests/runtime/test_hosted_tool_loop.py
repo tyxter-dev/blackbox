@@ -8,7 +8,7 @@ from agent_runtime import AgentRuntime, EventTypes
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.items import ItemTypes
 from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import ApplyPatch, HostedToolHandlers, Shell
+from agent_runtime.hosted_tools import ApplyPatch, ComputerUse, HostedToolHandlers, Shell
 from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext, HostedToolOutput
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
@@ -127,3 +127,30 @@ async def test_runtime_executes_apply_patch_through_handler_and_continues() -> N
     continuation = scripted.calls[1].input[0]
     assert continuation.data["provider_input_item"]["type"] == "apply_patch_call_output"
     assert result.items[-1].type == ItemTypes.HOSTED_TOOL_RESULT
+
+
+async def test_runtime_executes_computer_use_through_handler_and_continues() -> None:
+    runtime, scripted = _runtime()
+    scripted.queue(
+        _hosted_call_turn(
+            hosted_tool_type="computer",
+            provider_item_type="computer_call",
+            call_id="computer_1",
+            arguments={"action": "screenshot"},
+        )
+    )
+    scripted.queue(text_only_turn("observed"))
+    calls: list[HostedToolCall] = []
+    handler = RecordingHostedHandler("computer", "screen", calls)
+
+    result = await runtime.run(
+        provider="scripted:test",
+        input="inspect screen",
+        hosted_tools=[ComputerUse(display_width=1024, display_height=768)],
+        hosted_tool_handlers=HostedToolHandlers(computer=handler),
+    )
+
+    assert result.text == "observed"
+    assert calls[0].hosted_tool_type == "computer"
+    continuation = scripted.calls[1].input[0]
+    assert continuation.data["provider_input_item"]["type"] == "computer_call_output"

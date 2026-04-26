@@ -148,6 +148,9 @@ class GeminiGenerateContentProvider:
                 "safety_settings": CapabilityDetail(
                     status="passthrough", native_name="config.safety_settings"
                 ),
+                "tool_search": CapabilityDetail(status="unsupported"),
+                "compaction": CapabilityDetail(status="unsupported"),
+                "modalities": CapabilityDetail(status="unsupported"),
                 "extra": CapabilityDetail(status="passthrough"),
             },
             state_modes={

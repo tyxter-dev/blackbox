@@ -95,7 +95,7 @@ Status legend:
 | In-memory run store | Supported | `InMemoryRunStore` | Save/load/all-runs operations are implemented. |
 | Provider-native continuation state | Supported | `ProviderState` | Preserves provider continuation IDs and native state outside chat history. |
 | OpenAI previous response continuation | Supported | `ProviderState.previous_response_id` | OpenAI Responses adapter round-trips `previous_response_id`. |
-| Provider-native request controls | Supported | `ModelRequestControls` / `TurnRequest.controls` | Common controls such as instructions, sampling, output token caps, tool choice, parallel tool calls, and reasoning effort are mapped by adapters where native support exists; `extra` remains the escape hatch. |
+| Provider-native request controls | Supported | `ModelRequestControls` / `TurnRequest.controls` | Common controls such as instructions, sampling, output token caps, tool choice, parallel tool calls, reasoning effort, verbosity, tool search, compaction/truncation, background mode, store, and include are mapped by adapters where native support exists; `extra` remains the escape hatch. |
 | Model usage and cost accounting | Supported | `ModelUsage`, `ModelCatalog`, `ModelPricing` | Provider adapters normalize usage, split cache read/cache creation tokens where available, preserve provider usage details, and applications can register current pricing to add cost estimates to result metadata. |
 | Native provider cache controls | Partial | `ModelCacheControl`, `cache=...` | OpenAI/xAI map prompt cache keys/retention, Anthropic maps ephemeral cache controls, and Gemini consumes `cached_content` names. Provider-side cache creation, eviction/invalidation, and persistent cache registries are not implemented. |
 | Raw provider payload preservation | Supported | `AgentEvent.raw`, `RawEnvelope` | Provider adapters can keep original SDK payloads; `RawEnvelope` supports sensitivity tagging/redaction. |
@@ -112,6 +112,9 @@ Status legend:
 | Control capability validation | Supported | `ModelRequestControls` | Explicit unsupported controls raise before provider calls. |
 | State mode validation | Supported | `ModelRequestControls.state_mode` | Explicit unsupported state modes raise before provider calls. |
 | Compatibility profile derivation | Supported | `get_model_capability_profile(...)` | Providers without `capability_profile(...)` still get a conservative profile derived from flat `ModelCapabilities`. |
+| OpenAI tool-search control | Supported | `ToolSearchControl` / `ToolSearch` | OpenAI can request provider tool search directly or through hosted namespace specs without duplicate tool-search entries. |
+| OpenAI compaction control | Supported | `CompactionControl(strategy="auto" | "disabled")` | Maps to Responses `truncation`; aggressive/custom compaction raises until a full compaction workflow exists. |
+| Modalities control | Contract only | `ModelRequestControls.modalities` | Explicit typed surface exists and unsupported providers reject it; no adapter maps it yet. |
 
 ## Provider Runtime
 

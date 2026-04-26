@@ -20,8 +20,14 @@ from agent_runtime.models.capability_validation import (
     resolve_output_strategy,
 )
 from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.output.schema import build_output_schema
-from agent_runtime.providers.base import ModelCacheControl, ModelRequestControls
+from agent_runtime.providers.base import (
+    CompactionControl,
+    ModelCacheControl,
+    ModelRequestControls,
+    ToolSearchControl,
+)
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
 
@@ -59,11 +65,17 @@ def test_requested_controls_only_includes_explicit_fields() -> None:
         temperature=0.2,
         reasoning_effort="high",
         cache=ModelCacheControl(key="tenant", breakpoints=[{"after": 1}]),
+        tool_search=ToolSearchControl(max_results=5),
+        compaction=CompactionControl(strategy="auto"),
+        modalities=["text"],
     )
 
     assert requested_controls(controls) == [
         "temperature",
         "reasoning_effort",
+        "tool_search",
+        "compaction",
+        "modalities",
         "cache",
         "cache_key",
         "cache_breakpoints",
@@ -108,6 +120,18 @@ def test_model_runtime_capabilities_parses_provider_ref() -> None:
 
     assert profile.provider == "echo"
     assert profile.model == "echo-mini"
+
+
+def test_openai_profile_exposes_hardened_tool_and_control_surfaces() -> None:
+    profile = OpenAIResponsesProvider(api_key="x").capability_profile("gpt-test")
+
+    assert profile.hosted_tools["tool_search"].status == "supported"
+    assert profile.hosted_tools["computer_use"].status == "supported"
+    assert profile.hosted_tools["image_generation"].status == "supported"
+    assert profile.hosted_tools["shell"].status == "supported"
+    assert profile.controls["tool_search"].status == "supported"
+    assert profile.controls["compaction"].status == "supported"
+    assert profile.controls["modalities"].status == "unsupported"
 
 
 def test_build_output_schema_keeps_posthoc_runtime_strategy_available() -> None:

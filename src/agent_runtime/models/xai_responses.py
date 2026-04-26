@@ -88,6 +88,9 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
                     status="supported", native_name="parallel_tool_calls"
                 ),
                 "reasoning_effort": CapabilityDetail(status="conditional"),
+                "tool_search": CapabilityDetail(status="unsupported"),
+                "compaction": CapabilityDetail(status="unsupported"),
+                "modalities": CapabilityDetail(status="unsupported"),
                 "extra": CapabilityDetail(status="passthrough"),
             },
             state_modes={

@@ -4,13 +4,19 @@ import pytest
 
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import OutputSpec
-from agent_runtime.hosted_tools import FileSearch, HostedToolRaw, RemoteMCP, WebSearch
+from agent_runtime.hosted_tools import FileSearch, HostedToolRaw, RemoteMCP, ToolSearch, WebSearch
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider, _compose_messages
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.output.schema import build_output_schema
-from agent_runtime.providers.base import ModelCacheControl, ModelRequestControls, TurnRequest
+from agent_runtime.providers.base import (
+    CompactionControl,
+    ModelCacheControl,
+    ModelRequestControls,
+    ToolSearchControl,
+    TurnRequest,
+)
 
 
 def test_openai_responses_maps_common_controls_to_native_kwargs() -> None:
@@ -70,6 +76,58 @@ def test_openai_maps_cache_controls_to_prompt_cache_kwargs() -> None:
     assert kwargs["prompt_cache_key"] == "tenant-a"
     assert kwargs["prompt_cache_retention"] == "24h"
     assert kwargs["prompt_cache_custom"] == "value"
+
+
+def test_openai_maps_tool_search_control_to_tool() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        controls=ModelRequestControls(
+            tool_search=ToolSearchControl(max_results=3, extra={"ranking": "auto"})
+        ),
+    )
+
+    kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["tools"] == [
+        {"type": "tool_search", "max_results": 3, "ranking": "auto"}
+    ]
+
+
+def test_openai_tool_search_control_does_not_duplicate_hosted_tool_search() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        hosted_tools=[ToolSearch(max_results=5)],
+        controls=ModelRequestControls(tool_search=ToolSearchControl()),
+    )
+
+    kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["tools"] == [{"type": "tool_search", "max_results": 5}]
+
+
+def test_openai_maps_compaction_to_truncation() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        controls=ModelRequestControls(compaction=CompactionControl(strategy="auto")),
+    )
+
+    kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["truncation"] == "auto"
+
+
+def test_openai_rejects_aggressive_compaction() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        controls=ModelRequestControls(compaction=CompactionControl(strategy="aggressive")),
+    )
+
+    with pytest.raises(UnsupportedFeatureError, match="aggressive"):
+        OpenAIResponsesProvider._build_request_kwargs(request)
 
 
 def test_openai_rejects_cache_bypass() -> None:

@@ -288,6 +288,20 @@ result = await runtime.run(
 )
 ```
 
+OpenAI-specific typed controls include provider tool search and Responses
+truncation:
+
+```python
+from agent_runtime import CompactionControl, ToolSearchControl
+
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Use the available tool catalog to plan the next action.",
+    tool_search=ToolSearchControl(max_results=5),
+    compaction=CompactionControl(strategy="auto"),
+)
+```
+
 Pass additional keyword arguments to `runtime.models.run(...)` for
 provider-specific fields that are not part of the common controls. Those
 provider-specific values override the common controls.

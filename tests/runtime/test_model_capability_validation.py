@@ -37,6 +37,21 @@ async def test_runtime_rejects_unsupported_control_before_provider_call() -> Non
             pass
 
 
+async def test_runtime_rejects_unsupported_modalities_before_provider_call() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+
+    with pytest.raises(UnsupportedFeatureError, match="modalities"):
+        async for _ in runtime.models.stream(
+            provider="scripted:test",
+            input="hi",
+            modalities=["text"],
+        ):
+            pass
+    assert scripted.calls == []
+
+
 async def test_runtime_applies_output_fallback() -> None:
     runtime = AgentRuntime()
     runtime.registry.register_model(EchoModelProvider())
