@@ -7,7 +7,12 @@ from typing import Any, TypeVar, cast
 from uuid import uuid4
 
 from agent_runtime.compat.chat import ChatMessage, messages_to_input
-from agent_runtime.core.accounting import ModelCatalog, add_usage, usage_to_dict
+from agent_runtime.core.accounting import (
+    ModelCatalog,
+    add_usage,
+    usage_provider_details,
+    usage_to_dict,
+)
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
 from agent_runtime.core.errors import (
@@ -160,7 +165,7 @@ class ModelRuntime:
             if isinstance(maybe_state, ProviderState):
                 captured_state = maybe_state
             if event.type == EventTypes.MODEL_COMPLETED:
-                usage = add_usage(usage, event.data.get("usage"))
+                usage = add_usage(usage, _event_usage(event))
                 completed_provider = event.provider or completed_provider
                 model_value = event.data.get("model")
                 if isinstance(model_value, str):
@@ -169,6 +174,9 @@ class ModelRuntime:
         usage_dict = usage_to_dict(usage)
         if usage_dict is not None:
             metadata["usage"] = usage_dict
+        provider_usage = usage_provider_details(usage)
+        if provider_usage is not None:
+            metadata["usage_provider_details"] = provider_usage
         if usage is not None and completed_provider is not None and completed_model is not None:
             cost = self.model_catalog.estimate_cost(
                 provider=completed_provider, model=completed_model, usage=usage
@@ -801,7 +809,7 @@ class AgentRuntime:
                         if isinstance(maybe_state, ProviderState):
                             captured_state = maybe_state
                         if event.type == EventTypes.MODEL_COMPLETED:
-                            usage = add_usage(usage, event.data.get("usage"))
+                            usage = add_usage(usage, _event_usage(event))
                             completed_provider = event.provider or completed_provider
                             model_value = event.data.get("model")
                             if isinstance(model_value, str):
@@ -848,6 +856,9 @@ class AgentRuntime:
             usage_dict = usage_to_dict(usage)
             if usage_dict is not None:
                 metadata["usage"] = usage_dict
+            provider_usage = usage_provider_details(usage)
+            if provider_usage is not None:
+                metadata["usage_provider_details"] = provider_usage
             if usage is not None and completed_provider is not None and completed_model is not None:
                 cost = self.model_catalog.estimate_cost(
                     provider=completed_provider, model=completed_model, usage=usage
@@ -979,6 +990,14 @@ def _mcp_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
             item["item_id"] for item in tool_lists if item.get("item_id") is not None
         ]
     return metadata
+
+
+def _event_usage(event: AgentEvent) -> Any:
+    usage = event.data.get("usage")
+    details = event.data.get("usage_provider_details")
+    if isinstance(usage, dict) and isinstance(details, dict) and details:
+        return {**usage, "provider_details": details}
+    return usage
 
 
 def _tool_names(tools: Any) -> list[str]:

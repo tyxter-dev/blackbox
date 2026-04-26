@@ -192,6 +192,8 @@ class OpenAIResponsesProvider:
         data: dict[str, Any] = {"model": request.model, "provider_state": provider_state}
         if usage is not None:
             data["usage"] = usage.to_dict()
+            if usage.provider_details:
+                data["usage_provider_details"] = usage.provider_details
         yield AgentEvent(
             type=EventTypes.MODEL_COMPLETED,
             provider=self.provider_id,

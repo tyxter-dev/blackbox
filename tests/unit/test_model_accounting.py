@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from agent_runtime import AgentResult, AgentRuntime, ModelPricing
 from agent_runtime.core.accounting import (
     ModelUsage,
@@ -50,7 +52,13 @@ async def test_model_runtime_collects_usage_and_estimates_cost() -> None:
         "output_tokens": 50,
         "total_tokens": 150,
         "cached_input_tokens": 20,
+        "cache_read_input_tokens": 20,
+        "cache_creation_input_tokens": 0,
         "reasoning_tokens": 10,
+    }
+    assert result.metadata["usage_provider_details"]["input_tokens"] == 100
+    assert result.metadata["usage_provider_details"]["input_tokens_details"] == {
+        "cached_tokens": 20
     }
     assert result.metadata["cost"]["total"] == 0.000182
 
@@ -184,9 +192,61 @@ def test_usage_accumulates_and_estimates_cached_input_cost() -> None:
         "output_tokens": 30,
         "total_tokens": 0,
         "cached_input_tokens": 30,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
         "reasoning_tokens": 0,
     }
     assert estimate["total"] == 0.000183
+
+
+def test_usage_accumulates_split_cache_fields_and_estimates_split_cost() -> None:
+    usage = ModelUsage(
+        input_tokens=100,
+        output_tokens=20,
+        cache_read_input_tokens=25,
+        cache_creation_input_tokens=5,
+        reasoning_tokens=3,
+        provider_details={"provider": "first"},
+    )
+    other = ModelUsage(
+        input_tokens=50,
+        output_tokens=10,
+        cache_read_input_tokens=5,
+        cache_creation_input_tokens=2,
+        reasoning_tokens=1,
+        provider_details={"provider": "second"},
+    )
+    pricing = ModelPricing(
+        provider="p",
+        model="m",
+        input_per_million=1,
+        output_per_million=2,
+        cache_read_input_per_million=0.1,
+        cache_creation_input_per_million=1.25,
+        reasoning_output_per_million=3,
+    )
+
+    total = usage.add(other)
+    estimate = pricing.estimate(total)
+
+    assert total.to_dict() == {
+        "input_tokens": 150,
+        "output_tokens": 30,
+        "total_tokens": 0,
+        "cached_input_tokens": 37,
+        "cache_read_input_tokens": 30,
+        "cache_creation_input_tokens": 7,
+        "reasoning_tokens": 4,
+    }
+    assert total.provider_details == {
+        "turns": [{"provider": "first"}, {"provider": "second"}]
+    }
+    assert estimate["input"] == 0.000113
+    assert estimate["cache_read_input"] == 0.000003
+    assert estimate["cache_creation_input"] == 0.00000875
+    assert estimate["output"] == 0.00006
+    assert estimate["reasoning_output"] == 0.000012
+    assert estimate["total"] == pytest.approx(0.00019675)
 
 
 def test_anthropic_usage_extraction_handles_cache_tokens() -> None:
@@ -207,8 +267,11 @@ def test_anthropic_usage_extraction_handles_cache_tokens() -> None:
         "output_tokens": 25,
         "total_tokens": 125,
         "cached_input_tokens": 15,
+        "cache_read_input_tokens": 10,
+        "cache_creation_input_tokens": 5,
         "reasoning_tokens": 0,
     }
+    assert usage.provider_details["cache_read_input_tokens"] == 10
 
 
 def test_gemini_usage_extraction_handles_thought_tokens() -> None:
@@ -230,5 +293,8 @@ def test_gemini_usage_extraction_handles_thought_tokens() -> None:
         "output_tokens": 12,
         "total_tokens": 45,
         "cached_input_tokens": 3,
+        "cache_read_input_tokens": 3,
+        "cache_creation_input_tokens": 0,
         "reasoning_tokens": 7,
     }
+    assert usage.provider_details["cached_content_token_count"] == 3
