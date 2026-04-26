@@ -20,7 +20,12 @@ from agent_runtime.agents.local import LocalAgentProvider
 from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
 from agent_runtime.agents.vertex_agent_engine import VertexAIAgentEngineProvider
 from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities
+from agent_runtime.core.capabilities import (
+    AgentCapabilities,
+    ModelCapabilities,
+    ModelCapabilityProfile,
+    get_model_capability_profile,
+)
 from agent_runtime.core.errors import (
     ApprovalError,
     ProviderNotConfiguredError,
@@ -33,7 +38,7 @@ from agent_runtime.models.echo import EchoModelProvider
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.models.xai_responses import XAIResponsesProvider
-from agent_runtime.providers.base import AgentProvider, TaskSpec, TurnRequest
+from agent_runtime.providers.base import AgentProvider, ModelProvider, TaskSpec, TurnRequest
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
 from tests.fixtures.scripted_model import ScriptedModelProvider, tool_call_turn
@@ -92,6 +97,48 @@ def test_xai_responses_capabilities_match_prd() -> None:
     assert caps.supports_reasoning_items
     assert caps.supports_provider_state
     assert caps.supports_structured_output is False
+
+
+@pytest.mark.parametrize(
+    "provider",
+    [
+        EchoModelProvider(),
+        OpenAIResponsesProvider(api_key="x"),
+        AnthropicMessagesProvider(api_key="x"),
+        GeminiGenerateContentProvider(api_key="x"),
+        XAIResponsesProvider(api_key="x"),
+    ],
+)
+def test_model_providers_return_granular_capability_profiles(
+    provider: ModelProvider,
+) -> None:
+    profile = get_model_capability_profile(provider, "test-model")
+
+    assert isinstance(profile, ModelCapabilityProfile)
+    assert profile.provider
+    assert profile.model == "test-model"
+    assert profile.summary == provider.capabilities("test-model")
+
+
+@pytest.mark.parametrize(
+    "provider",
+    [
+        EchoModelProvider(),
+        OpenAIResponsesProvider(api_key="x"),
+        AnthropicMessagesProvider(api_key="x"),
+        GeminiGenerateContentProvider(api_key="x"),
+        XAIResponsesProvider(api_key="x"),
+    ],
+)
+def test_granular_profiles_do_not_contradict_flat_summary(provider: ModelProvider) -> None:
+    profile = get_model_capability_profile(provider, "test-model")
+
+    provider_native = profile.output_strategies.get("provider_native")
+    if provider_native is not None and provider_native.status == "supported":
+        assert profile.summary.supports_structured_output is True
+    finalizer_tool = profile.output_strategies.get("finalizer_tool")
+    if finalizer_tool is not None and finalizer_tool.status == "supported":
+        assert profile.summary.supports_function_tools is True
 
 
 def test_local_agent_capabilities_default_no_approvals() -> None:

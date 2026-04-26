@@ -5,7 +5,13 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from agent_runtime.core.accounting import usage_from_openai_response
-from agent_runtime.core.capabilities import HostedToolSupport, ModelCapabilities
+from agent_runtime.core.capabilities import (
+    CapabilityConstraint,
+    CapabilityDetail,
+    HostedToolSupport,
+    ModelCapabilities,
+    ModelCapabilityProfile,
+)
 from agent_runtime.core.errors import (
     ProviderExecutionError,
     ProviderNotConfiguredError,
@@ -154,6 +160,106 @@ class OpenAIResponsesProvider:
             },
         )
 
+    def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        summary = self.capabilities(model)
+        return ModelCapabilityProfile(
+            provider=self.provider_id,
+            model=model,
+            hosted_tools={
+                "web_search": CapabilityDetail(status="supported", native_name="web_search"),
+                "file_search": CapabilityDetail(status="supported", native_name="file_search"),
+                "code_interpreter": CapabilityDetail(
+                    status="supported", native_name="code_interpreter"
+                ),
+                "remote_mcp": CapabilityDetail(status="supported", native_name="mcp"),
+                "tool_search": CapabilityDetail(status="supported", native_name="tool_search"),
+                "computer_use": CapabilityDetail(status="supported", native_name="computer"),
+                "image_generation": CapabilityDetail(
+                    status="supported", native_name="image_generation"
+                ),
+                "shell": CapabilityDetail(status="supported", native_name="shell"),
+                "apply_patch": CapabilityDetail(status="supported", native_name="apply_patch"),
+                "raw": CapabilityDetail(status="passthrough"),
+            },
+            output_strategies={
+                "provider_native": CapabilityDetail(
+                    status="supported", native_name="text.format"
+                ),
+                "finalizer_tool": CapabilityDetail(status="supported", native_name="function"),
+                "posthoc_parse": CapabilityDetail(status="supported"),
+                "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
+            },
+            controls={
+                "instructions": CapabilityDetail(
+                    status="supported", native_name="instructions"
+                ),
+                "temperature": CapabilityDetail(status="supported", native_name="temperature"),
+                "top_p": CapabilityDetail(status="supported", native_name="top_p"),
+                "max_output_tokens": CapabilityDetail(
+                    status="supported", native_name="max_output_tokens"
+                ),
+                "tool_choice": CapabilityDetail(status="supported", native_name="tool_choice"),
+                "parallel_tool_calls": CapabilityDetail(
+                    status="supported", native_name="parallel_tool_calls"
+                ),
+                "reasoning_effort": CapabilityDetail(
+                    status="supported",
+                    native_name="reasoning.effort",
+                    supported_values=("minimal", "low", "medium", "high"),
+                ),
+                "reasoning_summary": CapabilityDetail(
+                    status="supported", native_name="reasoning.summary"
+                ),
+                "verbosity": CapabilityDetail(
+                    status="supported",
+                    native_name="text.verbosity",
+                    supported_values=("low", "medium", "high"),
+                ),
+                "cache": CapabilityDetail(status="supported"),
+                "cache_key": CapabilityDetail(
+                    status="supported", native_name="prompt_cache_key"
+                ),
+                "cache_ttl": CapabilityDetail(
+                    status="supported", native_name="prompt_cache_retention"
+                ),
+                "include": CapabilityDetail(status="supported", native_name="include"),
+                "background": CapabilityDetail(status="supported", native_name="background"),
+                "store": CapabilityDetail(status="supported", native_name="store"),
+                "conversation": CapabilityDetail(
+                    status="supported", native_name="conversation"
+                ),
+                "extra": CapabilityDetail(status="passthrough"),
+            },
+            state_modes={
+                "none": CapabilityDetail(status="supported"),
+                "provider_stateful": CapabilityDetail(
+                    status="supported", native_name="previous_response_id"
+                ),
+                "stateless_replay": CapabilityDetail(
+                    status="supported",
+                    reason="Can replay Response output items as input items.",
+                ),
+                "zdr": CapabilityDetail(
+                    status="conditional",
+                    native_name="store=false",
+                    reason="Requires adapter to avoid server-side stored continuation.",
+                ),
+                "encrypted_reasoning": CapabilityDetail(
+                    status="supported",
+                    native_name="include.reasoning.encrypted_content",
+                ),
+            },
+            constraints=(
+                CapabilityConstraint(
+                    name="computer_use_requires_result_loop",
+                    status="conditional",
+                    reason="Computer use requires caller/runtime to return computer_call_output.",
+                    hosted_tools_any=("computer_use",),
+                ),
+            ),
+            summary=summary,
+        )
+
     def _get_client(self) -> Any:
         if self._client is not None:
             return self._client
@@ -264,6 +370,15 @@ class OpenAIResponsesProvider:
             "model": request.model,
             "input": _coerce_input(request.input),
         }
+        controls = request.controls
+        if (
+            controls.state_mode == "stateless_replay"
+            and request.provider_state
+            and isinstance(request.provider_state.native_history, list)
+        ):
+            current_input = _coerce_input(request.input)
+            current_items = current_input if isinstance(current_input, list) else [current_input]
+            kwargs["input"] = [*request.provider_state.native_history, *current_items]
         tools = [
             *request.tools,
             *openai_namespace_tools(request.hosted_tools),
@@ -274,7 +389,6 @@ class OpenAIResponsesProvider:
         include_values = openai_include_values(request.hosted_tools)
         if include_values:
             kwargs["include"] = include_values
-        controls = request.controls
         if controls.instructions is not None:
             kwargs["instructions"] = controls.instructions
         if controls.temperature is not None:
@@ -289,6 +403,20 @@ class OpenAIResponsesProvider:
             kwargs["parallel_tool_calls"] = controls.parallel_tool_calls
         if controls.reasoning_effort is not None:
             kwargs["reasoning"] = {"effort": controls.reasoning_effort}
+        if controls.reasoning_summary is not None:
+            reasoning = dict(kwargs.get("reasoning", {}))
+            reasoning["summary"] = controls.reasoning_summary
+            kwargs["reasoning"] = reasoning
+        if controls.verbosity is not None:
+            text_config = dict(kwargs.get("text", {}))
+            text_config["verbosity"] = controls.verbosity
+            kwargs["text"] = text_config
+        if controls.background is not None:
+            kwargs["background"] = controls.background
+        if controls.store is not None:
+            kwargs["store"] = controls.store
+        if controls.include is not None:
+            kwargs["include"] = [*kwargs.get("include", []), *controls.include]
         if controls.cache is not None:
             if controls.cache.strategy == "bypass":
                 raise UnsupportedFeatureError(
@@ -302,7 +430,20 @@ class OpenAIResponsesProvider:
             kwargs.update(controls.cache.extra)
         if request.output_schema is not None and request.output_strategy == "provider_native":
             _merge_text_format(kwargs, request)
-        if request.provider_state:
+        if controls.state_mode == "encrypted_reasoning":
+            kwargs["include"] = [
+                *kwargs.get("include", []),
+                "reasoning.encrypted_content",
+            ]
+            kwargs["store"] = False
+        elif controls.state_mode == "zdr":
+            kwargs["store"] = False
+        if request.provider_state and controls.state_mode not in {
+            "none",
+            "stateless_replay",
+            "zdr",
+            "encrypted_reasoning",
+        }:
             previous = (
                 request.provider_state.previous_response_id
                 or request.provider_state.continuation.get("previous_response_id")

@@ -3,7 +3,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from agent_runtime.core.capabilities import ModelCapabilities
+from agent_runtime.core.capabilities import (
+    CapabilityDetail,
+    ModelCapabilities,
+    ModelCapabilityProfile,
+)
 from agent_runtime.hosted_tools import to_raw_hosted_tool
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.providers.base import TurnRequest
@@ -46,6 +50,56 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
             supports_reasoning_items=True,
             supports_provider_state=True,
             supports_structured_output=False,
+        )
+
+    def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        summary = self.capabilities(model)
+        return ModelCapabilityProfile(
+            provider=self.provider_id,
+            model=model,
+            hosted_tools={
+                "raw": CapabilityDetail(status="passthrough"),
+                "web_search": CapabilityDetail(status="unsupported"),
+                "file_search": CapabilityDetail(status="unsupported"),
+                "code_interpreter": CapabilityDetail(status="unsupported"),
+                "remote_mcp": CapabilityDetail(status="unsupported"),
+                "tool_search": CapabilityDetail(status="unsupported"),
+                "computer_use": CapabilityDetail(status="unsupported"),
+                "image_generation": CapabilityDetail(status="unsupported"),
+            },
+            output_strategies={
+                "provider_native": CapabilityDetail(status="unsupported"),
+                "finalizer_tool": CapabilityDetail(status="supported"),
+                "posthoc_parse": CapabilityDetail(status="supported"),
+                "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
+            },
+            controls={
+                "instructions": CapabilityDetail(
+                    status="unsupported",
+                    reason="xAI Responses adapter strips instructions before request dispatch.",
+                ),
+                "temperature": CapabilityDetail(status="supported", native_name="temperature"),
+                "top_p": CapabilityDetail(status="supported", native_name="top_p"),
+                "max_output_tokens": CapabilityDetail(
+                    status="supported", native_name="max_output_tokens"
+                ),
+                "tool_choice": CapabilityDetail(status="supported", native_name="tool_choice"),
+                "parallel_tool_calls": CapabilityDetail(
+                    status="supported", native_name="parallel_tool_calls"
+                ),
+                "reasoning_effort": CapabilityDetail(status="conditional"),
+                "extra": CapabilityDetail(status="passthrough"),
+            },
+            state_modes={
+                "none": CapabilityDetail(status="supported"),
+                "provider_stateful": CapabilityDetail(
+                    status="conditional", native_name="previous_response_id"
+                ),
+                "stateless_replay": CapabilityDetail(status="conditional"),
+                "zdr": CapabilityDetail(status="unsupported"),
+                "encrypted_reasoning": CapabilityDetail(status="unsupported"),
+            },
+            summary=summary,
         )
 
     @staticmethod

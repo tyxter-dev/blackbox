@@ -191,6 +191,34 @@ HostedToolSpec: TypeAlias = (
 )
 
 
+def hosted_tool_kind(spec: HostedToolSpec) -> str:
+    if isinstance(spec, WebSearch):
+        return "web_search"
+    if isinstance(spec, WebFetch):
+        return "web_fetch"
+    if isinstance(spec, URLContext):
+        return "url_context"
+    if isinstance(spec, FileSearch):
+        return "file_search"
+    if isinstance(spec, CodeInterpreter):
+        return "code_interpreter"
+    if isinstance(spec, Shell):
+        return "bash" if spec.execution == "local" else "shell"
+    if isinstance(spec, ApplyPatch):
+        return "apply_patch"
+    if isinstance(spec, ComputerUse):
+        return "computer_use"
+    if isinstance(spec, ImageGeneration):
+        return "image_generation"
+    if isinstance(spec, ToolSearch):
+        return "tool_search"
+    if isinstance(spec, RemoteMCP):
+        return "remote_mcp"
+    if isinstance(spec, HostedToolRaw):
+        return "raw"
+    raise TypeError(f"Unknown hosted tool spec: {type(spec).__name__}")
+
+
 def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
     if isinstance(spec, WebSearch):
         payload: dict[str, Any] = {"type": "web_search"}

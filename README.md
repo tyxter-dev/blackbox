@@ -158,6 +158,22 @@ result = await runtime.models.run(
 print(result.text)
 ```
 
+Applications can inspect granular provider/model support before constructing a
+request:
+
+```python
+profile = runtime.models.capabilities("openai:gpt-5.4")
+
+assert profile.hosted_tools["web_search"].status == "supported"
+assert profile.output_strategies["provider_native"].status == "supported"
+assert profile.controls["reasoning_effort"].status == "supported"
+```
+
+The same profile powers runtime validation. If a request explicitly asks for
+an unsupported hosted tool, output strategy, control, or state mode, the
+runtime raises `UnsupportedFeatureError` before making the provider SDK call.
+`HostedToolRaw` and `extra` remain explicit provider-native escape hatches.
+
 ## Chat compatibility facade
 
 Chat messages are supported as an explicit compatibility projection:

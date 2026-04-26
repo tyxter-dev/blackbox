@@ -6,7 +6,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage, ArtifactRef
-from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities
+from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities, StateMode
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.results import OutputStrategy
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
@@ -51,6 +51,12 @@ class ModelRequestControls:
     parallel_tool_calls: bool | None = None
     reasoning_effort: str | None = None
     cache: ModelCacheControl | None = None
+    verbosity: str | None = None
+    reasoning_summary: str | None = None
+    state_mode: StateMode | None = None
+    background: bool | None = None
+    store: bool | None = None
+    include: list[str] | None = None
 
 
 @dataclass(slots=True)

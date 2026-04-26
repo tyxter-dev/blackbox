@@ -13,7 +13,12 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from agent_runtime.core.accounting import add_usage, usage_from_gemini_chunk
-from agent_runtime.core.capabilities import HostedToolSupport, ModelCapabilities
+from agent_runtime.core.capabilities import (
+    CapabilityDetail,
+    HostedToolSupport,
+    ModelCapabilities,
+    ModelCapabilityProfile,
+)
 from agent_runtime.core.errors import (
     ProviderExecutionError,
     ProviderNotConfiguredError,
@@ -73,6 +78,94 @@ class GeminiGenerateContentProvider:
                     "computer", True, True, False, True, requires_handler=True
                 ),
             },
+        )
+
+    def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        summary = self.capabilities(model)
+        return ModelCapabilityProfile(
+            provider=self.provider_id,
+            model=model,
+            hosted_tools={
+                "web_search": CapabilityDetail(status="supported", native_name="google_search"),
+                "file_search": CapabilityDetail(
+                    status="unsupported",
+                    reason="Gemini File Search exists, but adapter typed mapping is not part of "
+                    "the stable granular contract yet.",
+                ),
+                "code_interpreter": CapabilityDetail(
+                    status="unsupported",
+                    reason="Gemini code execution exists, but adapter typed mapping is not part "
+                    "of the stable granular contract yet.",
+                ),
+                "computer_use": CapabilityDetail(
+                    status="unsupported",
+                    reason="Adapter typed mapping is not part of the stable granular contract yet.",
+                ),
+                "url_context": CapabilityDetail(
+                    status="unsupported",
+                    reason="Adapter mapping exists but is not part of the stable granular "
+                    "contract yet.",
+                ),
+                "remote_mcp": CapabilityDetail(status="unsupported"),
+                "raw": CapabilityDetail(status="passthrough"),
+            },
+            output_strategies={
+                "provider_native": CapabilityDetail(
+                    status="supported", native_name="config.response_json_schema"
+                ),
+                "finalizer_tool": CapabilityDetail(status="supported"),
+                "posthoc_parse": CapabilityDetail(status="supported"),
+                "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
+            },
+            controls={
+                "instructions": CapabilityDetail(
+                    status="supported", native_name="system_instruction"
+                ),
+                "temperature": CapabilityDetail(status="supported", native_name="temperature"),
+                "top_p": CapabilityDetail(status="supported", native_name="top_p"),
+                "max_output_tokens": CapabilityDetail(
+                    status="supported", native_name="max_output_tokens"
+                ),
+                "tool_choice": CapabilityDetail(
+                    status="unsupported",
+                    reason="Current adapter does not map tool_choice.",
+                ),
+                "parallel_tool_calls": CapabilityDetail(
+                    status="conditional",
+                    reason="Capability summary says supported, but request mapping should be "
+                    "verified.",
+                ),
+                "cache": CapabilityDetail(status="supported"),
+                "cached_content": CapabilityDetail(
+                    status="supported", native_name="cached_content"
+                ),
+                "cache_key": CapabilityDetail(status="unsupported"),
+                "cache_ttl": CapabilityDetail(status="unsupported"),
+                "reasoning_effort": CapabilityDetail(
+                    status="unsupported",
+                    reason="Current adapter does not map thinking controls.",
+                ),
+                "safety_settings": CapabilityDetail(
+                    status="passthrough", native_name="config.safety_settings"
+                ),
+                "extra": CapabilityDetail(status="passthrough"),
+            },
+            state_modes={
+                "none": CapabilityDetail(status="supported"),
+                "provider_stateful": CapabilityDetail(
+                    status="unsupported",
+                    reason="GenerateContent adapter replays native history rather than using a "
+                    "provider-side conversation ID.",
+                ),
+                "stateless_replay": CapabilityDetail(
+                    status="supported",
+                    reason="Adapter preserves native contents, thought signatures, and tool call "
+                    "IDs.",
+                ),
+                "zdr": CapabilityDetail(status="conditional"),
+                "encrypted_reasoning": CapabilityDetail(status="unsupported"),
+            },
+            summary=summary,
         )
 
     def _get_client(self) -> Any:

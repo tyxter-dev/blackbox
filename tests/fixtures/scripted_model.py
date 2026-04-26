@@ -4,7 +4,12 @@ from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent_runtime.core.capabilities import HostedToolSupport, ModelCapabilities
+from agent_runtime.core.capabilities import (
+    CapabilityDetail,
+    HostedToolSupport,
+    ModelCapabilities,
+    ModelCapabilityProfile,
+)
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
@@ -37,6 +42,48 @@ class ScriptedModelProvider:
                 "apply_patch": HostedToolSupport("apply_patch", True, True, False, True),
                 "computer": HostedToolSupport("computer", True, True, False, True),
             },
+        )
+
+    def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        summary = self.capabilities(model)
+        return ModelCapabilityProfile(
+            provider=self.provider_id,
+            model=model,
+            hosted_tools={
+                "web_search": CapabilityDetail(status="supported"),
+                "bash": CapabilityDetail(status="supported"),
+                "shell": CapabilityDetail(status="supported"),
+                "apply_patch": CapabilityDetail(status="supported"),
+                "computer_use": CapabilityDetail(status="supported"),
+                "raw": CapabilityDetail(status="passthrough"),
+            },
+            output_strategies={
+                "provider_native": CapabilityDetail(
+                    status="supported" if summary.supports_structured_output else "unsupported"
+                ),
+                "finalizer_tool": CapabilityDetail(status="supported"),
+                "posthoc_parse": CapabilityDetail(status="supported"),
+                "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
+            },
+            controls={
+                "instructions": CapabilityDetail(status="conditional"),
+                "temperature": CapabilityDetail(status="conditional"),
+                "top_p": CapabilityDetail(status="conditional"),
+                "max_output_tokens": CapabilityDetail(status="conditional"),
+                "tool_choice": CapabilityDetail(status="conditional"),
+                "parallel_tool_calls": CapabilityDetail(status="conditional"),
+                "reasoning_effort": CapabilityDetail(status="conditional"),
+                "cache": CapabilityDetail(status="conditional"),
+                "extra": CapabilityDetail(status="passthrough"),
+            },
+            state_modes={
+                "none": CapabilityDetail(status="supported"),
+                "provider_stateful": CapabilityDetail(status="supported"),
+                "stateless_replay": CapabilityDetail(status="supported"),
+                "zdr": CapabilityDetail(status="unsupported"),
+                "encrypted_reasoning": CapabilityDetail(status="unsupported"),
+            },
+            summary=summary,
         )
 
     def queue(self, script: TurnScript) -> None:

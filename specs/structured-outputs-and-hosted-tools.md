@@ -482,14 +482,31 @@ Capabilities should stay provider honest:
 
 - `supports_hosted_tools=True` only means the provider can receive hosted tool
   configs.
-- More granular support lives in a new helper:
+- `supports_structured_output=True` only means provider-native schema output is
+  mapped by the adapter.
+- Granular support lives in `ModelCapabilityProfile`, available through:
 
 ```python
-provider.supported_hosted_tools(model) -> set[str]
+profile = runtime.models.capabilities("openai:gpt-5.4")
+profile.hosted_tools["web_search"].status
+profile.output_strategies["provider_native"].status
+profile.controls["reasoning_effort"].status
+profile.state_modes["provider_stateful"].status
 ```
 
-Phase 1 can implement this as optional duck-typed method, not a protocol
-requirement.
+Providers may implement optional `capability_profile(model)`. Providers that
+only implement the original `capabilities(model)` protocol are still accepted;
+the runtime derives a conservative compatibility profile from the flat flags.
+
+Runtime validation uses the granular profile before provider dispatch:
+
+- Unsupported typed hosted tools raise `UnsupportedFeatureError`.
+- Unsupported explicit controls raise `UnsupportedFeatureError`.
+- Unsupported explicit state modes raise `UnsupportedFeatureError`.
+- Unsupported output strategies use `OutputSpec.fallback` when possible, or
+  raise.
+- `HostedToolRaw` and request `extra` remain explicit provider-native escape
+  hatches and are represented as passthrough capabilities.
 
 ### Tests
 

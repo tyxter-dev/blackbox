@@ -15,11 +15,10 @@ from agent_runtime.core.accounting import (
 )
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
-from agent_runtime.core.capabilities import validate_hosted_tools
+from agent_runtime.core.capabilities import ModelCapabilityProfile, get_model_capability_profile
 from agent_runtime.core.errors import (
     OutputValidationError,
     ProviderExecutionError,
-    UnsupportedFeatureError,
 )
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import RunItem
@@ -28,6 +27,10 @@ from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, S
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
 from agent_runtime.hosted_tools import HostedToolHandlers, HostedToolSpec
+from agent_runtime.models.capability_validation import (
+    resolve_output_strategy,
+    validate_turn_request_capabilities,
+)
 from agent_runtime.observability.traces import model_turn_span_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
@@ -53,6 +56,17 @@ class ModelRuntime:
     registry: ProviderRegistry
     model_catalog: ModelCatalog = field(default_factory=ModelCatalog)
 
+    def capabilities(
+        self,
+        provider: str,
+        *,
+        model: str | None = None,
+    ) -> ModelCapabilityProfile:
+        provider_ref = ProviderRef.parse(provider)
+        model_name = model or provider_ref.resource
+        adapter = self.registry.get_model(provider_ref.provider_key)
+        return get_model_capability_profile(adapter, model_name)
+
     async def stream(
         self,
         *,
@@ -73,6 +87,12 @@ class ModelRuntime:
         parallel_tool_calls: bool | None = None,
         reasoning_effort: str | None = None,
         cache: ModelCacheControl | None = None,
+        verbosity: str | None = None,
+        reasoning_summary: str | None = None,
+        state_mode: str | None = None,
+        background: bool | None = None,
+        store: bool | None = None,
+        include: list[str] | None = None,
         run_id: str | None = None,
         **kwargs: object,
     ) -> AsyncIterator[AgentEvent]:
@@ -81,11 +101,6 @@ class ModelRuntime:
         if not model_name:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
         adapter = self.registry.get_model(provider_ref.provider_key)
-        validate_hosted_tools(
-            adapter.capabilities(model_name),
-            list(hosted_tools or []),
-            provider=provider_ref.provider_key,
-        )
         request = TurnRequest(
             model=model_name,
             input=input if isinstance(input, str) else list(input),
@@ -103,9 +118,16 @@ class ModelRuntime:
                 parallel_tool_calls=parallel_tool_calls,
                 reasoning_effort=reasoning_effort,
                 cache=cache,
+                verbosity=verbosity,
+                reasoning_summary=reasoning_summary,
+                state_mode=cast(Any, state_mode),
+                background=background,
+                store=store,
+                include=include,
             ),
             extra=dict(kwargs),
         )
+        validate_turn_request_capabilities(provider=adapter, request=request)
         effective_run_id = run_id or f"run_{uuid4().hex}"
         sequence = 0
         async for event in adapter.stream_turn(request):
@@ -136,6 +158,12 @@ class ModelRuntime:
         parallel_tool_calls: bool | None = None,
         reasoning_effort: str | None = None,
         cache: ModelCacheControl | None = None,
+        verbosity: str | None = None,
+        reasoning_summary: str | None = None,
+        state_mode: str | None = None,
+        background: bool | None = None,
+        store: bool | None = None,
+        include: list[str] | None = None,
         run_id: str | None = None,
         **kwargs: object,
     ) -> TurnResult:
@@ -163,6 +191,12 @@ class ModelRuntime:
             parallel_tool_calls=parallel_tool_calls,
             reasoning_effort=reasoning_effort,
             cache=cache,
+            verbosity=verbosity,
+            reasoning_summary=reasoning_summary,
+            state_mode=state_mode,
+            background=background,
+            store=store,
+            include=include,
             run_id=run_id,
             **kwargs,
         ):
@@ -609,6 +643,14 @@ class AgentRuntime:
         """Release resources held by registered provider adapters."""
         await self.registry.close()
 
+    def model_capabilities(
+        self,
+        provider: str,
+        *,
+        model: str | None = None,
+    ) -> ModelCapabilityProfile:
+        return self.models.capabilities(provider, model=model)
+
     async def stream(
         self,
         *,
@@ -740,26 +782,24 @@ class AgentRuntime:
         spec = _resolve_output_spec(output_type, output_spec)
         output_schema = build_output_schema(spec)
         provider_ref = ProviderRef.parse(provider)
+        model_name = model or provider_ref.resource
+        if not model_name:
+            raise ValueError("model must be provided explicitly or as 'provider/model'.")
         adapter = self.registry.get_model(provider_ref.provider_key)
         effective_strategy: OutputStrategy | None = spec.strategy
-        if spec.strategy == "provider_native" and output_schema is not None:
-            if not adapter.capabilities(model or provider_ref.resource).supports_structured_output:
-                if spec.fallback == "posthoc_parse":
-                    output_schema = None
-                    effective_strategy = "posthoc_parse"
-                elif spec.fallback == "finalizer_tool":
-                    effective_strategy = "finalizer_tool"
-                else:
-                    raise UnsupportedFeatureError(
-                        f"Provider '{provider_ref.provider_key}' does not support "
-                        "provider-native structured output."
-                    )
-        if effective_strategy == "finalizer_tool" and output_schema is not None:
-            if not adapter.capabilities(model or provider_ref.resource).supports_function_tools:
-                raise UnsupportedFeatureError(
-                    f"Provider '{provider_ref.provider_key}' does not support "
-                    "finalizer_tool structured output."
-                )
+        initial_provider_native_fallback: str | None = None
+        if output_schema is not None:
+            profile = get_model_capability_profile(adapter, model_name)
+            resolved_strategy = resolve_output_strategy(
+                profile=profile,
+                requested=spec.strategy,
+                fallback=spec.fallback,
+            )
+            if resolved_strategy != spec.strategy:
+                initial_provider_native_fallback = resolved_strategy
+            effective_strategy = resolved_strategy
+            if effective_strategy == "posthoc_parse":
+                output_schema = None
         attempts_allowed = (
             1 + spec.max_validation_retries
             if effective_strategy == "posthoc_parse_with_retry"
@@ -778,7 +818,7 @@ class AgentRuntime:
         finalizer_output: dict[str, Any] | None = None
         last_error: OutputValidationError | None = None
         current_input = input
-        provider_native_fallback: str | None = None
+        provider_native_fallback: str | None = initial_provider_native_fallback
 
         for attempt in range(attempts_allowed):
             text_parts: list[str] = []

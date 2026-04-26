@@ -25,7 +25,12 @@ from collections.abc import AsyncIterator
 from typing import Any, cast
 
 from agent_runtime.core.accounting import usage_from_anthropic_message
-from agent_runtime.core.capabilities import HostedToolSupport, ModelCapabilities
+from agent_runtime.core.capabilities import (
+    CapabilityDetail,
+    HostedToolSupport,
+    ModelCapabilities,
+    ModelCapabilityProfile,
+)
 from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
@@ -93,6 +98,89 @@ class AnthropicMessagesProvider:
                 ),
                 "mcp": HostedToolSupport("mcp", True, True, True, False),
             },
+        )
+
+    def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        summary = self.capabilities(model)
+        return ModelCapabilityProfile(
+            provider=self.provider_id,
+            model=model,
+            hosted_tools={
+                "remote_mcp": CapabilityDetail(
+                    status="supported", native_name="mcp_servers/mcp_toolset"
+                ),
+                "web_search": CapabilityDetail(
+                    status="unsupported",
+                    reason="Provider supports server web search, but adapter support is not part "
+                    "of the stable granular contract yet.",
+                ),
+                "web_fetch": CapabilityDetail(
+                    status="unsupported",
+                    reason="Provider supports server web fetch, but adapter support is not part "
+                    "of the stable granular contract yet.",
+                ),
+                "code_interpreter": CapabilityDetail(
+                    status="unsupported",
+                    reason="Provider supports server code execution, but adapter support is not "
+                    "part of the stable granular contract yet.",
+                ),
+                "tool_search": CapabilityDetail(
+                    status="unsupported",
+                    reason="Provider support exists, adapter mapping is not part of the stable "
+                    "granular contract yet.",
+                ),
+                "bash": CapabilityDetail(status="unsupported"),
+                "computer_use": CapabilityDetail(status="unsupported"),
+                "text_editor": CapabilityDetail(status="unsupported"),
+                "raw": CapabilityDetail(status="passthrough"),
+            },
+            output_strategies={
+                "provider_native": CapabilityDetail(
+                    status="unsupported",
+                    reason="Structured output beta is not mapped by AnthropicMessagesProvider.",
+                ),
+                "finalizer_tool": CapabilityDetail(status="supported"),
+                "posthoc_parse": CapabilityDetail(status="supported"),
+                "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
+            },
+            controls={
+                "instructions": CapabilityDetail(status="supported", native_name="system"),
+                "temperature": CapabilityDetail(status="supported", native_name="temperature"),
+                "top_p": CapabilityDetail(status="supported", native_name="top_p"),
+                "max_output_tokens": CapabilityDetail(
+                    status="supported", native_name="max_tokens"
+                ),
+                "tool_choice": CapabilityDetail(status="supported", native_name="tool_choice"),
+                "parallel_tool_calls": CapabilityDetail(status="supported"),
+                "cache": CapabilityDetail(status="supported"),
+                "cache_ttl": CapabilityDetail(status="supported", native_name="cache_control.ttl"),
+                "cache_breakpoints": CapabilityDetail(
+                    status="supported", native_name="cache_control"
+                ),
+                "reasoning_effort": CapabilityDetail(
+                    status="unsupported",
+                    reason="Current adapter does not map thinking/adaptive thinking controls.",
+                ),
+                "extra": CapabilityDetail(status="passthrough"),
+            },
+            state_modes={
+                "none": CapabilityDetail(status="supported"),
+                "provider_stateful": CapabilityDetail(
+                    status="unsupported",
+                    reason="Messages adapter replays native message history rather than using a "
+                    "provider-side conversation ID.",
+                ),
+                "stateless_replay": CapabilityDetail(
+                    status="supported", native_name="messages/native_history"
+                ),
+                "zdr": CapabilityDetail(status="conditional"),
+                "encrypted_reasoning": CapabilityDetail(
+                    status="unsupported",
+                    reason="Adapter preserves thinking blocks but does not expose encrypted "
+                    "reasoning state mode.",
+                ),
+            },
+            summary=summary,
         )
 
     def _get_client(self) -> Any:

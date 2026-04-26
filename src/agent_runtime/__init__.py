@@ -9,7 +9,14 @@ from agent_runtime.compat.providers import (
 from agent_runtime.core.accounting import ModelCatalog, ModelPricing, ModelUsage
 from agent_runtime.core.approvals import ApprovalDecision, ApprovalRequest
 from agent_runtime.core.artifacts import Artifact, ArtifactRef
-from agent_runtime.core.capabilities import AgentCapabilities, HostedToolSupport, ModelCapabilities
+from agent_runtime.core.capabilities import (
+    AgentCapabilities,
+    CapabilityConstraint,
+    CapabilityDetail,
+    HostedToolSupport,
+    ModelCapabilities,
+    ModelCapabilityProfile,
+)
 from agent_runtime.core.errors import OutputValidationError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
@@ -63,6 +70,8 @@ __all__ = [
     "ApprovalRequest",
     "Artifact",
     "ArtifactRef",
+    "CapabilityConstraint",
+    "CapabilityDetail",
     "ChatMessage",
     "ChatRuntimeFacade",
     "CodeInterpreter",
@@ -77,6 +86,7 @@ __all__ = [
     "ItemTypes",
     "ModelCacheControl",
     "ModelCapabilities",
+    "ModelCapabilityProfile",
     "ModelCatalog",
     "ModelPricing",
     "ModelProvider",

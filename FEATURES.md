@@ -102,6 +102,17 @@ Status legend:
 | Resume run from persisted state | Supported | `provider_state=...`, `RunStore` | `RunState` can be saved, reloaded in a fresh runtime, and passed back into `AgentRuntime.run`. |
 | JSONL/SQLite stores | Supported | `JSONLEventStore`, `SQLiteRunStore` | JSONL event logs and SQLite run-state persistence are implemented and covered by tests. |
 
+## Granular Model Capabilities
+
+| Feature | Status | Public surface | Notes |
+|---|---|---|---|
+| Model capability profile | Supported | `runtime.models.capabilities(...)` | Returns hosted tool, output strategy, control, and state-mode support. |
+| Hosted-tool capability validation | Supported | Runtime validation | Explicit unsupported typed hosted tools raise before provider calls. |
+| Output strategy fallback resolution | Supported | `OutputSpec.fallback` | Runtime chooses a supported fallback strategy or raises. |
+| Control capability validation | Supported | `ModelRequestControls` | Explicit unsupported controls raise before provider calls. |
+| State mode validation | Supported | `ModelRequestControls.state_mode` | Explicit unsupported state modes raise before provider calls. |
+| Compatibility profile derivation | Supported | `get_model_capability_profile(...)` | Providers without `capability_profile(...)` still get a conservative profile derived from flat `ModelCapabilities`. |
+
 ## Provider Runtime
 
 | Feature | Status | Public surface | Notes |
@@ -112,6 +123,7 @@ Status legend:
 | Agent provider protocol | Supported | `AgentProvider` | Providers implement agent/session lifecycle methods. |
 | Chat compatibility facade | Supported | `runtime.chat`, `ChatMessage` | Explicitly projects chat-shaped messages into model runtime inputs for migration paths without making chat the internal source of truth. |
 | Capability flags | Supported | `ModelCapabilities`, `AgentCapabilities` | Providers advertise supported behavior; tests assert honesty. |
+| Granular model capability profile | Supported | `ModelCapabilityProfile` | Providers can expose model-specific support for hosted tools, output strategies, controls, state modes, and simple cross-feature constraints without changing the base `ModelProvider` protocol. |
 | Direct model run | Supported | `runtime.models.run(...)` | Collects text and provider state from a model turn. |
 | Direct model stream | Supported | `runtime.models.stream(...)` | Streams provider-normalized events. |
 | Echo model provider | Supported | `EchoModelProvider` | Dependency-free provider for tests/examples. |

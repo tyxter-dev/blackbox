@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from agent_runtime.core.capabilities import ModelCapabilities
+from agent_runtime.core.capabilities import (
+    CapabilityDetail,
+    ModelCapabilities,
+    ModelCapabilityProfile,
+)
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
@@ -19,6 +23,36 @@ class EchoModelProvider:
 
     def capabilities(self, model: str | None = None) -> ModelCapabilities:
         return ModelCapabilities(supports_streaming_events=True, supports_provider_state=True)
+
+    def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        summary = self.capabilities(model)
+        return ModelCapabilityProfile(
+            provider=self.provider_id,
+            model=model,
+            hosted_tools={
+                "raw": CapabilityDetail(status="unsupported"),
+            },
+            output_strategies={
+                "posthoc_parse": CapabilityDetail(status="supported"),
+                "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
+                "finalizer_tool": CapabilityDetail(status="unsupported"),
+                "provider_native": CapabilityDetail(status="unsupported"),
+            },
+            controls={
+                "extra": CapabilityDetail(status="unsupported"),
+            },
+            state_modes={
+                "none": CapabilityDetail(status="supported"),
+                "provider_stateful": CapabilityDetail(
+                    status="supported",
+                    reason="Echo stores a simple synthetic turn counter in ProviderState.",
+                ),
+                "stateless_replay": CapabilityDetail(status="unsupported"),
+                "zdr": CapabilityDetail(status="unsupported"),
+                "encrypted_reasoning": CapabilityDetail(status="unsupported"),
+            },
+            summary=summary,
+        )
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         text = request.input if isinstance(request.input, str) else str(request.input)
