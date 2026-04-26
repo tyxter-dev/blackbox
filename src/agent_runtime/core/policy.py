@@ -22,6 +22,9 @@ PolicyCheckpoint = Literal[
     "before_command",
     "before_artifact_export",
     "before_final_output",
+    "before_agent_publish",
+    "before_connector_bind",
+    "before_scheduled_run",
 ]
 
 PolicyVerdict = Literal["allow", "deny", "require_approval"]

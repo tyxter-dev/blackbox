@@ -24,7 +24,7 @@ User receives a final typed result.
 
 That blackbox loop was the soul of `llm_factory_toolkit`: developers did not have to manually parse tool calls, dispatch functions, feed results back into the model, or reconstruct structured output. The new runtime must keep that high-level promise while adding modern provider-native sessions, events, artifacts, approvals, MCP, and cloud-agent support.
 
-The new architecture is shaped around two first-class provider interfaces:
+The new architecture is shaped around model, agent, and workspace surfaces:
 
 ```text
 ModelProvider
@@ -34,6 +34,10 @@ ModelProvider
 AgentProvider
   Runs agent sessions.
   Examples: OpenAI cloud/Codex-style agents, Anthropic Managed Agents, Google Agent Platform, local model-backed agents.
+
+Workspace contracts
+  Describe where agents work and how governed workspace agents are packaged.
+  Examples: WorkspaceRuntime, WorkspaceAgentSpec, ConnectorSpec, ScheduleSpec.
 ```
 
 The core product thesis is:
@@ -108,7 +112,7 @@ Agent Runtime Core is a provider-native Python runtime that can either run a com
 ## 4. Design principles
 
 1. **The complete agent loop is first-class.** The runtime must provide a high-level blackbox path that owns tool-call detection, dispatch, continuation, finalization, and structured output validation.
-2. **ModelProvider and AgentProvider are separate.** A model turn and an agent session are different units of work.
+2. **ModelProvider, AgentProvider, and workspace contracts are separate.** A model turn, an agent session, and the workspace/package governance layer are different units of work.
 3. **Events are the runtime stream.** Text output is only one event projection.
 4. **Provider state is preserved.** Provider continuation IDs, native output items, tool IDs, reasoning metadata, checkpoints, and session references must survive across turns.
 5. **Compatibility is explicit.** Chat messages and OpenAI-like payloads are compatibility projections, not the runtime truth.
@@ -119,6 +123,7 @@ Agent Runtime Core is a provider-native Python runtime that can either run a com
 10. **Approvals are central.** Human review, permission checks, and tool confirmation must be part of the runtime, not a callback afterthought.
 11. **Typed outputs are product surface, not decoration.** Structured output with Pydantic-style validation must be available at the top-level runtime API.
 12. **Coding agents are the primary use case.** The library should understand workspaces, files, commands, patches, artifacts, and sessions.
+13. **Workspace agent packages are core contracts.** Sharing, scheduling, connector auth mode, tool permissions, skills, and publication metadata should be modeled in core without forcing a downstream UI, scheduler, OAuth provider, or database.
 
 ## 5. Target users
 
@@ -176,6 +181,9 @@ deterministic `ScriptedModelProvider` — not just expose the contract.
 The MVP must include:
 
 - `ModelProvider` and `AgentProvider` Protocols.
+- Workspace package contracts for governed agents (`WorkspaceAgentSpec`,
+  connector auth modes, permissions, schedules, publication metadata, skills,
+  serialization, and a registry protocol).
 - Provider registry and routing (canonical separator: `:` at the high level,
   `/` accepted for backward compatibility).
 - Event model with `run_id` and `sequence` correlation fields.
@@ -212,6 +220,7 @@ Provider-specific implementations land one at a time with golden fixtures.
 - Google Agents CLI / Agent Platform provider.
 - MCP local and remote connector support.
 - Workspace file, patch, and command abstractions.
+- `WorkspaceProvider` protocol for local, sandbox, git, and cloud workspace backends.
 - Dynamic tool discovery and tool search bridging.
 - Trace/event sinks.
 - Provider-native structured output.
@@ -257,6 +266,10 @@ AgentLoop / TaskRunner            ModelRuntimeFacade              AgentRuntimeFa
   |-- streamed events
   |-- provider state
   |-- hosted tools / MCP / reasoning items
+  |
+  |-- workspace package contracts
+  |-- connector permissions / schedules / publication metadata
+  |-- workspace files / commands / patches / snapshots
 ```
 
 ### 8.2 Package layout
@@ -301,6 +314,14 @@ src/agent_runtime/
     spec.py
     changes.py
 
+  workspace_agents/
+    spec.py
+    permissions.py
+    schedules.py
+    registry.py
+    serialization.py
+    runtime.py
+
   mcp/
     spec.py
     connector.py
@@ -312,7 +333,8 @@ src/agent_runtime/
 
 ### 8.3 Core runtime split
 
-`AgentRuntime` exposes a high-level task runner, a tool registry facade, and two lower-level supervision facades:
+`AgentRuntime` exposes a high-level task runner, a tool registry facade, two
+lower-level supervision facades, and workspace/package contracts:
 
 ```python
 runtime.run(...)
@@ -333,11 +355,20 @@ runtime.agents.send_message(...)
 runtime.agents.approve(...)
 runtime.agents.cancel(...)
 runtime.agents.list_artifacts(...)
+
+WorkspaceAgentSpec(...)
+WorkspaceAgentRegistry
+run_workspace_agent(...)
 ```
 
 The top-level `runtime.run(...)` and `runtime.stream(...)` APIs are the high-level task runner. They preserve the original blackbox promise: complete loop in, typed result out.
 
 The `runtime.models.*` and `runtime.agents.*` facades are lower-level supervision APIs. This split prevents cloud agents from being squeezed into a `generate()` API while still keeping a simple default path.
+
+Workspace package contracts are not a third execution loop. They are the core
+schema layer that lets downstream products publish, schedule, permission, and
+audit agents while still executing through model, agent, tool, MCP, and
+workspace primitives.
 
 ### 8.4 AgentLoop / TaskRunner
 

@@ -136,6 +136,27 @@ async for event in runtime.stream(...):
 | 3.10 | ✅ | Approval resume | same | Runtime continues after approval. |
 | 3.11 | ✅ | Approval denial | `runtime/test_local_agent_provider.py::test_approval_denial_skips_tool_and_records_failure` | Runtime handles denied actions safely. |
 | 3.12 | ✅ | Failure result | `runtime/test_runtime_run.py::test_run_raises_output_validation_error_on_pydantic_mismatch` + max_iterations test | Failures produce typed errors and useful diagnostics. |
+| 3.13 | ✅ | Workspace agent package bridge | `unit/test_workspace_agents.py::test_run_workspace_agent_uses_existing_runtime_loop` | A portable `WorkspaceAgentSpec` can run through the existing high-level runtime loop without a separate product scheduler or UI. |
+
+---
+
+## 3A. Workspace agent package contracts
+
+For governed, shareable agent definitions without downstream product concerns.
+
+```python
+WorkspaceAgentSpec(...)
+WorkspaceAgentRegistry
+run_workspace_agent(...)
+```
+
+| # | Status | Functionality | Test | What it proves |
+|---|---|---|---|---|
+| 3A.1 | ✅ | Package serialization | `unit/test_workspace_agents.py::test_workspace_agent_spec_serializes_nested_contracts` | Nested connectors, permissions, schedules, and skills round-trip through dict serialization. |
+| 3A.2 | ✅ | `AgentSpec` projection | `unit/test_workspace_agents.py::test_workspace_agent_converts_to_agent_spec_metadata` | Package metadata can be projected into the existing lower-level agent spec. |
+| 3A.3 | ✅ | Permission policy context | `unit/test_workspace_agents.py::test_tool_permission_policy_request_carries_agent_context` | Tool permission declarations can produce policy requests carrying agent/tool/connector scope metadata. |
+| 3A.4 | ✅ | Registry protocol implementation | `unit/test_workspace_agents.py::test_in_memory_workspace_agent_registry_publishes_and_lists` | In-memory registry can save, publish, list, and deprecate package definitions. |
+| 3A.5 | ✅ | Runtime preparation guard | `unit/test_workspace_agents.py::test_prepare_agent_spec_requires_model_provider` | Runtime bridge fails clearly when a model-backed package lacks a provider. |
 
 ---
 

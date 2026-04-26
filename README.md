@@ -15,6 +15,10 @@ AgentProvider
   Runs agent sessions.
   Examples: OpenAI cloud coding agents, Anthropic managed agents, Google Agent Platform,
   local model-backed agents.
+
+Workspace contracts
+  Describe where agents work and how packaged workspace agents are governed.
+  Examples: WorkspaceRuntime, WorkspaceAgentSpec, ConnectorSpec, ScheduleSpec.
 ```
 
 ## Core principle
@@ -36,6 +40,7 @@ src/agent_runtime/
   agents/           # cloud/local agent provider adapters; LocalAgentProvider included
   tools/            # local tool registry/runtime/context injection
   workspaces/       # workspace abstractions for files, patches, repos, sandboxes
+  workspace_agents/ # governed agent package contracts, permissions, schedules, registry
   mcp/              # MCP server specs, connector, and stdio/HTTP transports
   observability/    # traces and event sink placeholders
 ```
@@ -214,6 +219,49 @@ session = await runtime.agents.create_session(
 
 async for event in runtime.agents.stream(session):
     print(event.type, event.data)
+```
+
+## Workspace agent packages
+
+`WorkspaceAgentSpec` describes a governed agent as a portable package:
+instructions, model/provider preference, tools, hosted tools, MCP servers,
+connectors, permissions, schedules, skills, memory policy, publication
+metadata, version, and owner metadata. The package contract lives in core, while
+admin UI, OAuth, org RBAC, cron execution, secret storage, and persistence stay
+in downstream applications.
+
+```python
+from agent_runtime import (
+    AgentRuntime,
+    ConnectorSpec,
+    ScheduleSpec,
+    ScheduleTrigger,
+    ToolPermission,
+    WorkspaceAgentSpec,
+    run_workspace_agent,
+)
+from agent_runtime.models.echo import EchoModelProvider
+
+runtime = AgentRuntime()
+runtime.registry.register_model(EchoModelProvider())
+
+agent = WorkspaceAgentSpec(
+    name="release-prep",
+    instructions="Prepare a concise release brief.",
+    model_provider="echo",
+    model="echo-mini",
+    tools=["lookup_issue"],
+    connectors=[ConnectorSpec(name="github", kind="github", auth_mode="end_user")],
+    permissions=[ToolPermission(ref="lookup_issue", scopes=["read"], connector="github")],
+    schedules=[
+        ScheduleSpec(
+            name="weekday",
+            trigger=ScheduleTrigger(kind="cron", expression="0 16 * * 1-5"),
+        )
+    ],
+)
+
+result = await run_workspace_agent(runtime, agent, input="Summarize today's work.")
 ```
 
 ## Examples

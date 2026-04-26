@@ -1,8 +1,19 @@
 # Architecture Notes
 
-## Why two provider protocols?
+## Why separate model, agent, and workspace surfaces?
 
-`ModelProvider` and `AgentProvider` are intentionally separate because hosted/cloud agents are not model calls with more tools. They have lifecycle, artifacts, permissions, state, sessions, approvals, and sometimes deployment/evaluation operations.
+`ModelProvider`, `AgentProvider`, and the workspace contracts are intentionally
+separate because they represent different units of work.
+
+- `ModelProvider` runs model turns.
+- `AgentProvider` runs local or cloud-managed agent sessions.
+- Workspace contracts describe where agents work and how governed workspace
+  agents are packaged, permissioned, scheduled, shared, and audited.
+
+Hosted/cloud agents are not model calls with more tools. Likewise, a workspace
+agent package is not only an agent session: it carries connector auth modes,
+tool permissions, schedule metadata, publication metadata, skills, and memory
+policy that downstream products can persist or expose in an agent directory.
 
 ## Provider compatibility without LiteLLM
 
@@ -30,11 +41,12 @@ Implemented provider/runtime slices:
 5. JSONL event store and SQLite run store adapters.
 6. Local workspace runtime and workspace tools registered through the high-level loop.
 7. Local MCP connector for registered tools with namespaced refs and policy gates.
+8. Workspace agent package contracts, permissions, schedules, serialization,
+   registry protocol, and thin runtime bridge.
 
 Remaining architectural targets:
 
-1. Cloud/coding-agent providers with real session streaming.
-2. MCP stdio, HTTP/SSE, and streamable HTTP transport management.
-3. Provider-native remote MCP configuration passthrough.
-4. Workspace approval-channel integration and non-local workspace kinds.
-5. OpenTelemetry-style trace export and richer replay/debug tooling.
+1. `WorkspaceProvider` protocol for local, sandbox, git, and cloud workspace backends.
+2. Vertex Agent Engine execution.
+3. Workspace approval-channel integration and non-local workspace kinds.
+4. OpenTelemetry-style trace export and richer replay/debug tooling.

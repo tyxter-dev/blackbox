@@ -20,6 +20,7 @@ Status legend:
 | Text-only runs | Supported | `runtime.run(output_type=None)` | Returns final text as `AgentResult.output` and `AgentResult.text`. |
 | Max-iteration guard | Supported | `runtime.run(max_iterations=...)` | Prevents unbounded model/tool loops and emits a terminal failure event. |
 | Mock tool execution | Supported | `runtime.run(mock_tools=True)` / `runtime.tools.call(..., mock=True)` | Short-circuits real tool side effects for tests and demos. |
+| Workspace agent package contracts | Supported | `WorkspaceAgentSpec`, `WorkspaceAgentRegistry`, `run_workspace_agent(...)` | Portable package metadata for governed agents: connectors, permissions, schedules, skills, publication, serialization, and a thin bridge into the existing runtime loop. |
 
 ## Structured Output
 
@@ -158,6 +159,7 @@ Status legend:
 | Artifact data contracts | Supported | `Artifact`, `ArtifactRef`, `ArtifactPage` | Typed artifact models exist. |
 | Local workspace runtime | Supported | `WorkspaceRuntime` | Local workspaces support file read/write/delete, patch artifacts, command execution, snapshots, policy gates, and canonical events. |
 | Workspace data contracts | Supported | `workspaces.spec`, `workspaces.changes` | Workspace refs, mounts, file changes, patch artifacts, commands, and command results exist. |
+| Workspace agent package contracts | Supported | `workspace_agents` | Governed workspace-agent packages model connector auth modes, tool permissions, schedules, skills, publication metadata, registry protocols, and serialization without downstream UI/scheduler/storage assumptions. |
 | MCP server spec | Supported | `MCPServerSpec` | Server configuration model exists for `stdio`, `http`, `sse`, and `streamable_http`, including environment, timeout, and cache controls. |
 | Local MCP dispatch connector | Supported | `MCPConnector` | Registers in-process MCP tools, starts managed stdio/HTTP transports, lists namespaced `mcp:<server>.<tool>` refs, gates calls through policy, and emits MCP events. |
 | MCP runtime tool bridge | Supported | `MCPConnector.register_runtime_tools(...)` | Exposes discovered MCP tools to a `ToolRegistry` while preserving MCP metadata and routing calls through the connector. |
