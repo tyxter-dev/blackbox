@@ -31,7 +31,7 @@ def pytest_configure(config: Any) -> None:
 
 def _should_load_dotenv(config: Any) -> bool:
     mark_expression = str(getattr(config.option, "markexpr", "") or "")
-    if "integration_" in mark_expression:
+    if "integration_" in mark_expression or "journey" in mark_expression:
         return True
     args = [str(arg).replace("\\", "/") for arg in getattr(config, "args", [])]
-    return any("tests/integration" in arg for arg in args)
+    return any("tests/integration" in arg or "tests/journey" in arg for arg in args)

@@ -321,14 +321,27 @@ class OpenAIResponsesProvider:
         attempt = 0
         while True:
             emitted_provider_output = False
+            terminal_event_type: str | None = None
+            terminal_response: Any | None = None
             try:
                 async with client.responses.stream(**kwargs) as stream:
                     async for sdk_event in stream:
+                        event_type = getattr(sdk_event, "type", None)
+                        if event_type in {"response.incomplete", "response.failed"}:
+                            candidate = _attr(sdk_event, "response")
+                            if candidate is not None:
+                                terminal_event_type = event_type
+                                terminal_response = candidate
                         mapped = _map_event(sdk_event, provider=self.provider_id)
                         if mapped is not None:
                             emitted_provider_output = True
                             yield mapped
-                    final_response = await _get_final_response(stream)
+                    try:
+                        final_response = await _get_final_response(stream)
+                    except RuntimeError:
+                        if terminal_event_type != "response.incomplete" or terminal_response is None:
+                            raise
+                        final_response = terminal_response
                 break
             except ProviderExecutionError:
                 raise
@@ -349,6 +362,12 @@ class OpenAIResponsesProvider:
         provider_state = _build_provider_state(final_response, provider=self.provider_id)
         usage = usage_from_openai_response(final_response)
         data: dict[str, Any] = {"model": request.model, "provider_state": provider_state}
+        status = _attr(final_response, "status")
+        if status is not None:
+            data["status"] = status
+        incomplete_details = _attr(final_response, "incomplete_details")
+        if incomplete_details is not None:
+            data["incomplete_details"] = _public_response_detail(incomplete_details)
         if usage is not None:
             data["usage"] = usage.to_dict()
             if usage.provider_details:
@@ -780,6 +799,19 @@ def _attr(obj: Any, name: str) -> Any:
     if isinstance(obj, dict):
         return obj.get(name)
     return getattr(obj, name, None)
+
+
+def _public_response_detail(value: Any) -> Any:
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        value = dump()
+    elif hasattr(value, "__dict__"):
+        value = {
+            key: item
+            for key, item in vars(value).items()
+            if not str(key).startswith("_")
+        }
+    return strip_private_fields(value)
 
 
 def _hosted_tool_data(item: Any, *, item_type: str) -> dict[str, Any]:

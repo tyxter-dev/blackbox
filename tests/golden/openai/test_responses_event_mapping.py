@@ -131,6 +131,37 @@ async def test_hosted_tool_maps_to_typed_run_item() -> None:
     ] == ["web_search"]
 
 
+async def test_incomplete_terminal_response_can_finalize_stream() -> None:
+    client = FakeOpenAIClient()
+    msg = item("message", id_="msg_partial")
+    partial_response = final_response(
+        id_="resp_partial",
+        output=[msg],
+        status="incomplete",
+        incomplete_details={"reason": "max_output_tokens"},
+    )
+    client.queue(
+        events=[
+            evt("response.output_item.added", item=msg),
+            evt("response.output_text.delta", delta="partial answer", item_id="msg_partial"),
+            evt("response.output_item.done", item=msg),
+            evt("response.incomplete", response=partial_response),
+        ],
+        final_error=RuntimeError("Didn't receive a `response.completed` event."),
+    )
+
+    runtime = _runtime_with(client)
+    result = await runtime.models.run(provider="openai/gpt-5.4", input="search")
+
+    assert result.text == "partial answer"
+    assert result.provider_state is not None
+    assert result.provider_state.previous_response_id == "resp_partial"
+    completed = result.events[-1]
+    assert completed.type == EventTypes.MODEL_COMPLETED
+    assert completed.data["status"] == "incomplete"
+    assert completed.data["incomplete_details"] == {"reason": "max_output_tokens"}
+
+
 async def test_unknown_hosted_tool_falls_back_to_generic_item_event() -> None:
     client = FakeOpenAIClient()
     hosted = item("browser_widget_call", id_="bw_1", prompt="inspect")

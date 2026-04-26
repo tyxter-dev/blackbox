@@ -12,6 +12,7 @@ class FakeStream:
 
     events: list[Any]
     final_response: Any = None
+    final_error: Exception | None = None
     captured_kwargs: dict[str, Any] = field(default_factory=dict)
 
     async def __aenter__(self) -> FakeStream:
@@ -31,6 +32,8 @@ class FakeStream:
             raise StopAsyncIteration from exc
 
     async def get_final_response(self) -> Any:
+        if self.final_error is not None:
+            raise self.final_error
         return self.final_response
 
 
@@ -52,8 +55,17 @@ class FakeResponses:
 class FakeOpenAIClient:
     responses: FakeResponses = field(default_factory=FakeResponses)
 
-    def queue(self, events: Iterable[Any], final_response: Any = None) -> FakeStream:
-        stream = FakeStream(events=list(events), final_response=final_response)
+    def queue(
+        self,
+        events: Iterable[Any],
+        final_response: Any = None,
+        final_error: Exception | None = None,
+    ) -> FakeStream:
+        stream = FakeStream(
+            events=list(events),
+            final_response=final_response,
+            final_error=final_error,
+        )
         self.responses.queued_streams.append(stream)
         return stream
 
