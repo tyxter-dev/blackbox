@@ -534,6 +534,5 @@ offline.
 ## Next implementation targets
 
 1. OpenAI cloud / Codex-style `AgentProvider`.
-2. Production Claude Code SDK wrapper for `ClaudeCodeAgentProvider`.
-3. Vertex AI Agent Engine `AgentProvider`.
-4. Approval resume channel for managed MCP transports.
+2. Vertex AI Agent Engine `AgentProvider`.
+3. Approval resume channel for managed MCP transports.

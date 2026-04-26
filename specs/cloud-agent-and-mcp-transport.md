@@ -16,10 +16,11 @@ Implemented since this spec was drafted:
   through `RemoteMCP`.
 - `ClaudeCodeAgentProvider` has a client-backed lifecycle covered by fake
   client tests.
+- `ClaudeCodeAgentProvider` can lazy-load the optional `claude-agent-sdk`
+  package and run a real SDK-backed lifecycle without an injected client.
 
 Remaining:
 
-- Production SDK-backed Claude Code wrapper without an injected fake/client.
 - OpenAI cloud/Codex-style agent execution.
 - Vertex Agent Engine execution.
 - Broader MCP OAuth/token-provider flows and production transport coverage.
@@ -60,18 +61,12 @@ References:
 
 ### 1. Cloud/coding-agent provider
 
-This is the top issue because `AgentProvider` is one of the library's central
-abstractions. Today `OpenAICloudAgentProvider`, `ClaudeCodeAgentProvider`, and
-`VertexAIAgentEngineProvider` intentionally report unsupported capabilities and
-raise `UnsupportedFeatureError`. That keeps capability honesty intact, but it
-also means the project does not yet prove that its agent-session abstraction can
-supervise real long-running provider work.
-
-The first real provider should be `ClaudeCodeAgentProvider` unless a stable
-OpenAI cloud-agent task API is available during implementation. The reason is
-pragmatic: the repo already renamed the Anthropic scaffold to Claude Code SDK
-backing, and a headless/local-SDK provider can be integration-tested without
-pretending there is a generic public cloud task API.
+This was the top issue because `AgentProvider` is one of the library's central
+abstractions. `ClaudeCodeAgentProvider` is now the first concrete provider: it
+supports an injected client protocol for deterministic tests and an optional
+`claude-agent-sdk` wrapper for real SDK-backed sessions. OpenAI cloud/Codex
+execution and Vertex Agent Engine remain honest stubs until their public API
+surfaces are stable enough to implement without guesswork.
 
 ### 2. MCP transport management
 
@@ -102,7 +97,7 @@ Phase 1 target:
 src/agent_runtime/agents/claude_code.py
 ```
 
-`ClaudeCodeAgentProvider` becomes the first concrete non-local `AgentProvider`.
+`ClaudeCodeAgentProvider` is the first concrete non-local `AgentProvider`.
 `OpenAICloudAgentProvider` and `VertexAIAgentEngineProvider` remain honest
 stubs until their public API surfaces are stable enough to implement without
 guesswork.

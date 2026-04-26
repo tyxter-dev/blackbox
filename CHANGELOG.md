@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Slice 12 — Claude Agent SDK-backed AgentProvider
+
+`ClaudeCodeAgentProvider` is now the first non-local `AgentProvider` with a
+real SDK-backed lifecycle. In addition to the existing injected-client path, it
+can lazy-load the optional `claude-agent-sdk` package from the new
+`claude-agent` extra and supervise sessions through the runtime contract.
+
+- Adds a production SDK adapter that creates agents, starts SDK sessions,
+  streams normalized model/workspace/session events, forwards follow-up
+  messages, interrupts sessions for cancellation, maps permission callbacks to
+  `approval.requested`, and exposes collected result/file-change artifacts.
+- Updates capability honesty so Claude Code advertises sessions, streaming,
+  artifacts, workspace, approvals, MCP, cancellation, and resume metadata while
+  OpenAI cloud and Vertex Agent Engine remain honest stubs.
+- Adds offline fake-SDK tests for SDK-backed lifecycle and approval resume.
+
 ### Slice 11 — JSONL/SQLite stores + resume-from-saved-state (M5 starter)
 
 First non-memory persistence backends for the runtime, plus the wiring

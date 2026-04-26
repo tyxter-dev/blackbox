@@ -147,7 +147,8 @@ Status legend:
 | Cancel session | Supported | `runtime.agents.cancel(...)` | Cancellation is honored between turns for local sessions. |
 | List session artifacts | Supported | `runtime.agents.list_artifacts(...)` | Local provider returns an `ArtifactPage`; no artifact-producing workspace flow yet. |
 | Session approval pause/resume/deny | Supported | `runtime.agents.approve(...)` | Local sessions can wait for approval and continue or skip denied tools. |
-| Cloud agent providers | Partial | `OpenAICloudAgentProvider`, `ClaudeCodeAgentProvider`, `VertexAIAgentEngineProvider` | `ClaudeCodeAgentProvider` supports a real client-backed lifecycle when constructed with `client=...`; OpenAI and Vertex remain honest stubs. |
+| Claude Code Agent SDK provider | Supported | `ClaudeCodeAgentProvider` | Supports injected `client=...` implementations and the optional production `claude-agent-sdk` wrapper for sessions, streaming events, workspace/tool events, approvals, artifacts, cancellation, and resume metadata. |
+| Cloud agent providers | Partial | `OpenAICloudAgentProvider`, `ClaudeCodeAgentProvider`, `VertexAIAgentEngineProvider` | Claude Code is implemented; OpenAI cloud/Codex-style execution and Vertex Agent Engine remain honest stubs. |
 
 ## Artifacts, Workspaces, MCP, and Observability
 
@@ -167,6 +168,5 @@ Status legend:
 
 - OpenAI cloud/Codex-style agent execution.
 - Vertex Agent Engine execution.
-- Built-in production Claude Code SDK wrapper without an injected client.
 - Persistent provider cache backends, cache eviction, and provider-side cache creation APIs.
 - Provider-breadth routing through LiteLLM.

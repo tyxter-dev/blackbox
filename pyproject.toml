@@ -24,6 +24,7 @@ dependencies = []
 openai = ["openai>=2,<3"]
 xai = ["openai>=2,<3"]
 anthropic = ["anthropic>=0.40,<1"]
+claude-agent = ["claude-agent-sdk>=0.2,<1"]
 google = ["google-genai>=1,<2"]
 mcp = ["mcp>=1,<2"]
 validate = ["pydantic>=2,<3"]
@@ -37,6 +38,7 @@ dev = [
 all = [
   "openai>=2,<3",
   "anthropic>=0.40,<1",
+  "claude-agent-sdk>=0.2,<1",
   "google-genai>=1,<2",
   "mcp>=1,<2",
 ]
