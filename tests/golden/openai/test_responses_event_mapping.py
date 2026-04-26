@@ -105,6 +105,30 @@ async def test_hosted_tool_maps_to_typed_run_item() -> None:
     assert run_item.type == ItemTypes.HOSTED_TOOL_CALL
     assert run_item.data["query"] == "agent runtime"
     assert hosted_events[0].raw is not None  # raw payload preserved
+    assert result.metadata["hosted_tools"] == {
+        "calls": [
+            {
+                "type": "web_search",
+                "item_type": "web_search_call",
+                "item_id": "ws_1",
+                "status": "completed",
+                "query": "agent runtime",
+            }
+        ],
+        "completed": [
+            {
+                "type": "web_search",
+                "item_type": "web_search_call",
+                "item_id": "ws_1",
+                "status": "completed",
+                "query": "agent runtime",
+            }
+        ],
+        "types": ["web_search"],
+    }
+    assert result.metadata["trace"]["spans"][0]["attributes"]["hosted_tools"][
+        "types"
+    ] == ["web_search"]
 
 
 async def test_unknown_hosted_tool_falls_back_to_generic_item_event() -> None:

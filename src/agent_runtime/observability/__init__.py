@@ -5,7 +5,7 @@ from agent_runtime.observability.sinks import (
     RedactionPolicy,
     default_redaction_policy,
 )
-from agent_runtime.observability.traces import Trace
+from agent_runtime.observability.traces import Trace, TraceSpan, model_turn_span_from_events
 
 __all__ = [
     "EventSink",
@@ -13,5 +13,7 @@ __all__ = [
     "RedactingEventSink",
     "RedactionPolicy",
     "Trace",
+    "TraceSpan",
     "default_redaction_policy",
+    "model_turn_span_from_events",
 ]

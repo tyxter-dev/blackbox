@@ -4,7 +4,11 @@ from pydantic import BaseModel
 
 from agent_runtime import AgentResult, AgentRuntime
 from agent_runtime.core.capabilities import ModelCapabilities
-from agent_runtime.core.errors import ProviderExecutionError, UnsupportedFeatureError
+from agent_runtime.core.errors import (
+    OutputValidationError,
+    ProviderExecutionError,
+    UnsupportedFeatureError,
+)
 from agent_runtime.core.events import EventTypes
 from agent_runtime.core.items import ItemTypes
 from agent_runtime.core.results import OutputSpec
@@ -68,6 +72,59 @@ async def test_provider_native_dict_schema_returns_dict() -> None:
     )
 
     assert result.output == {"summary": "done"}
+
+
+async def test_posthoc_parse_validates_dict_json_schema() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    scripted.queue(text_only_turn('{"summary": "done", "score": 3}'))
+
+    result: AgentResult[dict[str, object]] = await runtime.run(
+        provider="scripted:test",
+        input="summarize",
+        output_spec=OutputSpec(
+            schema={
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string"},
+                    "score": {"type": "integer"},
+                },
+                "required": ["summary", "score"],
+                "additionalProperties": False,
+            },
+            strategy="posthoc_parse",
+        ),
+    )
+
+    assert result.output == {"summary": "done", "score": 3}
+
+
+async def test_posthoc_parse_rejects_invalid_dict_json_schema_output() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    scripted.queue(text_only_turn('{"summary": 3, "extra": true}'))
+
+    try:
+        await runtime.run(
+            provider="scripted:test",
+            input="summarize",
+            output_spec=OutputSpec(
+                schema={
+                    "type": "object",
+                    "properties": {"summary": {"type": "string"}},
+                    "required": ["summary"],
+                    "additionalProperties": False,
+                },
+                strategy="posthoc_parse",
+            ),
+        )
+    except OutputValidationError as exc:
+        assert "JSON Schema" in str(exc)
+        assert "$.summary" in str(exc)
+    else:
+        raise AssertionError("expected invalid dict schema output to fail")
 
 
 async def test_provider_native_unsupported_provider_raises() -> None:

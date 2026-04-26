@@ -27,6 +27,7 @@ from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, S
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
 from agent_runtime.hosted_tools import HostedToolSpec
+from agent_runtime.observability.traces import model_turn_span_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
     AgentSpec,
@@ -186,6 +187,17 @@ class ModelRuntime:
         mcp_metadata = _mcp_metadata_from_events(events)
         if mcp_metadata:
             metadata["mcp"] = mcp_metadata
+        hosted_metadata = _hosted_tool_metadata_from_events(events)
+        if hosted_metadata:
+            metadata["hosted_tools"] = hosted_metadata
+        trace_span = model_turn_span_from_events(
+            events,
+            provider=completed_provider,
+            model=completed_model,
+            metadata=metadata,
+        )
+        if trace_span is not None:
+            metadata["trace"] = {"spans": [trace_span.to_dict()]}
         return TurnResult(
             text="".join(text_parts),
             events=events,
@@ -868,6 +880,17 @@ class AgentRuntime:
             mcp_metadata = _mcp_metadata_from_events(events)
             if mcp_metadata:
                 metadata["mcp"] = mcp_metadata
+            hosted_metadata = _hosted_tool_metadata_from_events(events)
+            if hosted_metadata:
+                metadata["hosted_tools"] = hosted_metadata
+            trace_span = model_turn_span_from_events(
+                events,
+                provider=completed_provider,
+                model=completed_model,
+                metadata=metadata,
+            )
+            if trace_span is not None:
+                metadata["trace"] = {"spans": [trace_span.to_dict()]}
             return AgentResult(
                 output=cast(T, output),
                 text=last_text,
@@ -992,6 +1015,50 @@ def _mcp_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
     return metadata
 
 
+def _hosted_tool_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
+    calls: list[dict[str, Any]] = []
+    completed: list[dict[str, Any]] = []
+    for event in events:
+        item = event.data.get("item")
+        item_type = event.data.get("hosted_tool_type")
+        if item_type is None and isinstance(item, RunItem):
+            item_type = item.data.get("hosted_tool_type")
+        if not isinstance(item_type, str):
+            continue
+        summary = {
+            "type": item_type,
+            "item_type": event.data.get("item_type"),
+            "item_id": event.item_id,
+            "status": event.data.get("status")
+            or (item.status if isinstance(item, RunItem) else None),
+        }
+        if "query" in event.data:
+            summary["query"] = event.data["query"]
+        if "call_id" in event.data:
+            summary["call_id"] = event.data["call_id"]
+        if "results" in event.data:
+            summary["result_count"] = len(event.data["results"]) if isinstance(
+                event.data["results"], list
+            ) else None
+        if event.type == EventTypes.MODEL_ITEM_COMPLETED:
+            completed.append(summary)
+        else:
+            calls.append(summary)
+    if not (calls or completed):
+        return {}
+    return {
+        "calls": calls,
+        "completed": completed,
+        "types": sorted(
+            {
+                item["type"]
+                for item in [*calls, *completed]
+                if isinstance(item.get("type"), str)
+            }
+        ),
+    }
+
+
 def _event_usage(event: AgentEvent) -> Any:
     usage = event.data.get("usage")
     details = event.data.get("usage_provider_details")
@@ -1048,20 +1115,23 @@ def _validate_output(
     if output_type is None or output_type is str:
         return text
     if isinstance(output_type, dict):
-        if allow_dict_schema:
-            try:
-                return json.loads(text)
-            except json.JSONDecodeError as exc:
-                raise OutputValidationError(
-                    "Final output is not valid JSON for the requested JSON Schema.",
-                    raw_text=text,
-                    cause=exc,
-                ) from exc
-        raise OutputValidationError(
-            "Dict-based JSON Schemas are not yet supported by posthoc_parse; "
-            "pass a Pydantic model or dataclass.",
-            raw_text=text,
-        )
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise OutputValidationError(
+                "Final output is not valid JSON for the requested JSON Schema.",
+                raw_text=text,
+                cause=exc,
+            ) from exc
+        try:
+            _validate_json_schema(data, output_type)
+        except ValueError as exc:
+            raise OutputValidationError(
+                f"Final output failed validation against JSON Schema: {exc}",
+                raw_text=text,
+                cause=exc,
+            ) from exc
+        return data
     pydantic_base: type[Any] | None
     try:
         from pydantic import BaseModel as _PydanticBaseModel
@@ -1106,3 +1176,113 @@ def _validate_output(
         f"Unsupported output_type: {output_type!r}. Use str, a Pydantic model, or a dataclass.",
         raw_text=text,
     )
+
+
+def _validate_json_schema(value: Any, schema: dict[str, Any], *, path: str = "$") -> None:
+    if "const" in schema and value != schema["const"]:
+        raise ValueError(f"{path} must equal {schema['const']!r}")
+    if "enum" in schema and value not in schema["enum"]:
+        raise ValueError(f"{path} must be one of {schema['enum']!r}")
+    if "anyOf" in schema:
+        _validate_any_of(value, schema["anyOf"], path=path)
+    if "oneOf" in schema:
+        _validate_one_of(value, schema["oneOf"], path=path)
+
+    expected_type = schema.get("type")
+    if expected_type is not None and not _matches_json_type(value, expected_type):
+        raise ValueError(f"{path} must be {_type_label(expected_type)}")
+
+    if isinstance(value, dict):
+        _validate_object(value, schema, path=path)
+    elif isinstance(value, list):
+        _validate_array(value, schema, path=path)
+
+
+def _validate_object(value: dict[str, Any], schema: dict[str, Any], *, path: str) -> None:
+    required = schema.get("required", [])
+    if isinstance(required, list):
+        for key in required:
+            if isinstance(key, str) and key not in value:
+                raise ValueError(f"{path}.{key} is required")
+    properties = schema.get("properties", {})
+    if isinstance(properties, dict):
+        for key, subschema in properties.items():
+            if key in value and isinstance(subschema, dict):
+                _validate_json_schema(value[key], subschema, path=f"{path}.{key}")
+    additional = schema.get("additionalProperties", True)
+    if additional is False and isinstance(properties, dict):
+        extras = sorted(set(value) - set(properties))
+        if extras:
+            raise ValueError(f"{path} contains unknown properties: {', '.join(extras)}")
+    elif isinstance(additional, dict):
+        for key in set(value) - set(properties if isinstance(properties, dict) else {}):
+            _validate_json_schema(value[key], additional, path=f"{path}.{key}")
+
+
+def _validate_array(value: list[Any], schema: dict[str, Any], *, path: str) -> None:
+    min_items = schema.get("minItems")
+    if isinstance(min_items, int) and len(value) < min_items:
+        raise ValueError(f"{path} must contain at least {min_items} items")
+    max_items = schema.get("maxItems")
+    if isinstance(max_items, int) and len(value) > max_items:
+        raise ValueError(f"{path} must contain at most {max_items} items")
+    items = schema.get("items")
+    if isinstance(items, dict):
+        for index, item in enumerate(value):
+            _validate_json_schema(item, items, path=f"{path}[{index}]")
+
+
+def _validate_any_of(value: Any, schemas: Any, *, path: str) -> None:
+    if not isinstance(schemas, list):
+        return
+    for schema in schemas:
+        if not isinstance(schema, dict):
+            continue
+        try:
+            _validate_json_schema(value, schema, path=path)
+            return
+        except ValueError:
+            continue
+    raise ValueError(f"{path} does not match any allowed schema")
+
+
+def _validate_one_of(value: Any, schemas: Any, *, path: str) -> None:
+    if not isinstance(schemas, list):
+        return
+    matches = 0
+    for schema in schemas:
+        if not isinstance(schema, dict):
+            continue
+        try:
+            _validate_json_schema(value, schema, path=path)
+        except ValueError:
+            continue
+        matches += 1
+    if matches != 1:
+        raise ValueError(f"{path} must match exactly one allowed schema")
+
+
+def _matches_json_type(value: Any, expected_type: Any) -> bool:
+    if isinstance(expected_type, list):
+        return any(_matches_json_type(value, item) for item in expected_type)
+    if expected_type == "object":
+        return isinstance(value, dict)
+    if expected_type == "array":
+        return isinstance(value, list)
+    if expected_type == "string":
+        return isinstance(value, str)
+    if expected_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected_type == "boolean":
+        return isinstance(value, bool)
+    if expected_type == "null":
+        return value is None
+    return True
+
+
+def _type_label(expected_type: Any) -> str:
+    if isinstance(expected_type, list):
+        return " or ".join(str(item) for item in expected_type)
+    return str(expected_type)
