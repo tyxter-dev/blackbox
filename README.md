@@ -533,6 +533,5 @@ offline.
 
 ## Next implementation targets
 
-1. OpenAI cloud / Codex-style `AgentProvider`.
-2. Vertex AI Agent Engine `AgentProvider`.
-3. Approval resume channel for managed MCP transports.
+1. Vertex AI Agent Engine `AgentProvider`.
+2. Approval resume channel for managed MCP transports.

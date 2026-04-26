@@ -158,19 +158,15 @@ def test_local_agent_capabilities_with_approval_policy() -> None:
 
 
 def test_cloud_agent_stub_capabilities_do_not_advertise_unimplemented_lifecycle() -> None:
-    for provider in (
-        OpenAICloudAgentProvider(api_key="x"),
-        VertexAIAgentEngineProvider(project="p"),
-    ):
-        caps = provider.capabilities()
-        assert caps.supports_sessions is False
-        assert caps.supports_streaming_events is False
-        assert caps.supports_artifacts is False
-        assert caps.supports_workspace is False
-        assert caps.supports_approvals is False
-        assert caps.supports_mcp is False
-        assert caps.supports_cancellation is False
-        assert caps.supports_resume is False
+    caps = VertexAIAgentEngineProvider(project="p").capabilities()
+    assert caps.supports_sessions is False
+    assert caps.supports_streaming_events is False
+    assert caps.supports_artifacts is False
+    assert caps.supports_workspace is False
+    assert caps.supports_approvals is False
+    assert caps.supports_mcp is False
+    assert caps.supports_cancellation is False
+    assert caps.supports_resume is False
 
 
 def test_vertex_agent_engine_does_not_advertise_unimplemented_lifecycle() -> None:
@@ -192,10 +188,22 @@ def test_claude_code_sdk_capabilities_advertise_provider_lifecycle() -> None:
     assert caps.supports_resume is True
 
 
+def test_openai_agents_sdk_capabilities_advertise_provider_lifecycle() -> None:
+    provider = OpenAICloudAgentProvider(api_key="x")
+    caps = provider.capabilities()
+    assert caps.supports_sessions is True
+    assert caps.supports_streaming_events is True
+    assert caps.supports_artifacts is True
+    assert caps.supports_workspace is True
+    assert caps.supports_approvals is True
+    assert caps.supports_mcp is True
+    assert caps.supports_cancellation is True
+    assert caps.supports_resume is True
+
+
 @pytest.mark.parametrize(
     "provider",
     [
-        OpenAICloudAgentProvider(api_key="x"),
         VertexAIAgentEngineProvider(project="p"),
     ],
 )
@@ -274,7 +282,7 @@ async def test_cloud_agent_stub_create_agent_requires_credentials() -> None:
         await provider.create_agent(AgentSpec(name="x"))
 
 
-async def test_cloud_agent_stub_create_agent_raises_unsupported_when_configured() -> None:
+async def test_openai_agents_create_agent_requires_optional_sdk_when_configured() -> None:
     provider = OpenAICloudAgentProvider(api_key="x")
     with pytest.raises(UnsupportedFeatureError):
         await provider.create_agent(AgentSpec(name="x"))

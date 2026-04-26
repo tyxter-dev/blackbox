@@ -166,9 +166,10 @@ await runtime.agents.list_artifacts(...)
 | 4.8 | ✅ | Agent approval | `runtime/test_local_agent_provider.py::test_approval_pause_and_approve` | Sessions pause/resume for approval. |
 | 4.9 | ✅ | Provider raw data | `golden/openai/test_responses_event_mapping.py` | Provider data is preserved. |
 | 4.10 | ✅ | Capability enforcement | `contracts/test_capability_honesty.py` | Unsupported actions raise typed errors. |
-| 4.11 | ✅ | Cloud-agent scaffold guardrails | `contracts/test_capability_honesty.py::test_cloud_agent_stub_operations_raise_unsupported_when_configured` | OpenAI and Vertex cloud-agent scaffolds raise typed unsupported errors until real lifecycle support lands. |
+| 4.11 | ✅ | Cloud-agent scaffold guardrails | `contracts/test_capability_honesty.py::test_cloud_agent_stub_operations_raise_unsupported_when_configured` | Vertex cloud-agent scaffold raises typed unsupported errors until real lifecycle support lands. |
 | 4.12 | ✅ | Client-backed Claude Code lifecycle | `runtime/test_claude_code_agent_provider.py` | Injected Claude Code clients can create agents, start sessions, stream/resume events, send messages, approve, cancel, and list artifacts. |
 | 4.13 | ✅ | SDK-backed Claude Code lifecycle | `runtime/test_claude_code_agent_provider.py::test_claude_code_sdk_backed_provider_runs_without_injected_client` | Optional `claude-agent-sdk` wrapper maps sessions, streaming events, workspace artifacts, approvals, cancellation, and resume metadata through `ClaudeCodeAgentProvider`. |
+| 4.14 | ✅ | SDK-backed OpenAI Agents lifecycle | `runtime/test_openai_agents_provider.py` | Optional `openai-agents` wrapper maps Agents SDK sessions, streaming events, approvals, continuation, cancellation, and artifacts through `OpenAICloudAgentProvider`. |
 
 ---
 

@@ -18,10 +18,12 @@ Implemented since this spec was drafted:
   client tests.
 - `ClaudeCodeAgentProvider` can lazy-load the optional `claude-agent-sdk`
   package and run a real SDK-backed lifecycle without an injected client.
+- `OpenAICloudAgentProvider` can lazy-load the optional `openai-agents`
+  package and supervise OpenAI Agents SDK runs through the `AgentProvider`
+  lifecycle.
 
 Remaining:
 
-- OpenAI cloud/Codex-style agent execution.
 - Vertex Agent Engine execution.
 - Broader MCP OAuth/token-provider flows and production transport coverage.
 
@@ -62,11 +64,10 @@ References:
 ### 1. Cloud/coding-agent provider
 
 This was the top issue because `AgentProvider` is one of the library's central
-abstractions. `ClaudeCodeAgentProvider` is now the first concrete provider: it
-supports an injected client protocol for deterministic tests and an optional
-`claude-agent-sdk` wrapper for real SDK-backed sessions. OpenAI cloud/Codex
-execution and Vertex Agent Engine remain honest stubs until their public API
-surfaces are stable enough to implement without guesswork.
+abstractions. `ClaudeCodeAgentProvider` and `OpenAICloudAgentProvider` now have
+concrete SDK-backed lifecycles covered by deterministic fake-SDK tests. Vertex
+Agent Engine remains an honest stub until its public API surface is stable
+enough to implement without guesswork.
 
 ### 2. MCP transport management
 
@@ -97,10 +98,10 @@ Phase 1 target:
 src/agent_runtime/agents/claude_code.py
 ```
 
-`ClaudeCodeAgentProvider` is the first concrete non-local `AgentProvider`.
-`OpenAICloudAgentProvider` and `VertexAIAgentEngineProvider` remain honest
-stubs until their public API surfaces are stable enough to implement without
-guesswork.
+`ClaudeCodeAgentProvider` was the first concrete non-local `AgentProvider`.
+`OpenAICloudAgentProvider` now targets the OpenAI Agents SDK. `VertexAIAgentEngineProvider`
+remains an honest stub until its public API surface is stable enough to
+implement without guesswork.
 
 ### Required Behavior
 
@@ -522,11 +523,9 @@ The milestone is complete when:
 
 ## Open Questions
 
-1. Which real provider SDK should be the first production dependency for
-   `ClaudeCodeAgentProvider`, and what exact version range is stable enough?
-2. Should `OpenAICloudAgentProvider` stay stubbed until a public cloud-agent API
-   exists, or should it wrap a local Codex CLI/SDK workflow first?
-3. Should MCP approval resume be implemented in this milestone or remain a
+1. Should `OpenAICloudAgentProvider` grow a deeper SandboxAgent workspace
+   manifest bridge, or keep SDK-native sandbox configuration as pass-through?
+2. Should MCP approval resume be implemented in this milestone or remain a
    fail-closed `ApprovalError` until the broader approval channel is unified?
-4. Should remote HTTP MCP allow non-localhost URLs by default, or require an
+3. Should remote HTTP MCP allow non-localhost URLs by default, or require an
    explicit policy allow decision?

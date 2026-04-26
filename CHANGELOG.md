@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Slice 13 — OpenAI Agents SDK-backed AgentProvider
+
+`OpenAICloudAgentProvider` now targets OpenAI's current code-first Agents SDK
+instead of staying a pure cloud-agent scaffold. The adapter supports injected
+clients for deterministic tests and can lazy-load the optional `openai-agents`
+package from the new `openai-agents` extra.
+
+- Adds an SDK adapter for `Agent` / `Runner.run_streamed` sessions, normalized
+  streaming events, follow-up turns, cancellation, HITL approval pause/resume
+  through `RunState`, and result/provider-reference artifacts.
+- Updates capability honesty so OpenAI Agents SDK and Claude Code advertise
+  implemented session lifecycles while Vertex Agent Engine remains the honest
+  unsupported provider.
+- Adds offline fake-SDK tests for lifecycle streaming, continuation,
+  cancellation, approval resume, artifact listing, and event replay.
+
 ### Slice 12 — Claude Agent SDK-backed AgentProvider
 
 `ClaudeCodeAgentProvider` is now the first non-local `AgentProvider` with a
@@ -15,7 +31,7 @@ can lazy-load the optional `claude-agent-sdk` package from the new
   `approval.requested`, and exposes collected result/file-change artifacts.
 - Updates capability honesty so Claude Code advertises sessions, streaming,
   artifacts, workspace, approvals, MCP, cancellation, and resume metadata while
-  OpenAI cloud and Vertex Agent Engine remain honest stubs.
+  OpenAI cloud and Vertex Agent Engine remain honest stubs at that slice.
 - Adds offline fake-SDK tests for SDK-backed lifecycle and approval resume.
 
 ### Slice 11 — JSONL/SQLite stores + resume-from-saved-state (M5 starter)
