@@ -481,6 +481,38 @@ The default policy redacts when `sensitivity ∈ {sensitive, secret}` or
 `storage_allowed=False`. Pass a custom `policy=Callable[[RawEnvelope],
 bool]` for project-specific rules.
 
+## Workflow tracing, replay, and eval hooks
+
+Every runtime-stamped event carries `trace_id`, `span_id`,
+`parent_span_id`, and `span_kind`. The default trace id is the run id, and
+provider-native request/trace identifiers are preserved separately on the
+event when available.
+
+```python
+from agent_runtime.observability import (
+    OpenTelemetryTraceExporter,
+    evaluate_trace,
+    replay_run,
+    trace_from_events,
+)
+
+result = await runtime.run(provider="openai:gpt-test", input="Ping")
+trace = trace_from_events(result.events, metadata=result.metadata)
+
+# Reconstruct a persisted run without calling a model.
+replay = await replay_run(runtime.event_store, result.events[0].run_id)
+print("\n".join(replay.timeline()))
+
+# Export through the OpenTelemetry SDK configured by the application.
+OpenTelemetryTraceExporter().export(trace)
+```
+
+`result.metadata["trace"]` includes a workflow root span plus child spans
+for model calls, tool calls, hosted tools, MCP calls, workspace actions,
+approvals, artifacts, retries, handoffs, guardrails, and eval events.
+Evaluator hooks can score reconstructed traces and emit canonical
+`eval.started` / `eval.completed` / `eval.failed` events.
+
 ## Workspace runtime (M2 local)
 
 `WorkspaceRuntime` backs `"local"` workspaces with file read/write/delete,

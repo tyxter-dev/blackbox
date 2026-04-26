@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, TypeVar, cast
 from uuid import uuid4
 
@@ -31,7 +31,7 @@ from agent_runtime.models.capability_validation import (
     resolve_output_strategy,
     validate_turn_request_capabilities,
 )
-from agent_runtime.observability.traces import model_turn_span_from_events
+from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
     AgentSpec,
@@ -99,6 +99,8 @@ class ModelRuntime:
         compaction: CompactionControl | None = None,
         modalities: list[str] | None = None,
         run_id: str | None = None,
+        trace_id: str | None = None,
+        parent_span_id: str | None = None,
         **kwargs: object,
     ) -> AsyncIterator[AgentEvent]:
         provider_ref = ProviderRef.parse(provider)
@@ -137,12 +139,16 @@ class ModelRuntime:
         )
         validate_turn_request_capabilities(provider=adapter, request=request)
         effective_run_id = run_id or f"run_{uuid4().hex}"
+        trace_context = TraceContext.for_run(
+            trace_id or effective_run_id,
+            root_span_id=parent_span_id,
+        )
         sequence = 0
         async for event in adapter.stream_turn(request):
-            yield replace(
+            yield trace_context.stamp(
                 event,
-                run_id=event.run_id or effective_run_id,
-                sequence=event.sequence if event.sequence is not None else sequence,
+                run_id=effective_run_id,
+                sequence=sequence,
             )
             sequence += 1
 
@@ -213,7 +219,7 @@ class ModelRuntime:
             compaction=compaction,
             modalities=modalities,
             run_id=run_id,
-            **kwargs,
+            **cast(Any, kwargs),
         ):
             events.append(event)
             if event.type == EventTypes.MODEL_TEXT_DELTA:
@@ -251,14 +257,9 @@ class ModelRuntime:
         hosted_metadata = _hosted_tool_metadata_from_events(events)
         if hosted_metadata:
             metadata["hosted_tools"] = hosted_metadata
-        trace_span = model_turn_span_from_events(
-            events,
-            provider=completed_provider,
-            model=completed_model,
-            metadata=metadata,
-        )
-        if trace_span is not None:
-            metadata["trace"] = {"spans": [trace_span.to_dict()]}
+        trace_metadata = trace_metadata_from_events(events, metadata=metadata)
+        if trace_metadata["spans"]:
+            metadata["trace"] = trace_metadata
         return TurnResult(
             text="".join(text_parts),
             events=events,
@@ -299,12 +300,13 @@ class AgentRuntimeFacade:
     ) -> AsyncIterator[AgentEvent]:
         adapter = self.registry.get_agent(session.provider)
         run_id = f"run_{uuid4().hex}"
+        trace_context = TraceContext.for_run(run_id)
         sequence = 0
         async for event in adapter.stream_events(session, after_event_id=after_event_id):
-            yield replace(
+            yield trace_context.stamp(
                 event,
-                run_id=event.run_id or run_id,
-                sequence=event.sequence if event.sequence is not None else sequence,
+                run_id=run_id,
+                sequence=sequence,
             )
             sequence += 1
 
@@ -722,6 +724,9 @@ class AgentRuntime:
             timeout=tool_timeout,
         )
 
+        run_id = f"run_{uuid4().hex}"
+        trace_context = TraceContext.for_run(run_id)
+
         async def stream_factory(
             *, input: str | list[Any], provider_state: ProviderState | None
         ) -> AsyncIterator[AgentEvent]:
@@ -738,6 +743,9 @@ class AgentRuntime:
                 tool_search=tool_search,
                 compaction=compaction,
                 modalities=modalities,
+                run_id=run_id,
+                trace_id=trace_context.trace_id,
+                parent_span_id=trace_context.root_span_id,
                 **kwargs,
             ):
                 yield event
@@ -756,7 +764,6 @@ class AgentRuntime:
                 else None
             ),
         )
-        run_id = f"run_{uuid4().hex}"
         sequence = 0
         async for event in loop.run(
             input=input,
@@ -764,7 +771,12 @@ class AgentRuntime:
             provider_id=provider_ref.provider_key,
             mock_tools=mock_tools,
         ):
-            stamped = replace(event, run_id=run_id, sequence=sequence)
+            stamped = trace_context.stamp(
+                event,
+                run_id=run_id,
+                sequence=sequence,
+                preserve_sequence=False,
+            )
             sequence += 1
             await self.event_store.append(stamped)
             yield stamped
@@ -976,14 +988,9 @@ class AgentRuntime:
             hosted_metadata = _hosted_tool_metadata_from_events(events)
             if hosted_metadata:
                 metadata["hosted_tools"] = hosted_metadata
-            trace_span = model_turn_span_from_events(
-                events,
-                provider=completed_provider,
-                model=completed_model,
-                metadata=metadata,
-            )
-            if trace_span is not None:
-                metadata["trace"] = {"spans": [trace_span.to_dict()]}
+            trace_metadata = trace_metadata_from_events(events, metadata=metadata)
+            if trace_metadata["spans"]:
+                metadata["trace"] = trace_metadata
             return AgentResult(
                 output=cast(T, output),
                 text=last_text,

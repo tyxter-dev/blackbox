@@ -112,9 +112,18 @@ class AgentLoop:
             ):
                 yield AgentEvent(
                     type=event.type,
+                    run_id=event.run_id,
+                    sequence=event.sequence,
+                    trace_id=event.trace_id,
+                    span_id=event.span_id,
+                    parent_span_id=event.parent_span_id,
+                    span_kind=event.span_kind,
                     provider=event.provider,
                     session_id=session_id,
                     item_id=event.item_id,
+                    provider_trace_id=event.provider_trace_id,
+                    provider_span_id=event.provider_span_id,
+                    provider_request_id=event.provider_request_id,
                     data=event.data,
                     raw=event.raw,
                 )

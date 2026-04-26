@@ -1,3 +1,19 @@
+from agent_runtime.observability.evals import (
+    EvaluationReport,
+    EvaluationResult,
+    Evaluator,
+    EvaluatorHook,
+    evaluate_trace,
+)
+from agent_runtime.observability.otel import OpenTelemetryTraceExporter, span_to_otel_attributes
+from agent_runtime.observability.replay import (
+    RunDiff,
+    SpanDiff,
+    TraceReplay,
+    diff_runs,
+    diff_traces,
+    replay_run,
+)
 from agent_runtime.observability.sinks import (
     EventSink,
     MemoryEventSink,
@@ -5,15 +21,44 @@ from agent_runtime.observability.sinks import (
     RedactionPolicy,
     default_redaction_policy,
 )
-from agent_runtime.observability.traces import Trace, TraceSpan, model_turn_span_from_events
+from agent_runtime.observability.traces import (
+    SpanKinds,
+    Trace,
+    TraceContext,
+    TraceSpan,
+    infer_span_kind,
+    model_turn_span_from_events,
+    spans_from_events,
+    trace_from_events,
+    trace_metadata_from_events,
+)
 
 __all__ = [
+    "EvaluationReport",
+    "EvaluationResult",
+    "Evaluator",
+    "EvaluatorHook",
     "EventSink",
     "MemoryEventSink",
+    "OpenTelemetryTraceExporter",
     "RedactingEventSink",
     "RedactionPolicy",
+    "RunDiff",
+    "SpanDiff",
+    "SpanKinds",
     "Trace",
+    "TraceContext",
+    "TraceReplay",
     "TraceSpan",
     "default_redaction_policy",
+    "diff_runs",
+    "diff_traces",
+    "evaluate_trace",
+    "infer_span_kind",
     "model_turn_span_from_events",
+    "replay_run",
+    "span_to_otel_attributes",
+    "spans_from_events",
+    "trace_from_events",
+    "trace_metadata_from_events",
 ]

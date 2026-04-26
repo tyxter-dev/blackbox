@@ -27,8 +27,15 @@ def test_event_round_trip_preserves_known_typed_payloads() -> None:
         type=EventTypes.MODEL_COMPLETED,
         run_id="run_1",
         sequence=2,
+        trace_id="run_1",
+        span_id="span_model",
+        parent_span_id="span_root",
+        span_kind="model",
         provider="scripted",
         item_id=item.id,
+        provider_trace_id="provider_trace_1",
+        provider_span_id="provider_span_1",
+        provider_request_id="resp_1",
         data={"item": item, "provider_state": state, "delta": "hi"},
     )
 
@@ -39,6 +46,13 @@ def test_event_round_trip_preserves_known_typed_payloads() -> None:
     assert rehydrated.type == event.type
     assert rehydrated.run_id == "run_1"
     assert rehydrated.sequence == 2
+    assert rehydrated.trace_id == "run_1"
+    assert rehydrated.span_id == "span_model"
+    assert rehydrated.parent_span_id == "span_root"
+    assert rehydrated.span_kind == "model"
+    assert rehydrated.provider_trace_id == "provider_trace_1"
+    assert rehydrated.provider_span_id == "provider_span_1"
+    assert rehydrated.provider_request_id == "resp_1"
     assert isinstance(rehydrated.data["item"], RunItem)
     assert rehydrated.data["item"].id == item.id
     assert isinstance(rehydrated.data["provider_state"], ProviderState)

@@ -18,14 +18,27 @@ class AgentEvent:
       invocation and stamped on every event so a stream can be replayed or audited.
     - ``sequence`` is a monotonic integer assigned per-run, useful for ordering
       events that share a timestamp.
+    - ``trace_id`` / ``span_id`` / ``parent_span_id`` form the workflow-level trace
+      context. By default the runtime uses the run id as the trace id and creates
+      child spans for model, tool, MCP, workspace, approval, artifact, handoff,
+      guardrail, retry, and eval work.
+    - ``provider_*`` fields preserve provider-native trace/request correlation
+      without making those identifiers part of the runtime's stable trace model.
     """
 
     type: str
     run_id: str | None = None
     sequence: int | None = None
+    trace_id: str | None = None
+    span_id: str | None = None
+    parent_span_id: str | None = None
+    span_kind: str | None = None
     session_id: str | None = None
     provider: str | None = None
     item_id: str | None = None
+    provider_trace_id: str | None = None
+    provider_span_id: str | None = None
+    provider_request_id: str | None = None
     data: dict[str, Any] = field(default_factory=dict)
     raw: Any | None = None
     id: str = field(default_factory=lambda: f"evt_{uuid4().hex}")
@@ -61,6 +74,10 @@ class EventTypes:
     TOOL_CALL_COMPLETED = "tool.call.completed"
     TOOL_CALL_FAILED = "tool.call.failed"
 
+    AGENT_TOOL_CALL_STARTED = "agent_tool.call.started"
+    AGENT_TOOL_CALL_COMPLETED = "agent_tool.call.completed"
+    AGENT_TOOL_CALL_FAILED = "agent_tool.call.failed"
+
     TOOL_SEARCH_REQUESTED = "tool_search.requested"
     TOOL_SEARCH_COMPLETED = "tool_search.completed"
 
@@ -90,8 +107,22 @@ class EventTypes:
     APPROVAL_APPROVED = "approval.approved"
     APPROVAL_DENIED = "approval.denied"
 
+    HANDOFF_REQUESTED = "handoff.requested"
+    HANDOFF_STARTED = "handoff.started"
+    HANDOFF_COMPLETED = "handoff.completed"
+    HANDOFF_FAILED = "handoff.failed"
+
+    GUARDRAIL_STARTED = "guardrail.started"
+    GUARDRAIL_COMPLETED = "guardrail.completed"
+    GUARDRAIL_FAILED = "guardrail.failed"
+
     ARTIFACT_CREATED = "artifact.created"
     ARTIFACT_UPDATED = "artifact.updated"
 
+    RETRY_STARTED = "retry.started"
+    RETRY_COMPLETED = "retry.completed"
+    RETRY_FAILED = "retry.failed"
+
     EVAL_STARTED = "eval.started"
     EVAL_COMPLETED = "eval.completed"
+    EVAL_FAILED = "eval.failed"

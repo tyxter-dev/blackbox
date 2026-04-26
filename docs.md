@@ -43,10 +43,12 @@ Implemented provider/runtime slices:
 7. Local MCP connector for registered tools with namespaced refs and policy gates.
 8. Workspace agent package contracts, permissions, schedules, serialization,
    registry protocol, and thin runtime bridge.
+9. Workflow trace context on every event, OpenTelemetry export, replay/diff
+   helpers, and evaluator hooks.
 
 Remaining architectural targets:
 
 1. `WorkspaceProvider` protocol for local, sandbox, git, and cloud workspace backends.
 2. Vertex Agent Engine execution.
 3. Workspace approval-channel integration and non-local workspace kinds.
-4. OpenTelemetry-style trace export and richer replay/debug tooling.
+4. Production presets for external trace, metrics, artifact, and evaluation backends.

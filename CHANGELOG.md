@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Slice 14 — Workflow tracing, replay, OpenTelemetry, and eval hooks
+
+Observability now covers full workflow-level traces instead of only compact
+model-turn metadata.
+
+- Adds trace context fields to every `AgentEvent`: `trace_id`, `span_id`,
+  `parent_span_id`, `span_kind`, plus provider-native trace/span/request
+  correlation fields.
+- Stamps model, agent-session, and high-level agent-loop streams with trace
+  context while preserving monotonic run-local event sequences.
+- Expands `observability.traces` with workflow-rooted span reconstruction for
+  model calls, tool calls, hosted tools, MCP, workspace actions, approvals,
+  artifacts, retries, handoffs, guardrails, and eval events.
+- Adds an optional `otel` extra and `OpenTelemetryTraceExporter` for exporting
+  reconstructed traces through an application-configured OpenTelemetry SDK.
+- Adds replay/diff helpers and evaluator hooks that can emit
+  `eval.started`, `eval.completed`, and `eval.failed` events.
+
 ### Slice 13 — OpenAI Agents SDK-backed AgentProvider
 
 `OpenAICloudAgentProvider` now targets OpenAI's current code-first Agents SDK

@@ -214,6 +214,8 @@ run_store.load(...)
 | 5.6 | ✅ | Session state transitions | `runtime/test_local_agent_provider.py` (running → waiting → completed) | Session lifecycle is valid. |
 | 5.7 | ✅ | Resume from state | `runtime/test_resume_run_from_saved_state.py` (2 tests) | Save `RunState` to SQLite, reload from a fresh runtime, resume the loop. |
 | 5.8 | ✅ | Raw redaction | `unit/test_event_sinks.py` (9 tests) | `RedactingEventSink` rewrites sensitive `RawEnvelope` payloads before forwarding. |
+| 5.9 | ✅ | Workflow trace context | `runtime/test_runtime_stream.py::test_every_event_carries_trace_context_and_tool_span_is_shared` | Every runtime event carries trace/span context and related tool events share a span. |
+| 5.10 | ✅ | Replay, diff, eval, OTEL projection | `unit/test_observability_workflows.py` | Stored events reconstruct traces; runs can be diffed; evaluators emit eval events; spans convert to OpenTelemetry attributes. |
 
 ---
 
