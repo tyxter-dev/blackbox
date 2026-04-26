@@ -1,5 +1,26 @@
 # ModelProvider Usage And Cost Tracking Implementation Plan
 
+Status: implemented, with pricing catalog caveats.
+
+Source of truth: `FEATURES.md` lists the public feature status and
+`tests/VALIDATION.md` lists the test coverage. This spec is retained as the
+historical implementation plan for usage and cost tracking.
+
+Implemented:
+
+- Split cache read and cache creation token fields.
+- Provider-specific usage details in result metadata.
+- Expanded cost estimate fields for input, cache read, cache creation, output,
+  reasoning output, and total.
+- `ModelCatalog.register_many(...)`.
+- Unit tests and network-gated OpenAI/Gemini/xAI validation.
+
+Remaining:
+
+- Built-in live pricing defaults are intentionally not shipped because provider
+  prices change frequently.
+- Budgets/quotas are out of scope.
+
 ## Goal
 
 Make usage and cost tracking a first-class ModelProvider feature that can support real benchmarking and cost comparison across providers.
@@ -12,7 +33,7 @@ The runtime should:
 - emit stable cost metadata when pricing is registered;
 - provide a simple pricing bootstrap path without hard-coding volatile defaults.
 
-## Current State
+## Original Current State
 
 The project has a useful foundation:
 
@@ -128,4 +149,3 @@ Add focused tests for:
 - Shipping live provider price defaults.
 - Fetching prices from provider websites.
 - Per-user budgets or quota enforcement.
-

@@ -31,6 +31,7 @@ Status legend:
 | Fail-fast validation errors | Supported | `OutputValidationError` | Carries `raw_text` and the original validation/JSON error when available. |
 | Provider-native structured output | Supported | `OutputSpec.strategy="provider_native"` | Runtime builds JSON Schema contracts and wires them into OpenAI Responses `text.format` and Gemini `response_json_schema`; unsupported providers raise unless an explicit fallback is selected. |
 | Finalizer tool structured output | Supported | `OutputSpec.strategy="finalizer_tool"` | Runtime injects a hidden `submit_final_output` tool, terminates when the model calls it, and validates the tool arguments as final output. |
+| Raw JSON Schema post-hoc output | Supported | `OutputSpec(schema={...}, strategy="posthoc_parse")` | Dict JSON Schemas validate common JSON Schema constraints after generation, including type, required fields, additional properties, arrays, enums, constants, `anyOf`, and `oneOf`. |
 | Structured output retry/repair | Supported | `OutputSpec.strategy="posthoc_parse_with_retry"` | On validation failure, the runtime feeds a repair prompt back to the model up to `max_validation_retries`. |
 
 ## Local Tools
@@ -64,6 +65,7 @@ Status legend:
 | Typed hosted tool specs | Supported | `WebSearch`, `FileSearch`, `CodeInterpreter`, `RemoteMCP`, `HostedToolRaw` | Provider-managed tools are passed via `hosted_tools` and remain distinct from local function tools. |
 | OpenAI hosted tool mapping | Supported | `runtime.run(..., hosted_tools=[...])` | Maps web search, file search, code interpreter, remote MCP, and raw hosted payloads into Responses `tools`; file search result inclusion is wired through `include`. |
 | OpenAI hosted tool events | Supported | `RunItem(type="hosted_tool_call")` | Known hosted output items are normalized into typed run items while preserving provider raw payloads. |
+| Hosted tool result metadata | Supported | `result.metadata["hosted_tools"]` | Summarizes observed hosted tool calls by type, item ID, status, query/call ID, and result count where available. |
 | Provider-native remote MCP | Supported | `RemoteMCP` | OpenAI maps to `type="mcp"` tools; Anthropic maps to `mcp_servers` plus `mcp_toolset` with the current MCP client beta. |
 | MCP result metadata | Supported | `result.metadata["mcp"]` | Summarizes MCP tool lists, calls, approvals, and OpenAI tool-list context item IDs that callers can retain for lower-latency continuation. |
 | Gemini hosted web search | Supported | `WebSearch` | Maps to GenerateContent `google_search`; unsupported hosted tool specs raise typed unsupported-feature errors. |
@@ -94,8 +96,8 @@ Status legend:
 | Provider-native continuation state | Supported | `ProviderState` | Preserves provider continuation IDs and native state outside chat history. |
 | OpenAI previous response continuation | Supported | `ProviderState.previous_response_id` | OpenAI Responses adapter round-trips `previous_response_id`. |
 | Provider-native request controls | Supported | `ModelRequestControls` / `TurnRequest.controls` | Common controls such as instructions, sampling, output token caps, tool choice, parallel tool calls, and reasoning effort are mapped by adapters where native support exists; `extra` remains the escape hatch. |
-| Model usage accounting | Supported | `ModelUsage`, `ModelCatalog`, `ModelPricing` | Provider adapters normalize token usage; applications can register current pricing to add cost estimates to result metadata. |
-| Native provider caching | Partial | `ProviderState` only | The library preserves provider state for continuation. It does not yet expose provider cache controls, cache eviction, or persistent cache backends. |
+| Model usage and cost accounting | Supported | `ModelUsage`, `ModelCatalog`, `ModelPricing` | Provider adapters normalize usage, split cache read/cache creation tokens where available, preserve provider usage details, and applications can register current pricing to add cost estimates to result metadata. |
+| Native provider cache controls | Partial | `ModelCacheControl`, `cache=...` | OpenAI/xAI map prompt cache keys/retention, Anthropic maps ephemeral cache controls, and Gemini consumes `cached_content` names. Provider-side cache creation, eviction/invalidation, and persistent cache registries are not implemented. |
 | Raw provider payload preservation | Supported | `AgentEvent.raw`, `RawEnvelope` | Provider adapters can keep original SDK payloads; `RawEnvelope` supports sensitivity tagging/redaction. |
 | Resume run from persisted state | Supported | `provider_state=...`, `RunStore` | `RunState` can be saved, reloaded in a fresh runtime, and passed back into `AgentRuntime.run`. |
 | JSONL/SQLite stores | Supported | `JSONLEventStore`, `SQLiteRunStore` | JSONL event logs and SQLite run-state persistence are implemented and covered by tests. |
@@ -143,12 +145,13 @@ Status legend:
 | Local MCP dispatch connector | Supported | `MCPConnector` | Registers in-process MCP tools, starts managed stdio/HTTP transports, lists namespaced `mcp:<server>.<tool>` refs, gates calls through policy, and emits MCP events. |
 | MCP runtime tool bridge | Supported | `MCPConnector.register_runtime_tools(...)` | Exposes discovered MCP tools to a `ToolRegistry` while preserving MCP metadata and routing calls through the connector. |
 | Observability sink protocol | Partial | `observability.sinks` | Event sink abstractions exist; full tracing/export integrations are not implemented. |
-| Trace data contracts | Partial | `observability.traces` | Trace/span models exist; no full tracing backend yet. |
+| Model-turn trace spans | Supported | `result.metadata["trace"]["spans"]` | Runtime derives compact model-turn spans with timing plus usage, cost, MCP, and hosted-tool attributes where available. |
+| Trace data contracts | Partial | `observability.traces` | Trace/span models exist; no OpenTelemetry exporter or production tracing backend yet. |
 
 ## Explicitly Not Supported Yet
 
 - OpenAI cloud/Codex-style agent execution.
 - Vertex Agent Engine execution.
 - Built-in production Claude Code SDK wrapper without an injected client.
-- Provider cache controls beyond preserving native continuation state.
+- Persistent provider cache backends, cache eviction, and provider-side cache creation APIs.
 - Provider-breadth routing through LiteLLM.

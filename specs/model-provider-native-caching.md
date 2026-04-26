@@ -1,5 +1,30 @@
 # ModelProvider Native Caching Implementation Plan
 
+Status: partially implemented.
+
+Source of truth: `FEATURES.md` lists the public feature status and
+`tests/VALIDATION.md` lists the test coverage. This spec is retained as the
+forward plan for the remaining cache lifecycle work.
+
+Implemented:
+
+- `ModelCacheControl` on `ModelRequestControls`.
+- `cache=...` on `ModelRuntime` and `AgentRuntime`.
+- OpenAI/xAI prompt cache key and retention request mapping.
+- Anthropic ephemeral cache-control mapping for system/input content.
+- Gemini cached-content reference mapping.
+- Usage/cost metadata reports provider cache usage when providers return it.
+- Network-gated cache/cost integration tests.
+
+Remaining:
+
+- Gemini cached-content creation/list/delete APIs.
+- Provider-side cache eviction/invalidation.
+- Persistent runtime cache registry.
+- Dedicated `metadata["cache"]`; cache usage currently lives under
+  `metadata["usage"]`, `metadata["usage_provider_details"]`, and
+  `metadata["cost"]`.
+
 ## Goal
 
 Expose provider-native prompt/context caching as a typed ModelProvider surface without forcing every provider into the same cache model.
@@ -12,7 +37,7 @@ The runtime should let applications:
 - receive normalized cache usage metadata from provider responses;
 - keep provider-specific escape hatches available through `extra`.
 
-## Current State
+## Original Current State
 
 The project currently records cache usage only after the provider reports it:
 
@@ -101,4 +126,3 @@ Add focused unit tests for:
 - Provider-side cache eviction.
 - Persistent cache stores.
 - Pricing table updates.
-

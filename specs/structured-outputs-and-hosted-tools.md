@@ -1,6 +1,10 @@
 # Structured Outputs and Hosted Tools Implementation Spec
 
-Status: draft
+Status: implemented.
+
+Source of truth: `FEATURES.md` lists the public feature status and
+`tests/VALIDATION.md` lists the test coverage. This spec is retained as the
+historical implementation plan for structured output and hosted tools.
 
 Scope: implement the two highest-value next features:
 
@@ -18,9 +22,9 @@ References:
   hosted, and remote MCP tools.
 - Gemini structured output uses `response_mime_type="application/json"` and
   `response_json_schema` in generation config.
-- Current repo state: `OutputSpec` defines `provider_native` and
-  `finalizer_tool`, but runtime behavior is still post-hoc parsing except for
-  retry.
+- Current repo state: `OutputSpec(strategy="provider_native")`,
+  `finalizer_tool`, and raw dict JSON Schema post-hoc validation are
+  implemented and covered by runtime/unit/golden tests.
 
 ## Goals
 
@@ -75,19 +79,23 @@ observed, configured, and normalized by this runtime.
 - Do not make chat messages the internal state model.
 - Do not hard-code provider pricing or provider-specific model matrices.
 
-## Current Problems
+## Original Problems
 
-1. `provider_native` is only a named strategy; it does not affect provider
+These were the problems this spec was written to solve. They are now covered
+by the implemented feature set listed in `FEATURES.md` and validated in
+`tests/VALIDATION.md`.
+
+1. `provider_native` was only a named strategy; it did not affect provider
    request payloads.
-2. `finalizer_tool` is only a named strategy; there is no hidden finalization
+2. `finalizer_tool` was only a named strategy; there was no hidden finalization
    tool.
-3. Dict JSON Schemas are rejected by `_validate_output(...)` for post-hoc
-   parsing, and there is no path where they are useful.
-4. Hosted tools can be passed manually as raw provider dicts, but there is no
-   public typed API for them.
-5. Hosted tool output items are mostly generic fallback events, so apps cannot
-   reliably distinguish web search, file search, code execution, and remote MCP
-   results.
+3. Dict JSON Schemas were rejected by `_validate_output(...)` for post-hoc
+   parsing, and there was no path where they were useful.
+4. Hosted tools could be passed manually as raw provider dicts, but there was
+   no public typed API for them.
+5. Hosted tool output items were mostly generic fallback events, so apps could
+   not reliably distinguish web search, file search, code execution, and
+   remote MCP results.
 
 ## Design Principles
 

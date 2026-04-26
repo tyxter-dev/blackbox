@@ -1,6 +1,28 @@
 # Cloud Agent and MCP Transport Implementation Spec
 
-Status: draft
+Status: partially implemented.
+
+Source of truth: `FEATURES.md` lists the public feature status and
+`tests/VALIDATION.md` lists the test coverage. This spec is retained as the
+forward plan for remaining cloud-agent work and MCP hardening.
+
+Implemented since this spec was drafted:
+
+- `MCPConnector` can start managed stdio/HTTP/SSE/Streamable HTTP transports
+  through injected transport clients, initialize/list/call tools, cache and
+  refresh tool definitions, stop transports, and bridge discovered MCP tools
+  into `ToolRegistry`.
+- Provider-native remote MCP request mapping exists for OpenAI and Anthropic
+  through `RemoteMCP`.
+- `ClaudeCodeAgentProvider` has a client-backed lifecycle covered by fake
+  client tests.
+
+Remaining:
+
+- Production SDK-backed Claude Code wrapper without an injected fake/client.
+- OpenAI cloud/Codex-style agent execution.
+- Vertex Agent Engine execution.
+- Broader MCP OAuth/token-provider flows and production transport coverage.
 
 Scope: implement the two highest-leverage gaps from the adversarial review:
 
@@ -53,13 +75,13 @@ pretending there is a generic public cloud task API.
 
 ### 2. MCP transport management
 
-This is the second issue because MCP is the most important cross-provider tool
-integration layer. Current repo state is better than the adversarial report:
-`RemoteMCP` is typed and provider-native OpenAI/Anthropic mapping exists.
-However, `MCPConnector` is still a local dispatch shim. It registers already
-discovered callables, emits MCP events, and policy-gates calls, but it does not
-start stdio servers, connect to HTTP/SSE or Streamable HTTP endpoints,
-initialize MCP sessions, call `tools/list`, or execute `tools/call`.
+This was the second issue because MCP is the most important cross-provider
+tool integration layer. The local-dispatch-only critique is now obsolete:
+`MCPConnector` supports managed transport clients in tests, initializes/list
+tools/calls tools through those transports, caches/refreshes tool definitions,
+and stops transports cleanly. Remaining work is production hardening around
+real transport clients, OAuth/token-provider flows, and broader integration
+coverage.
 
 ## Non-Goals
 
@@ -257,7 +279,7 @@ Integration tests:
 
 ## Feature 2: MCP Transport Management
 
-### Current State
+### Original Current State
 
 Existing:
 
@@ -267,7 +289,7 @@ Existing:
 - `MCPConnector.call_tool(...)` policy-gates and executes registered callables.
 - Provider-native remote MCP is modeled separately as `RemoteMCP` hosted tools.
 
-Missing:
+Originally missing:
 
 - Starting and supervising stdio MCP subprocesses.
 - Connecting to HTTP/SSE and Streamable HTTP MCP servers.
