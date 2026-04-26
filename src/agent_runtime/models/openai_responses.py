@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from agent_runtime.core.accounting import usage_from_openai_response
-from agent_runtime.core.capabilities import ModelCapabilities
+from agent_runtime.core.capabilities import HostedToolSupport, ModelCapabilities
 from agent_runtime.core.errors import (
     ProviderExecutionError,
     ProviderNotConfiguredError,
@@ -14,7 +14,7 @@ from agent_runtime.core.errors import (
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import openai_include_values, to_openai_tool
+from agent_runtime.hosted_tools import openai_include_values, openai_namespace_tools, to_openai_tool
 from agent_runtime.models._support import (
     is_retryable_status_error,
     sleep_for_retry,
@@ -49,6 +49,14 @@ _HOSTED_TOOL_CALL_TYPES = {
     "code_interpreter_call": "code_interpreter",
     "computer_call": "computer",
     "image_generation_call": "image_generation",
+    "shell_call": "shell",
+    "apply_patch_call": "apply_patch",
+}
+
+_HOSTED_TOOL_RESULT_TYPES = {
+    "shell_call_output": "shell",
+    "apply_patch_call_output": "apply_patch",
+    "computer_call_output": "computer",
 }
 
 _HOSTED_TOOL_DATA_KEYS = (
@@ -59,6 +67,10 @@ _HOSTED_TOOL_DATA_KEYS = (
     "code",
     "action",
     "call_id",
+    "arguments",
+    "command",
+    "diff",
+    "path",
 )
 
 _MCP_ITEM_DATA_KEYS = (
@@ -113,6 +125,33 @@ class OpenAIResponsesProvider:
             supports_reasoning_items=True,
             supports_provider_state=True,
             supports_structured_output=True,
+            hosted_tools={
+                "web_search": HostedToolSupport(
+                    "web_search", True, True, True, False
+                ),
+                "file_search": HostedToolSupport(
+                    "file_search", True, True, True, False
+                ),
+                "code_interpreter": HostedToolSupport(
+                    "code_interpreter", True, True, True, False
+                ),
+                "shell": HostedToolSupport(
+                    "shell", True, True, True, True, requires_handler=True
+                ),
+                "apply_patch": HostedToolSupport(
+                    "apply_patch", True, True, False, True, requires_handler=True
+                ),
+                "computer": HostedToolSupport(
+                    "computer", True, True, False, True, requires_handler=True
+                ),
+                "image_generation": HostedToolSupport(
+                    "image_generation", True, True, True, False
+                ),
+                "tool_search": HostedToolSupport(
+                    "tool_search", True, True, True, False
+                ),
+                "mcp": HostedToolSupport("mcp", True, True, True, False),
+            },
         )
 
     def _get_client(self) -> Any:
@@ -225,7 +264,11 @@ class OpenAIResponsesProvider:
             "model": request.model,
             "input": _coerce_input(request.input),
         }
-        tools = [*request.tools, *(to_openai_tool(tool) for tool in request.hosted_tools)]
+        tools = [
+            *request.tools,
+            *openai_namespace_tools(request.hosted_tools),
+            *(to_openai_tool(tool) for tool in request.hosted_tools),
+        ]
         if tools:
             kwargs["tools"] = tools
         include_values = openai_include_values(request.hosted_tools)
@@ -294,6 +337,10 @@ def _coerce_input(value: str | list[Any]) -> Any:
                     "output": entry.data.get("content", entry.data.get("error", "")),
                 }
             )
+        elif isinstance(entry, RunItem) and entry.type == ItemTypes.HOSTED_TOOL_RESULT:
+            provider_item = entry.data.get("provider_input_item")
+            if isinstance(provider_item, dict):
+                converted.append(provider_item)
         else:
             converted.append(strip_private_fields(entry))
     return converted
@@ -431,17 +478,56 @@ def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
             "item_type": item_type,
             **_hosted_tool_data(item, item_type=item_type),
         }
+        requires_continuation = item_type in {
+            "shell_call",
+            "apply_patch_call",
+            "computer_call",
+        }
+        if requires_continuation:
+            data["requires_continuation"] = True
+            data["provider_item_type"] = item_type
         run_item = RunItem(
             type=ItemTypes.HOSTED_TOOL_CALL,
             provider=provider,
-            status=_completed_item_status(item),
+            status="requires_action" if requires_continuation else _completed_item_status(item),
             id=item_id or f"item_{id(item)}",
             data=dict(data),
             raw=item,
         )
         data["item"] = run_item
         return AgentEvent(
-            type=EventTypes.MODEL_ITEM_COMPLETED,
+            type=(
+                EventTypes.HOSTED_TOOL_CALL_REQUESTED
+                if requires_continuation
+                else EventTypes.MODEL_ITEM_COMPLETED
+            ),
+            provider=provider,
+            item_id=run_item.id,
+            data=data,
+            raw=raw,
+        )
+
+    if item_type in _HOSTED_TOOL_RESULT_TYPES:
+        data = {
+            "item_type": item_type,
+            "hosted_tool_type": _HOSTED_TOOL_RESULT_TYPES[item_type],
+            "call_id": _attr(item, "call_id") or item_id or "",
+        }
+        output = _attr(item, "output")
+        if output is not None:
+            data["output"] = output
+        status: ItemStatus = "failed" if _attr(item, "status") == "failed" else "completed"
+        run_item = RunItem(
+            type=ItemTypes.HOSTED_TOOL_RESULT,
+            provider=provider,
+            status=status,
+            id=item_id or f"item_{id(item)}",
+            data=dict(data),
+            raw=item,
+        )
+        data["item"] = run_item
+        return AgentEvent(
+            type=EventTypes.HOSTED_TOOL_CALL_COMPLETED,
             provider=provider,
             item_id=run_item.id,
             data=data,
@@ -513,7 +599,7 @@ def _hosted_tool_data(item: Any, *, item_type: str) -> dict[str, Any]:
     for key in _HOSTED_TOOL_DATA_KEYS:
         value = _attr(item, key)
         if value is not None:
-            data[key] = value
+            data[key] = _parse_arguments(value) if key == "arguments" else value
     return data
 
 

@@ -22,16 +22,17 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 from agent_runtime.core.accounting import usage_from_anthropic_message
-from agent_runtime.core.capabilities import ModelCapabilities
+from agent_runtime.core.capabilities import HostedToolSupport, ModelCapabilities
 from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
 from agent_runtime.hosted_tools import (
     anthropic_beta_values,
+    anthropic_deferred_tools,
     anthropic_mcp_servers,
     to_anthropic_tool,
 )
@@ -74,6 +75,24 @@ class AnthropicMessagesProvider:
             supports_reasoning_items=True,
             supports_provider_state=True,
             supports_structured_output=False,
+            hosted_tools={
+                "web_search": HostedToolSupport("web_search", True, True, True, False),
+                "web_fetch": HostedToolSupport("web_fetch", True, True, True, False),
+                "code_interpreter": HostedToolSupport(
+                    "code_interpreter", True, True, True, False
+                ),
+                "tool_search": HostedToolSupport("tool_search", True, True, True, False),
+                "shell": HostedToolSupport(
+                    "shell", True, True, False, True, requires_handler=True
+                ),
+                "computer": HostedToolSupport(
+                    "computer", True, True, False, True, requires_handler=True
+                ),
+                "text_editor": HostedToolSupport(
+                    "text_editor", True, True, False, True, requires_handler=True
+                ),
+                "mcp": HostedToolSupport("mcp", True, True, True, False),
+            },
         )
 
     def _get_client(self) -> Any:
@@ -191,7 +210,11 @@ class AnthropicMessagesProvider:
             "messages": messages,
             "max_tokens": 1024,
         }
-        tools = [*request.tools, *(to_anthropic_tool(tool) for tool in request.hosted_tools)]
+        tools = [
+            *request.tools,
+            *anthropic_deferred_tools(request.hosted_tools),
+            *(to_anthropic_tool(tool) for tool in request.hosted_tools),
+        ]
         if not tools:
             tools = tools_from_extra
         if tools:
@@ -234,7 +257,11 @@ def _compose_messages(request: TurnRequest) -> list[dict[str, Any]]:
     tool_results: list[dict[str, Any]] = []
     passthrough: list[dict[str, Any]] = []
     for entry in request.input:
-        if isinstance(entry, RunItem) and entry.type == ItemTypes.FUNCTION_RESULT:
+        if isinstance(entry, RunItem) and entry.type == ItemTypes.HOSTED_TOOL_RESULT:
+            provider_item = entry.data.get("provider_input_item")
+            if isinstance(provider_item, dict):
+                tool_results.append(provider_item)
+        elif isinstance(entry, RunItem) and entry.type == ItemTypes.FUNCTION_RESULT:
             tool_use_id = entry.data.get("call_id", "")
             content = entry.data.get("content", entry.data.get("error", ""))
             block: dict[str, Any] = {
@@ -278,7 +305,7 @@ def _cache_marked_entry(entry: dict[str, Any], cache: Any) -> dict[str, Any]:
     cache_control = entry.get("_cache_control") or _cache_control_payload(cache)
     converted = strip_private_fields(entry)
     if cache_control is None:
-        return converted
+        return cast(dict[str, Any], converted)
     content = converted.get("content")
     if isinstance(content, str):
         converted["content"] = [
@@ -290,7 +317,7 @@ def _cache_marked_entry(entry: dict[str, Any], cache: Any) -> dict[str, Any]:
             updated = dict(last)
             updated["cache_control"] = dict(cache_control)
             converted["content"] = [*content[:-1], updated]
-    return converted
+    return cast(dict[str, Any], converted)
 
 
 def _convert_tools(tools: list[Any]) -> list[dict[str, Any]]:
@@ -393,11 +420,30 @@ def _map_block_start(
         "tool_use": ItemTypes.FUNCTION_CALL,
         "mcp_tool_use": ItemTypes.MCP_CALL,
         "mcp_tool_result": ItemTypes.MCP_CALL,
+        "server_tool_use": ItemTypes.HOSTED_TOOL_CALL,
+        "web_search_tool_result": ItemTypes.HOSTED_TOOL_RESULT,
+        "web_fetch_tool_result": ItemTypes.HOSTED_TOOL_RESULT,
+        "code_execution_tool_result": ItemTypes.HOSTED_TOOL_RESULT,
+        "tool_search_tool_result": ItemTypes.TOOL_SEARCH_OUTPUT,
+        "tool_reference": ItemTypes.TOOL_SEARCH_OUTPUT,
     }.get(block_type, block_type)
     if block_type == "mcp_tool_use":
         canonical = EventTypes.MCP_CALL_STARTED
     elif block_type == "mcp_tool_result":
         canonical = EventTypes.MCP_CALL_COMPLETED
+    elif block_type == "tool_search_tool_result" or block_type == "tool_reference":
+        canonical = EventTypes.TOOL_SEARCH_COMPLETED
+    elif block_type in {
+        "server_tool_use",
+        "web_search_tool_result",
+        "web_fetch_tool_result",
+        "code_execution_tool_result",
+    }:
+        canonical = (
+            EventTypes.HOSTED_TOOL_CALL_COMPLETED
+            if block_type.endswith("_tool_result")
+            else EventTypes.MODEL_ITEM_CREATED
+        )
 
     item_id = block_id or f"block_{index}"
     data: dict[str, Any] = {"item_type": block_type, "index": index}
@@ -406,6 +452,8 @@ def _map_block_start(
         data["name"] = state["name"]
     elif block_type in {"mcp_tool_use", "mcp_tool_result"}:
         data.update(_mcp_block_data(block, block_type=block_type))
+    elif run_item_type in {ItemTypes.HOSTED_TOOL_CALL, ItemTypes.HOSTED_TOOL_RESULT}:
+        data.update(_hosted_block_data(block, block_type=block_type))
 
     run_item = RunItem(
         type=run_item_type,
@@ -489,6 +537,35 @@ def _map_block_stop(
     if block_type == "tool_use":
         joined = "".join(json_buffers.pop(index, []))
         arguments = _parse_arguments(joined)
+        hosted_tool_type = _anthropic_client_tool_type(str(state.get("name", "")))
+        if hosted_tool_type is not None:
+            data = {
+                "call_id": state.get("call_id", ""),
+                "name": state.get("name", ""),
+                "arguments": arguments,
+                "item_type": block_type,
+                "provider_item_type": block_type,
+                "hosted_tool_type": hosted_tool_type,
+                "requires_continuation": True,
+                "index": index,
+                "phase": "done",
+            }
+            item = RunItem(
+                type=ItemTypes.HOSTED_TOOL_CALL,
+                provider=provider,
+                status="requires_action",
+                id=item_id,
+                data=dict(data),
+                raw=state.get("block"),
+            )
+            data["item"] = item
+            return AgentEvent(
+                type=EventTypes.HOSTED_TOOL_CALL_REQUESTED,
+                provider=provider,
+                item_id=item_id,
+                data=data,
+                raw=raw,
+            )
         return AgentEvent(
             type=EventTypes.TOOL_CALL_REQUESTED,
             provider=provider,
@@ -569,6 +646,56 @@ def _mcp_block_data(block: Any, *, block_type: str) -> dict[str, Any]:
     if is_error is not None:
         data["is_error"] = is_error
     return data
+
+
+def _hosted_block_data(block: Any, *, block_type: str) -> dict[str, Any]:
+    data: dict[str, Any] = {"hosted_tool_type": _anthropic_server_tool_type(block, block_type)}
+    call_id = _attr(block, "id") or _attr(block, "tool_use_id")
+    if call_id is not None:
+        data["call_id"] = call_id
+    name = _attr(block, "name")
+    if name is not None:
+        data["name"] = name
+    input_value = _attr(block, "input")
+    if input_value is not None:
+        data["arguments"] = input_value
+    content = _attr(block, "content")
+    if content is not None:
+        data["output"] = content
+    is_error = _attr(block, "is_error")
+    if is_error is not None:
+        data["is_error"] = is_error
+    return data
+
+
+def _anthropic_server_tool_type(block: Any, block_type: str) -> str:
+    name = _attr(block, "name")
+    if isinstance(name, str):
+        if name == "web_search":
+            return "web_search"
+        if name == "web_fetch":
+            return "web_fetch"
+        if name == "code_execution":
+            return "code_interpreter"
+        if name == "tool_search":
+            return "tool_search"
+    if block_type == "web_search_tool_result":
+        return "web_search"
+    if block_type == "web_fetch_tool_result":
+        return "web_fetch"
+    if block_type == "code_execution_tool_result":
+        return "code_interpreter"
+    return block_type.removesuffix("_tool_result")
+
+
+def _anthropic_client_tool_type(name: str) -> str | None:
+    if name == "bash":
+        return "shell"
+    if name == "computer":
+        return "computer"
+    if name in {"text_editor", "str_replace_editor"}:
+        return "text_editor"
+    return None
 
 
 def _block_status(block: Any, *, block_type: str) -> ItemStatus:

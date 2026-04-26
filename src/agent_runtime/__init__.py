@@ -9,7 +9,7 @@ from agent_runtime.compat.providers import (
 from agent_runtime.core.accounting import ModelCatalog, ModelPricing, ModelUsage
 from agent_runtime.core.approvals import ApprovalDecision, ApprovalRequest
 from agent_runtime.core.artifacts import Artifact, ArtifactRef
-from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities
+from agent_runtime.core.capabilities import AgentCapabilities, HostedToolSupport, ModelCapabilities
 from agent_runtime.core.errors import OutputValidationError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
@@ -17,10 +17,20 @@ from agent_runtime.core.results import AgentResult, ToolPayload
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.hosted_tools import (
+    ApplyPatch,
     CodeInterpreter,
+    ComputerUse,
+    ContainerSpec,
     FileSearch,
+    HostedToolHandlers,
     HostedToolRaw,
+    ImageGeneration,
     RemoteMCP,
+    Shell,
+    ToolNamespace,
+    ToolSearch,
+    URLContext,
+    WebFetch,
     WebSearch,
 )
 from agent_runtime.output.schema import OutputSchema
@@ -48,6 +58,7 @@ __all__ = [
     "AgentRuntimeFacade",
     "AgentSession",
     "AgentSpec",
+    "ApplyPatch",
     "ApprovalDecision",
     "ApprovalRequest",
     "Artifact",
@@ -55,9 +66,14 @@ __all__ = [
     "ChatMessage",
     "ChatRuntimeFacade",
     "CodeInterpreter",
+    "ComputerUse",
+    "ContainerSpec",
     "EventTypes",
     "FileSearch",
+    "HostedToolHandlers",
     "HostedToolRaw",
+    "HostedToolSupport",
+    "ImageGeneration",
     "ItemTypes",
     "ModelCacheControl",
     "ModelCapabilities",
@@ -77,11 +93,16 @@ __all__ = [
     "RunItem",
     "RunState",
     "SessionRef",
+    "Shell",
     "TaskSpec",
+    "ToolNamespace",
     "ToolPayload",
+    "ToolSearch",
     "ToolSession",
     "TurnRequest",
     "TurnResult",
+    "URLContext",
+    "WebFetch",
     "WebSearch",
     "create_runtime_with_default_providers",
     "provider_ref_for_model",

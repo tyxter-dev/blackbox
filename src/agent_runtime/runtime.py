@@ -15,6 +15,7 @@ from agent_runtime.core.accounting import (
 )
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
+from agent_runtime.core.capabilities import validate_hosted_tools
 from agent_runtime.core.errors import (
     OutputValidationError,
     ProviderExecutionError,
@@ -26,7 +27,7 @@ from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, 
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
-from agent_runtime.hosted_tools import HostedToolSpec
+from agent_runtime.hosted_tools import HostedToolHandlers, HostedToolSpec
 from agent_runtime.observability.traces import model_turn_span_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
@@ -61,6 +62,7 @@ class ModelRuntime:
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
+        hosted_tool_handlers: HostedToolHandlers | None = None,
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         instructions: str | None = None,
@@ -79,6 +81,11 @@ class ModelRuntime:
         if not model_name:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
         adapter = self.registry.get_model(provider_ref.provider_key)
+        validate_hosted_tools(
+            adapter.capabilities(model_name),
+            list(hosted_tools or []),
+            provider=provider_ref.provider_key,
+        )
         request = TurnRequest(
             model=model_name,
             input=input if isinstance(input, str) else list(input),
@@ -118,6 +125,7 @@ class ModelRuntime:
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
+        hosted_tool_handlers: HostedToolHandlers | None = None,
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         instructions: str | None = None,
@@ -144,6 +152,7 @@ class ModelRuntime:
             provider_state=provider_state,
             tools=tools,
             hosted_tools=hosted_tools,
+            hosted_tool_handlers=hosted_tool_handlers,
             output_schema=output_schema,
             output_strategy=output_strategy,
             instructions=instructions,
@@ -619,6 +628,7 @@ class AgentRuntime:
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
+        hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[AgentEvent]:
@@ -668,6 +678,8 @@ class AgentRuntime:
         loop = AgentLoop(
             stream_factory=stream_factory,
             tools=tool_runtime if tools else None,
+            hosted_tools=list(hosted_tools or []),
+            hosted_tool_handlers=hosted_tool_handlers or HostedToolHandlers(),
             approval_policy=approval_policy,
             policy=policy,
             max_iterations=max_iterations,
@@ -709,6 +721,7 @@ class AgentRuntime:
         output_spec: OutputSpec | None = None,
         provider_state: ProviderState | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
+        hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
         **kwargs: Any,
     ) -> AgentResult[T]:
@@ -786,6 +799,7 @@ class AgentRuntime:
                         mock_tools=mock_tools,
                         provider_state=captured_state,
                         hosted_tools=hosted_tools,
+                        hosted_tool_handlers=hosted_tool_handlers,
                         output_schema=output_schema,
                         output_strategy=effective_strategy if output_schema is not None else None,
                         cache=cache,
@@ -805,6 +819,10 @@ class AgentRuntime:
                                         call_id=event.data.get("call_id"),
                                     )
                                 )
+                        elif event.type == EventTypes.ARTIFACT_CREATED:
+                            artifact = event.data.get("artifact")
+                            if isinstance(artifact, Artifact):
+                                artifacts.append(artifact)
                         item = event.data.get("item")
                         if isinstance(item, RunItem):
                             items.append(item)
@@ -836,7 +854,7 @@ class AgentRuntime:
                     ):
                         raise
                     provider_native_fallback = spec.fallback
-                    effective_strategy = spec.fallback
+                    effective_strategy = cast(OutputStrategy, spec.fallback)
                     if effective_strategy == "posthoc_parse":
                         output_schema = None
                     text_parts = []

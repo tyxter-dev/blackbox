@@ -27,6 +27,15 @@ from agent_runtime.core.policy import (
     PolicyRequest,
 )
 from agent_runtime.core.state import ProviderState
+from agent_runtime.hosted_tools import (
+    ApplyPatch,
+    ComputerUse,
+    HostedToolHandlers,
+    HostedToolSpec,
+    Shell,
+)
+from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext
+from agent_runtime.tools.hosted_runtime import HostedToolRunner
 from agent_runtime.tools.runtime import ToolRuntime
 
 ApprovalPolicy = Callable[[str, dict[str, Any]], bool]
@@ -37,6 +46,11 @@ class _PendingToolCall:
     call_id: str
     name: str
     arguments: dict[str, Any]
+
+
+@dataclass(slots=True)
+class _PendingHostedToolCall:
+    call: HostedToolCall
 
 
 @dataclass
@@ -56,6 +70,9 @@ class AgentLoop:
     with the chosen provider/model."""
 
     tools: ToolRuntime | None = None
+    hosted_tools: list[HostedToolSpec] = field(default_factory=list)
+    hosted_tool_handlers: HostedToolHandlers = field(default_factory=HostedToolHandlers)
+    hosted_tool_runner: HostedToolRunner = field(default_factory=HostedToolRunner)
     approval_policy: ApprovalPolicy | None = None
     policy: Policy | None = None
     max_iterations: int = 8
@@ -87,6 +104,7 @@ class AgentLoop:
                 return
 
             pending_calls: list[_PendingToolCall] = []
+            pending_hosted_calls: list[_PendingHostedToolCall] = []
             last_state: ProviderState | None = None
 
             async for event in self.stream_factory(
@@ -108,14 +126,110 @@ class AgentLoop:
                             arguments=dict(event.data.get("arguments") or {}),
                         )
                     )
+                if event.type == EventTypes.HOSTED_TOOL_CALL_REQUESTED:
+                    hosted_call = _hosted_call_from_event(event)
+                    if hosted_call is not None:
+                        pending_hosted_calls.append(_PendingHostedToolCall(hosted_call))
                 maybe_state = event.data.get("provider_state")
                 if isinstance(maybe_state, ProviderState):
                     last_state = maybe_state
 
             provider_state = last_state
 
-            if not pending_calls:
+            if not pending_calls and not pending_hosted_calls:
                 return
+
+            hosted_results: list[RunItem] = []
+            if pending_hosted_calls:
+                context = HostedToolContext(
+                    run_id="",
+                    session_id=session_id,
+                    provider=provider_id,
+                    model="",
+                    policy=self._effective_policy(),
+                )
+                for pending in pending_hosted_calls:
+                    hosted_call = pending.call
+                    yield AgentEvent(
+                        type=EventTypes.HOSTED_TOOL_CALL_STARTED,
+                        provider=provider_id,
+                        session_id=session_id,
+                        item_id=hosted_call.item_id or hosted_call.call_id,
+                        data={
+                            "call_id": hosted_call.call_id,
+                            "hosted_tool_type": hosted_call.hosted_tool_type,
+                            "provider_item_type": hosted_call.provider_item_type,
+                            "arguments": dict(hosted_call.arguments),
+                        },
+                        raw=hosted_call.raw,
+                    )
+                    try:
+                        output = await self.hosted_tool_runner.call(
+                            hosted_call,
+                            context=context,
+                            handlers=self.hosted_tool_handlers,
+                            spec=_find_matching_hosted_spec(hosted_call, self.hosted_tools),
+                        )
+                    except Exception as exc:
+                        yield AgentEvent(
+                            type=EventTypes.HOSTED_TOOL_CALL_FAILED,
+                            provider=provider_id,
+                            session_id=session_id,
+                            item_id=hosted_call.item_id or hosted_call.call_id,
+                            data={
+                                "call_id": hosted_call.call_id,
+                                "hosted_tool_type": hosted_call.hosted_tool_type,
+                                "error": str(exc),
+                            },
+                        )
+                        raise
+
+                    result_item = self.hosted_tool_runner.output_item(output)
+                    hosted_results.append(result_item)
+                    for artifact in output.artifacts:
+                        yield AgentEvent(
+                            type=EventTypes.ARTIFACT_CREATED,
+                            provider=provider_id,
+                            session_id=session_id,
+                            item_id=artifact.id,
+                            data={"artifact": artifact},
+                        )
+                    event_type = {
+                        "completed": EventTypes.HOSTED_TOOL_CALL_COMPLETED,
+                        "failed": EventTypes.HOSTED_TOOL_CALL_FAILED,
+                        "denied": EventTypes.HOSTED_TOOL_CALL_DENIED,
+                    }[output.status]
+                    yield AgentEvent(
+                        type=event_type,
+                        provider=provider_id,
+                        session_id=session_id,
+                        item_id=hosted_call.item_id or hosted_call.call_id,
+                        data={
+                            "call_id": output.call_id,
+                            "hosted_tool_type": output.hosted_tool_type,
+                            "content": output.content,
+                            "provider_input_item": output.provider_input_item,
+                            "item": result_item,
+                            "artifact_ids": [artifact.id for artifact in output.artifacts],
+                        },
+                        raw=output.raw,
+                    )
+                    yield AgentEvent(
+                        type=EventTypes.HOSTED_TOOL_OUTPUT_PREPARED,
+                        provider=provider_id,
+                        session_id=session_id,
+                        item_id=result_item.id,
+                        data={
+                            "call_id": output.call_id,
+                            "hosted_tool_type": output.hosted_tool_type,
+                            "provider_input_item": output.provider_input_item,
+                            "item": result_item,
+                        },
+                    )
+
+            if not pending_calls:
+                turn_input = hosted_results
+                continue
 
             finalizer_call = self._find_finalizer_call(pending_calls)
             if finalizer_call is not None:
@@ -254,7 +368,7 @@ class AgentLoop:
                     item_id=call.call_id,
                     data=completed_data,
                 )
-                tool_results.append(
+                tool_results[index] = (
                     RunItem(
                         type=ItemTypes.FUNCTION_RESULT,
                         provider=provider_id,
@@ -267,7 +381,10 @@ class AgentLoop:
                     )
                 )
 
-            turn_input = [item for item in tool_results if item is not None]
+            turn_input = [
+                *hosted_results,
+                *[item for item in tool_results if item is not None],
+            ]
         else:
             yield AgentEvent(
                 type=EventTypes.SESSION_FAILED,
@@ -346,3 +463,46 @@ class AgentLoop:
 
     def cancel(self) -> None:
         self._cancelled = True
+
+
+def _hosted_call_from_event(event: AgentEvent) -> HostedToolCall | None:
+    hosted_tool_type = event.data.get("hosted_tool_type")
+    if not isinstance(hosted_tool_type, str):
+        item = event.data.get("item")
+        if isinstance(item, RunItem):
+            value = item.data.get("hosted_tool_type")
+            hosted_tool_type = value if isinstance(value, str) else None
+    if not isinstance(hosted_tool_type, str):
+        return None
+    call_id = event.data.get("call_id") or event.item_id or ""
+    if not isinstance(call_id, str):
+        call_id = str(call_id)
+    arguments = event.data.get("arguments")
+    if not isinstance(arguments, dict):
+        arguments = {}
+    provider_item_type = event.data.get("provider_item_type") or event.data.get("item_type") or ""
+    status = event.data.get("status")
+    return HostedToolCall(
+        provider=event.provider or "",
+        hosted_tool_type=hosted_tool_type,
+        provider_item_type=str(provider_item_type),
+        call_id=call_id,
+        item_id=event.item_id,
+        status=status if isinstance(status, str) else None,
+        arguments=dict(arguments),
+        raw=event.raw,
+        metadata=dict(event.data.get("metadata") or {}),
+    )
+
+
+def _find_matching_hosted_spec(
+    call: HostedToolCall, specs: list[HostedToolSpec]
+) -> HostedToolSpec | None:
+    for spec in specs:
+        if call.hosted_tool_type == "shell" and isinstance(spec, Shell):
+            return spec
+        if call.hosted_tool_type == "apply_patch" and isinstance(spec, ApplyPatch):
+            return spec
+        if call.hosted_tool_type == "computer" and isinstance(spec, ComputerUse):
+            return spec
+    return None

@@ -1,6 +1,36 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from agent_runtime.core.errors import UnsupportedFeatureError
+from agent_runtime.hosted_tools import (
+    ApplyPatch,
+    CodeInterpreter,
+    ComputerUse,
+    FileSearch,
+    HostedToolRaw,
+    HostedToolSpec,
+    ImageGeneration,
+    RemoteMCP,
+    Shell,
+    ToolSearch,
+    URLContext,
+    WebFetch,
+    WebSearch,
+)
+
+
+@dataclass(slots=True, frozen=True)
+class HostedToolSupport:
+    tool_type: str
+    request_mapping: bool
+    event_mapping: bool
+    provider_server_execution: bool
+    runtime_client_execution: bool
+    requires_handler: bool = False
+    requires_approval_default: bool = False
+    models: list[str] = field(default_factory=list)
+    notes: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -22,6 +52,7 @@ class ModelCapabilities:
     supports_reasoning_items: bool = False
     supports_provider_state: bool = False
     supports_structured_output: bool = False
+    hosted_tools: dict[str, HostedToolSupport] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -38,3 +69,51 @@ class AgentCapabilities:
     supports_evals: bool = False
     supports_cancellation: bool = False
     supports_resume: bool = False
+
+
+def hosted_tool_type(spec: HostedToolSpec) -> str:
+    if isinstance(spec, WebSearch):
+        return "web_search"
+    if isinstance(spec, WebFetch):
+        return "web_fetch"
+    if isinstance(spec, URLContext):
+        return "url_context"
+    if isinstance(spec, FileSearch):
+        return "file_search"
+    if isinstance(spec, CodeInterpreter):
+        return "code_interpreter"
+    if isinstance(spec, Shell):
+        return "shell"
+    if isinstance(spec, ApplyPatch):
+        return "apply_patch"
+    if isinstance(spec, ComputerUse):
+        return "computer"
+    if isinstance(spec, ImageGeneration):
+        return "image_generation"
+    if isinstance(spec, ToolSearch):
+        return "tool_search"
+    if isinstance(spec, RemoteMCP):
+        return "mcp"
+    if isinstance(spec, HostedToolRaw):
+        return "raw"
+    return type(spec).__name__
+
+
+def validate_hosted_tools(
+    capabilities: ModelCapabilities,
+    specs: list[HostedToolSpec],
+    *,
+    provider: str,
+) -> None:
+    if not specs:
+        return
+    if not capabilities.supports_hosted_tools:
+        raise UnsupportedFeatureError(f"Provider '{provider}' does not support hosted tools.")
+    for spec in specs:
+        if isinstance(spec, HostedToolRaw):
+            continue
+        tool_type = hosted_tool_type(spec)
+        if tool_type not in capabilities.hosted_tools:
+            raise UnsupportedFeatureError(
+                f"Provider '{provider}' does not support hosted tool '{tool_type}'."
+            )

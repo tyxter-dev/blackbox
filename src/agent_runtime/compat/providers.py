@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
@@ -63,9 +63,9 @@ def resolve_model_route(model: str) -> ModelRoute:
     for prefix, provider in _BARE_PREFIXES.items():
         if lower.startswith(prefix):
             return ModelRoute(provider=provider, model=model)
-    provider = _EXACT_BARE.get(lower)
-    if provider is not None:
-        return ModelRoute(provider=provider, model=model)
+    exact_provider = _EXACT_BARE.get(lower)
+    if exact_provider is not None:
+        return ModelRoute(provider=exact_provider, model=model)
     raise ValueError(
         f"Cannot infer provider for model '{model}'. Use an explicit provider "
         "prefix such as openai/, anthropic/, google/, or xai/."
@@ -96,19 +96,39 @@ def register_default_model_providers(
         raise TypeError("target must be a ProviderRegistry or expose a .registry")
 
     selected = _normalize_include(include)
-    common = {
-        "timeout": timeout,
-        "max_retries": max_retries,
-        "retry_min_delay": retry_min_delay,
-    }
     if "openai" in selected:
-        registry.register_model(OpenAIResponsesProvider(**common))
+        registry.register_model(
+            OpenAIResponsesProvider(
+                timeout=timeout,
+                max_retries=max_retries,
+                retry_min_delay=retry_min_delay,
+            )
+        )
     if "anthropic" in selected:
-        registry.register_model(AnthropicMessagesProvider(**common))
+        registry.register_model(
+            AnthropicMessagesProvider(
+                timeout=timeout,
+                max_retries=max_retries,
+                retry_min_delay=retry_min_delay,
+            )
+        )
     if "google" in selected:
-        registry.register_model(GeminiGenerateContentProvider(**common), "gemini")
+        registry.register_model(
+            GeminiGenerateContentProvider(
+                timeout=timeout,
+                max_retries=max_retries,
+                retry_min_delay=retry_min_delay,
+            ),
+            "gemini",
+        )
     if "xai" in selected:
-        registry.register_model(XAIResponsesProvider(**common))
+        registry.register_model(
+            XAIResponsesProvider(
+                timeout=timeout,
+                max_retries=max_retries,
+                retry_min_delay=retry_min_delay,
+            )
+        )
     return registry
 
 
@@ -141,7 +161,7 @@ def _normalize_include(include: Iterable[ProviderAlias | str] | None) -> set[Pro
         if value == "gemini":
             selected.add("google")
         elif value in {"openai", "anthropic", "google", "xai"}:
-            selected.add(value)
+            selected.add(cast(ProviderKey, value))
         else:
             raise ValueError(
                 f"Unknown provider '{value}'. Expected one of: openai, anthropic, google, "

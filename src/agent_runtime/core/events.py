@@ -64,6 +64,13 @@ class EventTypes:
     TOOL_SEARCH_REQUESTED = "tool_search.requested"
     TOOL_SEARCH_COMPLETED = "tool_search.completed"
 
+    HOSTED_TOOL_CALL_REQUESTED = "hosted_tool.call.requested"
+    HOSTED_TOOL_CALL_STARTED = "hosted_tool.call.started"
+    HOSTED_TOOL_CALL_COMPLETED = "hosted_tool.call.completed"
+    HOSTED_TOOL_CALL_FAILED = "hosted_tool.call.failed"
+    HOSTED_TOOL_CALL_DENIED = "hosted_tool.call.denied"
+    HOSTED_TOOL_OUTPUT_PREPARED = "hosted_tool.output.prepared"
+
     MCP_LIST_TOOLS_COMPLETED = "mcp.list_tools.completed"
     MCP_APPROVAL_REQUIRED = "mcp.approval.required"
     MCP_CALL_STARTED = "mcp.call.started"

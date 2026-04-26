@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from agent_runtime.core.accounting import add_usage, usage_from_gemini_chunk
-from agent_runtime.core.capabilities import ModelCapabilities
+from agent_runtime.core.capabilities import HostedToolSupport, ModelCapabilities
 from agent_runtime.core.errors import (
     ProviderExecutionError,
     ProviderNotConfiguredError,
@@ -62,6 +62,17 @@ class GeminiGenerateContentProvider:
             supports_reasoning_items=True,
             supports_provider_state=True,
             supports_structured_output=True,
+            hosted_tools={
+                "web_search": HostedToolSupport("web_search", True, True, True, False),
+                "code_execution": HostedToolSupport(
+                    "code_execution", True, True, True, False
+                ),
+                "url_context": HostedToolSupport("url_context", True, True, True, False),
+                "file_search": HostedToolSupport("file_search", True, True, True, False),
+                "computer": HostedToolSupport(
+                    "computer", True, True, False, True, requires_handler=True
+                ),
+            },
         )
 
     def _get_client(self) -> Any:
@@ -263,6 +274,10 @@ def _compose_contents(request: TurnRequest) -> Any:
                     }
                 }
             )
+        elif isinstance(entry, RunItem) and entry.type == ItemTypes.HOSTED_TOOL_RESULT:
+            provider_item = entry.data.get("provider_input_item")
+            if isinstance(provider_item, dict):
+                parts.append(provider_item)
         else:
             passthrough.append(strip_private_fields(entry))
 
@@ -348,6 +363,62 @@ def _map_chunk(
                 )
                 continue
 
+            executable_code = _attr(part, "executable_code")
+            if executable_code is not None:
+                call_id = f"gemini_code_{len(assistant_parts)}"
+                item = RunItem(
+                    type=ItemTypes.HOSTED_TOOL_CALL,
+                    provider=provider,
+                    status="completed",
+                    id=call_id,
+                    data={
+                        "call_id": call_id,
+                        "hosted_tool_type": "code_execution",
+                        "provider_item_type": "executable_code",
+                        "code": _attr(executable_code, "code"),
+                        "language": _attr(executable_code, "language"),
+                    },
+                    raw=executable_code,
+                )
+                events.append(
+                    AgentEvent(
+                        type=EventTypes.HOSTED_TOOL_CALL_COMPLETED,
+                        provider=provider,
+                        item_id=item.id,
+                        data={**item.data, "item": item},
+                        raw=part,
+                    )
+                )
+                continue
+
+            code_execution_result = _attr(part, "code_execution_result")
+            if code_execution_result is not None:
+                call_id = f"gemini_code_result_{len(assistant_parts)}"
+                item = RunItem(
+                    type=ItemTypes.HOSTED_TOOL_RESULT,
+                    provider=provider,
+                    status="completed",
+                    id=call_id,
+                    data={
+                        "call_id": call_id,
+                        "hosted_tool_type": "code_execution",
+                        "provider_item_type": "code_execution_result",
+                        "output": _attr(code_execution_result, "output"),
+                        "outcome": _attr(code_execution_result, "outcome"),
+                    },
+                    raw=code_execution_result,
+                )
+                events.append(
+                    AgentEvent(
+                        type=EventTypes.HOSTED_TOOL_CALL_COMPLETED,
+                        provider=provider,
+                        item_id=item.id,
+                        data={**item.data, "item": item},
+                        raw=part,
+                    )
+                )
+                continue
+
             text = _attr(part, "text")
             if isinstance(text, str) and text:
                 if _attr(part, "thought") is True:
@@ -417,6 +488,18 @@ def _part_to_dict(part: Any) -> dict[str, Any]:
             "id": _attr(function_call, "id"),
             "name": _attr(function_call, "name"),
             "args": _coerce_args(_attr(function_call, "args")),
+        }
+    executable_code = _attr(part, "executable_code")
+    if executable_code is not None:
+        out["executable_code"] = {
+            "language": _attr(executable_code, "language"),
+            "code": _attr(executable_code, "code"),
+        }
+    code_execution_result = _attr(part, "code_execution_result")
+    if code_execution_result is not None:
+        out["code_execution_result"] = {
+            "outcome": _attr(code_execution_result, "outcome"),
+            "output": _attr(code_execution_result, "output"),
         }
     return out
 

@@ -84,7 +84,8 @@ def _headers(error: Exception) -> Any:
 
 def _header_get(headers: Any, key: str) -> str | None:
     if isinstance(headers, Mapping):
-        return headers.get(key) or headers.get(key.title())  # type: ignore[return-value]
+        value = headers.get(key) or headers.get(key.title())
+        return str(value) if value is not None else None
     getter = getattr(headers, "get", None)
     if callable(getter):
         value = getter(key)

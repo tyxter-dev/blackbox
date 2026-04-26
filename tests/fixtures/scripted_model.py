@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent_runtime.core.capabilities import ModelCapabilities
+from agent_runtime.core.capabilities import HostedToolSupport, ModelCapabilities
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
@@ -29,7 +29,14 @@ class ScriptedModelProvider:
         return ModelCapabilities(
             supports_streaming_events=True,
             supports_function_tools=True,
+            supports_hosted_tools=True,
             supports_provider_state=True,
+            hosted_tools={
+                "web_search": HostedToolSupport("web_search", True, True, True, False),
+                "shell": HostedToolSupport("shell", True, True, False, True),
+                "apply_patch": HostedToolSupport("apply_patch", True, True, False, True),
+                "computer": HostedToolSupport("computer", True, True, False, True),
+            },
         )
 
     def queue(self, script: TurnScript) -> None:
