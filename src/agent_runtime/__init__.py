@@ -27,6 +27,7 @@ from agent_runtime.output.schema import OutputSchema
 from agent_runtime.providers.base import (
     AgentProvider,
     AgentSpec,
+    ModelCacheControl,
     ModelProvider,
     ModelRequestControls,
     TaskSpec,
@@ -58,6 +59,7 @@ __all__ = [
     "FileSearch",
     "HostedToolRaw",
     "ItemTypes",
+    "ModelCacheControl",
     "ModelCapabilities",
     "ModelCatalog",
     "ModelPricing",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage, ArtifactRef
@@ -13,6 +13,25 @@ from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, S
 from agent_runtime.core.state import ProviderState
 from agent_runtime.hosted_tools import HostedToolSpec
 from agent_runtime.output.schema import OutputSchema
+
+CacheStrategy = Literal["auto", "ephemeral", "provider_managed", "bypass"]
+
+
+@dataclass(slots=True, frozen=True)
+class ModelCacheControl:
+    """Provider-native prompt/context cache controls for a model turn.
+
+    Provider adapters map the fields they support and should raise
+    ``UnsupportedFeatureError`` for explicit strategies they cannot honor.
+    Provider-specific options can still be passed through ``extra``.
+    """
+
+    strategy: CacheStrategy = "auto"
+    key: str | None = None
+    ttl: str | None = None
+    cached_content: str | None = None
+    breakpoints: list[dict[str, Any]] = field(default_factory=list)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -31,6 +50,7 @@ class ModelRequestControls:
     tool_choice: Any | None = None
     parallel_tool_calls: bool | None = None
     reasoning_effort: str | None = None
+    cache: ModelCacheControl | None = None
 
 
 @dataclass(slots=True)

@@ -203,7 +203,7 @@ class AnthropicMessagesProvider:
             kwargs["betas"] = [*existing_betas, *beta_values]
         controls = request.controls
         if controls.instructions is not None:
-            kwargs["system"] = controls.instructions
+            kwargs["system"] = _system_payload(controls.instructions, controls.cache)
         if controls.temperature is not None:
             kwargs["temperature"] = controls.temperature
         if controls.top_p is not None:
@@ -223,7 +223,11 @@ def _compose_messages(request: TurnRequest) -> list[dict[str, Any]]:
         prior = [dict(m) for m in request.provider_state.native_history if isinstance(m, dict)]
 
     if isinstance(request.input, str):
-        return [*prior, {"role": "user", "content": request.input}]
+        content: str | list[dict[str, Any]] = request.input
+        cache_control = _cache_control_payload(request.controls.cache)
+        if cache_control is not None:
+            content = [{"type": "text", "text": request.input, "cache_control": cache_control}]
+        return [*prior, {"role": "user", "content": content}]
 
     tool_results: list[dict[str, Any]] = []
     passthrough: list[dict[str, Any]] = []
@@ -240,13 +244,51 @@ def _compose_messages(request: TurnRequest) -> list[dict[str, Any]]:
                 block["is_error"] = True
             tool_results.append(block)
         elif isinstance(entry, dict):
-            passthrough.append(strip_private_fields(entry))
+            passthrough.append(_cache_marked_entry(entry, request.controls.cache))
 
     new_turns: list[dict[str, Any]] = []
     if tool_results:
         new_turns.append({"role": "user", "content": tool_results})
     new_turns.extend(passthrough)
     return [*prior, *new_turns]
+
+
+def _system_payload(instructions: str, cache: Any) -> str | list[dict[str, Any]]:
+    cache_control = _cache_control_payload(cache)
+    if cache_control is None:
+        return instructions
+    return [{"type": "text", "text": instructions, "cache_control": cache_control}]
+
+
+def _cache_control_payload(cache: Any) -> dict[str, Any] | None:
+    if cache is None or cache.strategy == "bypass":
+        return None
+    if cache.strategy not in {"auto", "ephemeral"}:
+        return None
+    payload: dict[str, Any] = {"type": "ephemeral"}
+    if cache.ttl is not None:
+        payload["ttl"] = cache.ttl
+    payload.update(cache.extra)
+    return payload
+
+
+def _cache_marked_entry(entry: dict[str, Any], cache: Any) -> dict[str, Any]:
+    cache_control = entry.get("_cache_control") or _cache_control_payload(cache)
+    converted = strip_private_fields(entry)
+    if cache_control is None:
+        return converted
+    content = converted.get("content")
+    if isinstance(content, str):
+        converted["content"] = [
+            {"type": "text", "text": content, "cache_control": dict(cache_control)}
+        ]
+    elif isinstance(content, list) and content:
+        last = content[-1]
+        if isinstance(last, dict) and "cache_control" not in last:
+            updated = dict(last)
+            updated["cache_control"] = dict(cache_control)
+            converted["content"] = [*content[:-1], updated]
+    return converted
 
 
 def _convert_tools(tools: list[Any]) -> list[dict[str, Any]]:

@@ -14,7 +14,11 @@ from typing import Any
 
 from agent_runtime.core.accounting import add_usage, usage_from_gemini_chunk
 from agent_runtime.core.capabilities import ModelCapabilities
-from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
+from agent_runtime.core.errors import (
+    ProviderExecutionError,
+    ProviderNotConfiguredError,
+    UnsupportedFeatureError,
+)
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
@@ -195,6 +199,15 @@ class GeminiGenerateContentProvider:
             config.setdefault("top_p", controls.top_p)
         if controls.max_output_tokens is not None:
             config.setdefault("max_output_tokens", controls.max_output_tokens)
+        if controls.cache is not None:
+            if controls.cache.strategy == "bypass":
+                raise UnsupportedFeatureError(
+                    "Gemini prompt caching is provider-managed and cannot be bypassed through "
+                    "ModelCacheControl."
+                )
+            if controls.cache.cached_content is not None:
+                config.setdefault("cached_content", controls.cache.cached_content)
+            config.update(controls.cache.extra)
         if request.output_schema is not None and request.output_strategy == "provider_native":
             _merge_output_schema_config(config, request)
         if config:

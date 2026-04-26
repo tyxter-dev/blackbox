@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import pytest
+
+from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import OutputSpec
 from agent_runtime.hosted_tools import FileSearch, HostedToolRaw, RemoteMCP, WebSearch
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider, _compose_messages
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.output.schema import build_output_schema
-from agent_runtime.providers.base import ModelRequestControls, TurnRequest
+from agent_runtime.providers.base import ModelCacheControl, ModelRequestControls, TurnRequest
 
 
 def test_openai_responses_maps_common_controls_to_native_kwargs() -> None:
@@ -49,6 +52,37 @@ def test_openai_extra_overrides_common_controls() -> None:
     assert OpenAIResponsesProvider._build_request_kwargs(request)["max_output_tokens"] == 32
 
 
+def test_openai_maps_cache_controls_to_prompt_cache_kwargs() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        controls=ModelRequestControls(
+            cache=ModelCacheControl(
+                key="tenant-a",
+                ttl="24h",
+                extra={"prompt_cache_custom": "value"},
+            )
+        ),
+    )
+
+    kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["prompt_cache_key"] == "tenant-a"
+    assert kwargs["prompt_cache_retention"] == "24h"
+    assert kwargs["prompt_cache_custom"] == "value"
+
+
+def test_openai_rejects_cache_bypass() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        controls=ModelRequestControls(cache=ModelCacheControl(strategy="bypass")),
+    )
+
+    with pytest.raises(UnsupportedFeatureError, match="cannot be bypassed"):
+        OpenAIResponsesProvider._build_request_kwargs(request)
+
+
 def test_xai_drops_unsupported_instructions_control() -> None:
     request = TurnRequest(
         model="grok-test",
@@ -86,6 +120,32 @@ def test_anthropic_messages_maps_common_controls_to_native_kwargs() -> None:
     assert kwargs["tool_choice"] == {"type": "auto"}
 
 
+def test_anthropic_maps_cache_controls_to_system_and_message_blocks() -> None:
+    request = TurnRequest(
+        model="claude-test",
+        input="long reusable prompt",
+        controls=ModelRequestControls(
+            instructions="Reusable system prompt",
+            cache=ModelCacheControl(strategy="ephemeral", ttl="1h"),
+        ),
+    )
+
+    messages = _compose_messages(request)
+    kwargs = AnthropicMessagesProvider._build_request_kwargs(request, messages)
+
+    assert kwargs["system"] == [
+        {
+            "type": "text",
+            "text": "Reusable system prompt",
+            "cache_control": {"type": "ephemeral", "ttl": "1h"},
+        }
+    ]
+    assert kwargs["messages"][0]["content"][0]["cache_control"] == {
+        "type": "ephemeral",
+        "ttl": "1h",
+    }
+
+
 def test_gemini_generate_content_maps_common_controls_to_config() -> None:
     request = TurnRequest(
         model="gemini-test",
@@ -104,6 +164,31 @@ def test_gemini_generate_content_maps_common_controls_to_config() -> None:
     assert kwargs["config"]["temperature"] == 0.2
     assert kwargs["config"]["top_p"] == 0.9
     assert kwargs["config"]["max_output_tokens"] == 64
+
+
+def test_gemini_maps_cached_content_to_config() -> None:
+    request = TurnRequest(
+        model="gemini-test",
+        input="hi",
+        controls=ModelRequestControls(
+            cache=ModelCacheControl(cached_content="cachedContents/abc123")
+        ),
+    )
+
+    kwargs = GeminiGenerateContentProvider._build_request_kwargs(request)
+
+    assert kwargs["config"]["cached_content"] == "cachedContents/abc123"
+
+
+def test_gemini_rejects_cache_bypass() -> None:
+    request = TurnRequest(
+        model="gemini-test",
+        input="hi",
+        controls=ModelRequestControls(cache=ModelCacheControl(strategy="bypass")),
+    )
+
+    with pytest.raises(UnsupportedFeatureError, match="cannot be bypassed"):
+        GeminiGenerateContentProvider._build_request_kwargs(request)
 
 
 def test_gemini_config_extra_overrides_common_controls() -> None:

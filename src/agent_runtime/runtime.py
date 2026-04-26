@@ -25,6 +25,7 @@ from agent_runtime.hosted_tools import HostedToolSpec
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
     AgentSpec,
+    ModelCacheControl,
     ModelRequestControls,
     TaskSpec,
     TurnRequest,
@@ -63,6 +64,7 @@ class ModelRuntime:
         tool_choice: Any | None = None,
         parallel_tool_calls: bool | None = None,
         reasoning_effort: str | None = None,
+        cache: ModelCacheControl | None = None,
         run_id: str | None = None,
         **kwargs: object,
     ) -> AsyncIterator[AgentEvent]:
@@ -87,6 +89,7 @@ class ModelRuntime:
                 tool_choice=tool_choice,
                 parallel_tool_calls=parallel_tool_calls,
                 reasoning_effort=reasoning_effort,
+                cache=cache,
             ),
             extra=dict(kwargs),
         )
@@ -118,6 +121,7 @@ class ModelRuntime:
         tool_choice: Any | None = None,
         parallel_tool_calls: bool | None = None,
         reasoning_effort: str | None = None,
+        cache: ModelCacheControl | None = None,
         run_id: str | None = None,
         **kwargs: object,
     ) -> TurnResult:
@@ -143,6 +147,7 @@ class ModelRuntime:
             tool_choice=tool_choice,
             parallel_tool_calls=parallel_tool_calls,
             reasoning_effort=reasoning_effort,
+            cache=cache,
             run_id=run_id,
             **kwargs,
         ):
@@ -594,6 +599,7 @@ class AgentRuntime:
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
+        cache: ModelCacheControl | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[AgentEvent]:
         """Stream events from a complete agent loop driven by the registered model.
@@ -634,6 +640,7 @@ class AgentRuntime:
                 hosted_tools=hosted_tools,
                 output_schema=output_schema,
                 output_strategy=output_strategy,
+                cache=cache,
                 **kwargs,
             ):
                 yield event
@@ -682,6 +689,7 @@ class AgentRuntime:
         output_spec: OutputSpec | None = None,
         provider_state: ProviderState | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
+        cache: ModelCacheControl | None = None,
         **kwargs: Any,
     ) -> AgentResult[T]:
         """Run the complete agent loop and return a typed AgentResult.
@@ -760,6 +768,7 @@ class AgentRuntime:
                         hosted_tools=hosted_tools,
                         output_schema=output_schema,
                         output_strategy=effective_strategy if output_schema is not None else None,
+                        cache=cache,
                         **kwargs,
                     ):
                         events.append(event)

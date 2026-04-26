@@ -6,7 +6,11 @@ from typing import Any
 
 from agent_runtime.core.accounting import usage_from_openai_response
 from agent_runtime.core.capabilities import ModelCapabilities
-from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
+from agent_runtime.core.errors import (
+    ProviderExecutionError,
+    ProviderNotConfiguredError,
+    UnsupportedFeatureError,
+)
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
@@ -240,6 +244,17 @@ class OpenAIResponsesProvider:
             kwargs["parallel_tool_calls"] = controls.parallel_tool_calls
         if controls.reasoning_effort is not None:
             kwargs["reasoning"] = {"effort": controls.reasoning_effort}
+        if controls.cache is not None:
+            if controls.cache.strategy == "bypass":
+                raise UnsupportedFeatureError(
+                    "OpenAI Responses prompt caching is provider-managed and cannot be bypassed "
+                    "through ModelCacheControl."
+                )
+            if controls.cache.key is not None:
+                kwargs["prompt_cache_key"] = controls.cache.key
+            if controls.cache.ttl is not None:
+                kwargs["prompt_cache_retention"] = controls.cache.ttl
+            kwargs.update(controls.cache.extra)
         if request.output_schema is not None and request.output_strategy == "provider_native":
             _merge_text_format(kwargs, request)
         if request.provider_state:
