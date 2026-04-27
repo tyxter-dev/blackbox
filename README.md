@@ -237,6 +237,19 @@ print(result.status)
 print(result.session_ref.id)
 ```
 
+Runnable AgentProvider examples live in `examples/`:
+
+- `examples/agent_provider_local_session.py` runs a local model-backed agent
+  session, streams events, sends a follow-up message, and streams again.
+- `examples/local_agent_with_tool.py` shows the local provider driving a tool
+  call loop through `ToolRuntime`.
+- `examples/agent_provider_openai_agents.py` shows an OpenAI Agents
+  SDK-backed provider session, event streaming, artifact listing, and saving
+  returned artifacts under `examples/artifacts/openai/`.
+- `examples/agent_provider_claude_code.py` shows a Claude Code provider run
+  against a local workspace with typed `AgentSessionResult` output and saved
+  artifacts under `examples/artifacts/claude-code/`.
+
 ## Workspace agent packages
 
 `WorkspaceAgentSpec` describes a governed agent as a portable package:

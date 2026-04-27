@@ -35,3 +35,4 @@ venv/
 *.patch
 /.claude
 requirements.txt
+examples/artifacts/
