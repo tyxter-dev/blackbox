@@ -73,6 +73,7 @@ markers = [
   "integration_openai_sandbox: requires OpenAI sandbox credentials and optional extra",
   "journey_model_provider: live goal-oriented ModelProvider journeys that emit LLM-readable reports",
   "journey_agent_provider: live goal-oriented AgentProvider journeys that emit LLM-readable reports",
+  "journey_workspace_provider: live goal-oriented WorkspaceProvider journeys that emit LLM-readable reports",
 ]
 
 [tool.mypy]
