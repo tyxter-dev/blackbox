@@ -5,6 +5,7 @@ import pytest
 from agent_runtime import AgentRuntime
 from agent_runtime.core.policy import PolicyRequest
 from agent_runtime.core.results import AgentResult
+from agent_runtime.mcp import MCPServerSpec, MCPToolset
 from agent_runtime.models.echo import EchoModelProvider
 from agent_runtime.workspace_agents import (
     ApprovalRequirement,
@@ -29,6 +30,28 @@ def test_workspace_agent_spec_serializes_nested_contracts() -> None:
         model_provider="echo",
         model="echo-mini",
         tools=["lookup_issue"],
+        mcp_servers=[
+            MCPServerSpec(
+                name="issues",
+                transport="streamable_http",
+                url="https://mcp.example.com/issues",
+                allowed_tools=["lookup_issue"],
+                require_approval="never",
+            )
+        ],
+        mcp_toolsets=[
+            MCPToolset(
+                server=MCPServerSpec(
+                    name="deployments",
+                    transport="streamable_http",
+                    url="https://mcp.example.com/deployments",
+                    allowed_tools=["create_deployment"],
+                    require_approval="always",
+                ),
+                mode="provider_native",
+                description="Deployment operations.",
+            )
+        ],
         connectors=[
             ConnectorSpec(
                 name="github",
@@ -64,6 +87,9 @@ def test_workspace_agent_spec_serializes_nested_contracts() -> None:
 
     assert restored == spec
     assert restored.connectors[0].auth_mode == "end_user"
+    assert restored.mcp_servers[0].name == "issues"
+    assert restored.mcp_toolsets[0].server.allowed_tools == ["create_deployment"]
+    assert restored.mcp_toolsets[0].mode == "provider_native"
     assert restored.permissions[0].approval.mode == "never"
     assert restored.schedules[0].trigger.expression == "0 16 * * 1-5"
 
@@ -74,6 +100,13 @@ def test_workspace_agent_converts_to_agent_spec_metadata() -> None:
         instructions="Triage incoming reports.",
         model="echo-mini",
         tools=["search"],
+        mcp_servers=[MCPServerSpec(name="support", transport="stdio", command="support-mcp")],
+        mcp_toolsets=[
+            MCPToolset(
+                server=MCPServerSpec(name="crm", transport="stdio", command="crm-mcp"),
+                mode="local",
+            )
+        ],
         skills=[SkillBundleRef(name="support-triage")],
     )
 
@@ -82,8 +115,33 @@ def test_workspace_agent_converts_to_agent_spec_metadata() -> None:
     assert agent_spec.name == "triage"
     assert agent_spec.instructions == "Triage incoming reports."
     assert agent_spec.tools == ["search"]
+    assert [server.name for server in agent_spec.mcp_servers] == ["support", "crm"]
+    assert agent_spec.permissions["mcp_servers"] == ["support", "crm"]
     assert agent_spec.metadata["workspace_agent_id"] == spec.id
     assert agent_spec.metadata["skills"] == ["support-triage"]
+
+
+def test_prepare_agent_spec_exposes_mcp_toolsets_to_runtime() -> None:
+    spec = WorkspaceAgentSpec(
+        name="support",
+        model_provider="echo",
+        model="echo-mini",
+        mcp_servers=[MCPServerSpec(name="orders", transport="stdio", command="orders-mcp")],
+        mcp_toolsets=[
+            MCPToolset(
+                server=MCPServerSpec(name="crm", transport="stdio", command="crm-mcp"),
+                mode="local",
+                allowed_tools=["create_task"],
+            )
+        ],
+    )
+
+    prepared = prepare_agent_spec(spec)
+
+    assert prepared["provider"] == "echo"
+    assert [toolset.server.name for toolset in prepared["toolsets"]] == ["orders", "crm"]
+    assert prepared["toolsets"][0].mode == "auto"
+    assert prepared["toolsets"][1].allowed_tools == ["create_task"]
 
 
 def test_tool_permission_policy_request_carries_agent_context() -> None:

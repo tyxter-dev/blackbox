@@ -18,6 +18,7 @@ def prepare_agent_spec(spec: WorkspaceAgentSpec) -> dict[str, Any]:
         "model": spec.model,
         "tools": list(spec.tools),
         "hosted_tools": list(spec.hosted_tools),
+        "toolsets": spec.resolved_mcp_toolsets(),
     }
 
 

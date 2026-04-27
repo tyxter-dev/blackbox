@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from typing import Any, TypeVar, cast, get_args, get_origin
 
+from agent_runtime.mcp import MCPServerSpec, MCPToolset
 from agent_runtime.workspace_agents.permissions import (
     ApprovalRequirement,
     ConnectorSpec,
@@ -29,11 +30,14 @@ _TYPE_REGISTRY: dict[type[Any], dict[str, type[Any]]] = {
         "permissions": ToolPermission,
         "schedules": ScheduleSpec,
         "skills": SkillBundleRef,
+        "mcp_servers": MCPServerSpec,
+        "mcp_toolsets": MCPToolset,
         "memory": MemorySpec,
         "publication": PublicationSpec,
         "version": WorkspaceAgentVersion,
         "metadata": WorkspaceAgentMetadata,
     },
+    MCPToolset: {"server": MCPServerSpec},
     ToolPermission: {"approval": ApprovalRequirement},
     ScheduleSpec: {"trigger": ScheduleTrigger},
 }

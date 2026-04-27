@@ -263,6 +263,8 @@ in downstream applications.
 from agent_runtime import (
     AgentRuntime,
     ConnectorSpec,
+    MCPServerSpec,
+    MCPToolset,
     ScheduleSpec,
     ScheduleTrigger,
     ToolPermission,
@@ -280,8 +282,23 @@ agent = WorkspaceAgentSpec(
     model_provider="echo",
     model="echo-mini",
     tools=["lookup_issue"],
+    mcp_toolsets=[
+        MCPToolset(
+            server=MCPServerSpec(
+                name="github",
+                transport="streamable_http",
+                url="https://mcp.example.com/mcp",
+                allowed_tools=["list_issues"],
+                require_approval="never",
+                allow_remote_http=True,
+            ),
+        )
+    ],
     connectors=[ConnectorSpec(name="github", kind="github", auth_mode="end_user")],
-    permissions=[ToolPermission(ref="lookup_issue", scopes=["read"], connector="github")],
+    permissions=[
+        ToolPermission(ref="lookup_issue", scopes=["read"], connector="github"),
+        ToolPermission(ref="mcp:github.list_issues", scopes=["read"], connector="github"),
+    ],
     schedules=[
         ScheduleSpec(
             name="weekday",
@@ -292,6 +309,13 @@ agent = WorkspaceAgentSpec(
 
 result = await run_workspace_agent(runtime, agent, input="Summarize today's work.")
 ```
+
+For packaged agents, MCP is modeled as part of the agent definition rather than
+as a loose tool name. `mcp_servers` declares bare server connections and
+`mcp_toolsets` declares server connections plus routing preferences; both are
+serialized with the package and passed through to `runtime.run(..., toolsets=...)`.
+That lets the runtime choose local MCP dispatch or provider-native remote MCP
+from the model capability profile.
 
 ## Examples
 
