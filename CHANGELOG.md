@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Slice 17 — MCP integration hardening and toolset routing
+
+MCP is now a hardened external tool/server boundary with explicit local versus
+provider-native routing.
+
+- Extends `MCPServerSpec` with protocol, auth, filter, timeout, output-limit,
+  approval-mode, remote-trust, and redaction fields.
+- Adds lifecycle-aware `MCPClient` initialization with protocol negotiation and
+  `notifications/initialized`.
+- Upgrades stdio and streamable HTTP transports with JSON-RPC request IDs,
+  request timeouts, notifications, session/protocol metadata, auth headers, and
+  secret-safe error behavior.
+- Adds MCP tool discovery cache keys that account for server identity, session,
+  protocol, auth shape, and tool filters.
+- Normalizes MCP call results into model-visible content plus preserved MCP
+  payload metadata for runtime tool calls.
+- Adds `MCPToolset` and `runtime.run(..., toolsets=[...])` routing for local
+  MCP dispatch or provider-native `RemoteMCP`.
+- Extends OpenAI `RemoteMCP` mapping with `connector_id` and filter-object
+  `allowed_tools` while preserving Anthropic `mcp_servers` plus `mcp_toolset`.
+
 ### Slice 16 — First-class WorkspaceProvider routing
 
 Workspace execution is now a provider layer instead of only a registered-tool

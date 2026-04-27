@@ -652,6 +652,34 @@ Discovered MCP tools can also be bridged into a local `ToolRegistry`:
 await connector.register_runtime_tools(runtime.tools.registry)
 ```
 
+`MCPToolset` routes a configured MCP server through the high-level runtime.
+`mode="local"` exposes discovered tools as namespaced local tools, while
+`mode="provider_native"` passes a remote server to providers that support
+native MCP. `mode="auto"` keeps stdio and private/local URLs in the runtime
+and uses provider-native remote MCP only when the provider capability profile
+supports it.
+
+```python
+from agent_runtime.mcp import MCPServerSpec, MCPToolset
+
+github = MCPToolset(
+    server=MCPServerSpec(
+        name="github",
+        transport="streamable_http",
+        url="https://mcp.example.com/mcp",
+        allowed_tools=["list_issues"],
+        require_approval="auto",
+    ),
+    mode="auto",
+)
+
+result = await runtime.run(
+    provider="openai/gpt-5.4",
+    input="Summarize recent auth issues.",
+    toolsets=[github],
+)
+```
+
 ## Tests
 
 ```bash
@@ -670,4 +698,5 @@ offline.
 ## Next implementation targets
 
 1. Vertex AI Agent Engine `AgentProvider`.
-2. Approval resume channel for managed MCP transports.
+2. Connector-level pending-call store for direct MCP approval resume outside
+   the high-level runtime loop.

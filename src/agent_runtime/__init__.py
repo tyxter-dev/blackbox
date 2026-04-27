@@ -52,6 +52,7 @@ from agent_runtime.hosted_tools import (
     WebFetch,
     WebSearch,
 )
+from agent_runtime.mcp import MCPToolset
 from agent_runtime.output.schema import OutputSchema
 from agent_runtime.providers.base import (
     AgentProvider,
@@ -134,6 +135,7 @@ __all__ = [
     "InMemoryProviderCacheStore",
     "InMemoryWorkspaceAgentRegistry",
     "ItemTypes",
+    "MCPToolset",
     "MemorySpec",
     "ModelCacheControl",
     "ModelCapabilities",

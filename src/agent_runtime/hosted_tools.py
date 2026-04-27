@@ -141,10 +141,11 @@ MCPApprovalPolicy: TypeAlias = Literal["always", "never"] | dict[str, Any]
 @dataclass(slots=True, frozen=True)
 class RemoteMCP:
     server_label: str
-    server_url: str
+    server_url: str | None = None
+    connector_id: str | None = None
     server_description: str | None = None
     authorization: str | None = None
-    allowed_tools: list[str] | None = None
+    allowed_tools: list[str] | dict[str, Any] | None = None
     denied_tools: list[str] | None = None
     require_approval: MCPApprovalPolicy | None = None
     defer_loading: bool | None = None
@@ -293,17 +294,28 @@ def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
             raise UnsupportedFeatureError(
                 "OpenAI RemoteMCP mapping supports allowed_tools, but not denied_tools."
             )
+        if bool(spec.server_url) == bool(spec.connector_id):
+            raise UnsupportedFeatureError(
+                "OpenAI RemoteMCP mapping requires exactly one of server_url or connector_id."
+            )
         payload = {
             "type": "mcp",
             "server_label": spec.server_label,
-            "server_url": spec.server_url,
         }
+        if spec.server_url is not None:
+            payload["server_url"] = spec.server_url
+        if spec.connector_id is not None:
+            payload["connector_id"] = spec.connector_id
         if spec.server_description is not None:
             payload["server_description"] = spec.server_description
         if spec.authorization is not None:
             payload["authorization"] = spec.authorization
         if spec.allowed_tools is not None:
-            payload["allowed_tools"] = list(spec.allowed_tools)
+            payload["allowed_tools"] = (
+                list(spec.allowed_tools)
+                if isinstance(spec.allowed_tools, list)
+                else dict(spec.allowed_tools)
+            )
         if spec.require_approval is not None:
             payload["require_approval"] = spec.require_approval
         payload.update(spec.extra)
@@ -391,6 +403,8 @@ def to_anthropic_tool(spec: HostedToolSpec) -> dict[str, Any]:
             computer_payload["display_height_px"] = spec.display_height
         return computer_payload
     if isinstance(spec, RemoteMCP):
+        if spec.server_url is None:
+            raise UnsupportedFeatureError("Anthropic RemoteMCP mapping requires server_url.")
         mcp_payload: dict[str, Any] = {
             "type": "mcp_toolset",
             "mcp_server_name": spec.server_label,
@@ -399,7 +413,7 @@ def to_anthropic_tool(spec: HostedToolSpec) -> dict[str, Any]:
         configs: dict[str, dict[str, Any]] = {
             name: dict(config) for name, config in spec.tool_configs.items()
         }
-        if spec.allowed_tools:
+        if isinstance(spec.allowed_tools, list) and spec.allowed_tools:
             default_config["enabled"] = False
             for name in spec.allowed_tools:
                 configs.setdefault(name, {})["enabled"] = True
@@ -427,6 +441,8 @@ def anthropic_mcp_servers(specs: list[HostedToolSpec]) -> list[dict[str, Any]]:
     for spec in specs:
         if not isinstance(spec, RemoteMCP):
             continue
+        if spec.server_url is None:
+            raise UnsupportedFeatureError("Anthropic RemoteMCP mapping requires server_url.")
         server: dict[str, Any] = {
             "type": "url",
             "url": spec.server_url,

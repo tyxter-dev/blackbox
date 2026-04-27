@@ -9,7 +9,12 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from agent_runtime.core.errors import MCPError
-from agent_runtime.mcp.auth import MCPAuthProvider
+from agent_runtime.mcp.auth import (
+    LegacyMCPAuthProvider,
+    MCPAuthChallenge,
+    MCPAuthProvider,
+    auth_headers_for,
+)
 from agent_runtime.mcp.spec import MCPServerSpec
 
 
@@ -20,8 +25,24 @@ class MCPTransportClient(Protocol):
     async def stop(self) -> None: ...
 
     async def request(
-        self, method: str, params: dict[str, Any] | None = None
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout_seconds: float | None = None,
     ) -> Any: ...
+
+    async def notify(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+    ) -> None: ...
+
+    @property
+    def session_id(self) -> str | None: ...
+
+    @property
+    def connected(self) -> bool: ...
 
 
 @dataclass(slots=True)
@@ -30,11 +51,11 @@ class JsonRPCTransport:
 
     _next_id: int = field(default=1, init=False)
 
-    async def _send_jsonrpc(
+    def _request_payload(
         self,
         method: str,
         params: dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> tuple[int, dict[str, Any]]:
         request_id = self._next_id
         self._next_id += 1
         payload: dict[str, Any] = {
@@ -44,7 +65,23 @@ class JsonRPCTransport:
         }
         if params is not None:
             payload["params"] = params
-        response = await self._roundtrip(payload)
+        return request_id, payload
+
+    @staticmethod
+    def _notification_payload(
+        method: str,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "method": method,
+        }
+        if params is not None:
+            payload["params"] = params
+        return payload
+
+    @staticmethod
+    def _result_from_response(response: Any, request_id: int) -> Any:
         if not isinstance(response, dict):
             raise MCPError("MCP transport returned a non-object JSON-RPC response.")
         if response.get("id") != request_id:
@@ -53,20 +90,29 @@ class JsonRPCTransport:
             raise MCPError(f"MCP JSON-RPC error: {response['error']!r}")
         return response.get("result")
 
-    async def _roundtrip(self, payload: dict[str, Any]) -> Any:
-        raise NotImplementedError
-
 
 @dataclass(slots=True)
 class StdioMCPTransport(JsonRPCTransport):
     spec: MCPServerSpec
     process: asyncio.subprocess.Process | None = None
     stderr_lines: list[str] = field(default_factory=list)
+    _stdout_task: asyncio.Task[None] | None = None
     _stderr_task: asyncio.Task[None] | None = None
+    _pending: dict[int, asyncio.Future[Any]] = field(default_factory=dict)
+    _write_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    @property
+    def session_id(self) -> str | None:
+        return None
+
+    @property
+    def connected(self) -> bool:
+        return self.process is not None and self.process.returncode is None
 
     async def start(self) -> None:
-        if self.process is not None:
+        if self.connected:
             return
+        self.spec.validate_managed(allow_remote_http=True)
         if not self.spec.command:
             raise MCPError(f"stdio MCP server '{self.spec.name}' requires command.")
         self.process = await asyncio.create_subprocess_exec(
@@ -78,45 +124,108 @@ class StdioMCPTransport(JsonRPCTransport):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+        self._stdout_task = asyncio.create_task(self._read_stdout())
         self._stderr_task = asyncio.create_task(self._drain_stderr())
 
     async def stop(self) -> None:
-        if self.process is None:
+        process = self.process
+        if process is None:
             return
-        if self.process.returncode is None:
-            self.process.terminate()
+        if process.stdin is not None and not process.stdin.is_closing():
+            process.stdin.close()
+            wait_closed = getattr(process.stdin, "wait_closed", None)
+            if callable(wait_closed):
+                try:
+                    await wait_closed()
+                except Exception:
+                    pass
+        if process.returncode is None:
             try:
-                await asyncio.wait_for(self.process.wait(), timeout=5)
+                await asyncio.wait_for(
+                    process.wait(),
+                    timeout=self.spec.shutdown_timeout_seconds,
+                )
             except TimeoutError:
-                self.process.kill()
-                await self.process.wait()
-        if self._stderr_task is not None:
-            self._stderr_task.cancel()
-            self._stderr_task = None
+                process.terminate()
+                try:
+                    await asyncio.wait_for(
+                        process.wait(),
+                        timeout=self.spec.shutdown_timeout_seconds,
+                    )
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
+        for task in (self._stdout_task, self._stderr_task):
+            if task is not None:
+                task.cancel()
+        self._stdout_task = None
+        self._stderr_task = None
         self.process = None
+        self._fail_pending(MCPError("stdio MCP transport stopped."))
 
     async def request(
-        self, method: str, params: dict[str, Any] | None = None
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout_seconds: float | None = None,
     ) -> Any:
         await self.start()
-        return await self._send_jsonrpc(method, params)
+        request_id, payload = self._request_payload(method, params)
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[Any] = loop.create_future()
+        self._pending[request_id] = future
+        await self._write_payload(payload)
+        timeout = timeout_seconds if timeout_seconds is not None else self.spec.timeout_seconds
+        try:
+            response = await asyncio.wait_for(future, timeout=timeout)
+        except TimeoutError as exc:
+            self._pending.pop(request_id, None)
+            await self.notify(
+                "notifications/cancelled",
+                {"requestId": request_id, "reason": "timeout"},
+            )
+            raise MCPError(f"MCP request timed out: {method}") from exc
+        return self._result_from_response(response, request_id)
 
-    async def _roundtrip(self, payload: dict[str, Any]) -> Any:
-        if self.process is None or self.process.stdin is None or self.process.stdout is None:
+    async def notify(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+    ) -> None:
+        await self.start()
+        await self._write_payload(self._notification_payload(method, params))
+
+    async def _write_payload(self, payload: dict[str, Any]) -> None:
+        if self.process is None or self.process.stdin is None:
             raise MCPError("stdio MCP transport is not running.")
         encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8") + b"\n"
-        self.process.stdin.write(encoded)
-        await self.process.stdin.drain()
-        line = await asyncio.wait_for(
-            self.process.stdout.readline(),
-            timeout=self.spec.timeout_seconds,
-        )
-        if not line:
-            raise MCPError("stdio MCP server closed stdout.")
-        try:
-            return json.loads(line.decode("utf-8"))
-        except json.JSONDecodeError as exc:
-            raise MCPError("stdio MCP server wrote non-JSON protocol output.") from exc
+        async with self._write_lock:
+            self.process.stdin.write(encoded)
+            await self.process.stdin.drain()
+
+    async def _read_stdout(self) -> None:
+        if self.process is None or self.process.stdout is None:
+            return
+        while True:
+            line = await self.process.stdout.readline()
+            if not line:
+                self._fail_pending(MCPError("stdio MCP server closed stdout."))
+                return
+            try:
+                message = json.loads(line.decode("utf-8"))
+            except json.JSONDecodeError as exc:
+                self._fail_pending(
+                    MCPError("stdio MCP server wrote non-JSON protocol output.")
+                )
+                raise MCPError("stdio MCP server wrote non-JSON protocol output.") from exc
+            if not isinstance(message, dict):
+                continue
+            request_id = message.get("id")
+            if isinstance(request_id, int):
+                future = self._pending.pop(request_id, None)
+                if future is not None and not future.done():
+                    future.set_result(message)
 
     async def _drain_stderr(self) -> None:
         if self.process is None or self.process.stderr is None:
@@ -127,52 +236,126 @@ class StdioMCPTransport(JsonRPCTransport):
                 return
             self.stderr_lines.append(line.decode("utf-8", errors="replace").rstrip())
 
+    def _fail_pending(self, error: Exception) -> None:
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(error)
+        self._pending.clear()
+
+
+class _HTTPAuthRequiredError(Exception):
+    def __init__(self, status_code: int, www_authenticate: str | None) -> None:
+        self.status_code = status_code
+        self.www_authenticate = www_authenticate
+        super().__init__("MCP HTTP authentication required.")
+
 
 @dataclass(slots=True)
 class StreamableHTTPMCPTransport(JsonRPCTransport):
     spec: MCPServerSpec
-    auth_provider: MCPAuthProvider | None = None
-    session_id: str | None = None
+    auth_provider: MCPAuthProvider | LegacyMCPAuthProvider | None = None
+    _session_id: str | None = None
+    protocol_version: str | None = None
     _started: bool = False
 
+    @property
+    def session_id(self) -> str | None:
+        return self._session_id
+
+    @property
+    def connected(self) -> bool:
+        return self._started
+
+    def set_protocol_version(self, protocol_version: str) -> None:
+        self.protocol_version = protocol_version
+
     async def start(self) -> None:
+        self.spec.validate_managed(allow_remote_http=True)
         if not self.spec.url:
             raise MCPError(f"HTTP MCP server '{self.spec.name}' requires url.")
         self._started = True
 
     async def stop(self) -> None:
         self._started = False
-        self.session_id = None
+        self._session_id = None
+        self.protocol_version = None
 
     async def request(
-        self, method: str, params: dict[str, Any] | None = None
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout_seconds: float | None = None,
     ) -> Any:
         await self.start()
-        return await self._send_jsonrpc(method, params)
+        request_id, payload = self._request_payload(method, params)
+        timeout = timeout_seconds if timeout_seconds is not None else self.spec.timeout_seconds
+        response = await self._roundtrip(payload, timeout_seconds=timeout)
+        return self._result_from_response(response, request_id)
 
-    async def _roundtrip(self, payload: dict[str, Any]) -> Any:
-        auth_header = None
-        if self.auth_provider is not None:
-            auth_header = await self.auth_provider.authorization_header(self.spec)
-        return await asyncio.to_thread(self._roundtrip_sync, payload, auth_header)
+    async def notify(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+    ) -> None:
+        await self.start()
+        await self._roundtrip(
+            self._notification_payload(method, params),
+            timeout_seconds=self.spec.timeout_seconds,
+        )
 
-    def _roundtrip_sync(self, payload: dict[str, Any], auth_header: str | None) -> Any:
+    async def _roundtrip(self, payload: dict[str, Any], *, timeout_seconds: float) -> Any:
+        auth_headers = await auth_headers_for(self.auth_provider, self.spec)
+        try:
+            return await asyncio.to_thread(
+                self._roundtrip_sync,
+                payload,
+                auth_headers,
+                timeout_seconds,
+            )
+        except _HTTPAuthRequiredError as exc:
+            challenge = MCPAuthChallenge(
+                server=self.spec.name,
+                status_code=exc.status_code,
+                www_authenticate=exc.www_authenticate,
+            )
+            handler = getattr(self.auth_provider, "handle_auth_challenge", None)
+            if not callable(handler):
+                raise MCPError("HTTP MCP server requires authentication.") from exc
+            refreshed = await handler(self.spec, challenge)
+            if refreshed is None:
+                raise MCPError("HTTP MCP server requires authentication.") from exc
+            auth_headers.update(refreshed)
+            return await asyncio.to_thread(
+                self._roundtrip_sync,
+                payload,
+                auth_headers,
+                timeout_seconds,
+            )
+
+    def _roundtrip_sync(
+        self,
+        payload: dict[str, Any],
+        auth_headers: dict[str, str],
+        timeout_seconds: float,
+    ) -> Any:
         if not self.spec.url:
             raise MCPError(f"HTTP MCP server '{self.spec.name}' requires url.")
-        body = json.dumps(payload).encode("utf-8")
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
             "Mcp-Method": str(payload.get("method", "")),
             **self.spec.headers,
+            **auth_headers,
         }
         name = _mcp_name_header(payload)
         if name is not None:
             headers["Mcp-Name"] = name
-        if self.session_id is not None:
-            headers["Mcp-Session-Id"] = self.session_id
-        if auth_header is not None:
-            headers["Authorization"] = auth_header
+        if self._session_id is not None:
+            headers["Mcp-Session-Id"] = self._session_id
+        if self.protocol_version is not None:
+            headers["MCP-Protocol-Version"] = self.protocol_version
         request = urllib.request.Request(
             self.spec.url,
             data=body,
@@ -180,14 +363,21 @@ class StreamableHTTPMCPTransport(JsonRPCTransport):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.spec.timeout_seconds) as response:
+            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
                 session_id = response.headers.get("Mcp-Session-Id")
                 if session_id:
-                    self.session_id = session_id
+                    self._session_id = session_id
                 response_body = response.read().decode("utf-8")
                 content_type = response.headers.get("Content-Type", "")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401:
+                raise _HTTPAuthRequiredError(
+                    exc.code,
+                    exc.headers.get("WWW-Authenticate"),
+                ) from exc
+            raise MCPError(f"HTTP MCP request failed with status {exc.code}.") from exc
         except urllib.error.URLError as exc:
-            raise MCPError(f"HTTP MCP request failed: {exc}") from exc
+            raise MCPError(f"HTTP MCP request failed: {exc.reason}") from exc
         if "text/event-stream" in content_type:
             return _last_sse_json(response_body)
         return json.loads(response_body) if response_body else {}
@@ -237,7 +427,7 @@ def _mcp_name_header(payload: dict[str, Any]) -> str | None:
 def transport_for_spec(
     spec: MCPServerSpec,
     *,
-    auth_provider: MCPAuthProvider | None = None,
+    auth_provider: MCPAuthProvider | LegacyMCPAuthProvider | None = None,
 ) -> MCPTransportClient:
     if spec.transport == "stdio":
         return StdioMCPTransport(spec=spec)

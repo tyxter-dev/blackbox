@@ -45,6 +45,7 @@ from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, S
 from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
 from agent_runtime.hosted_tools import HostedToolHandlers, HostedToolSpec
+from agent_runtime.mcp import MCPConnector, MCPToolset, resolve_mcp_route, to_remote_mcp
 from agent_runtime.models.capability_validation import (
     resolve_output_strategy,
     validate_turn_request_capabilities,
@@ -1224,6 +1225,7 @@ class AgentRuntime:
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
+        toolsets: list[MCPToolset] | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
         tool_search: ToolSearchControl | None = None,
@@ -1251,9 +1253,13 @@ class AgentRuntime:
         model_name = model or provider_ref.resource
         if not model_name:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
+        adapter = self.registry.get_model(provider_ref.provider_key)
+        capability_profile = get_model_capability_profile(adapter, model_name)
 
         effective_tool_session = tool_session
         effective_tools = list(tools or [])
+        effective_hosted_tools = list(hosted_tools or [])
+        active_mcp_connectors: list[MCPConnector] = []
         opened_workspace: tuple[Any, Any, bool] | None = None
         if workspace is not None:
             effective_tool_session = (
@@ -1273,6 +1279,31 @@ class AgentRuntime:
                 prefix=workspace_prefix,
             )
             effective_tools.extend(tool.name for tool in registered_workspace_tools)
+
+        for mcp_toolset in toolsets or []:
+            route = resolve_mcp_route(
+                provider_ref,
+                mcp_toolset,
+                capability_profile,
+                policy=policy,
+            )
+            if route == "provider_native":
+                effective_hosted_tools.append(to_remote_mcp(mcp_toolset))
+                continue
+            effective_tool_session = (
+                ToolSession.from_registry(effective_tool_session.registry)
+                if effective_tool_session is not None
+                else self.tools.session()
+            )
+            connector = MCPConnector(
+                [mcp_toolset.server_for_local_dispatch()],
+                policy=None,
+            )
+            registered_mcp_tools = await connector.register_runtime_tools(
+                effective_tool_session.registry
+            )
+            effective_tools.extend(tool.name for tool in registered_mcp_tools)
+            active_mcp_connectors.append(connector)
 
         tool_definitions = self._tool_payload(effective_tools, tool_session=effective_tool_session)
         if output_schema is not None and output_strategy == "finalizer_tool":
@@ -1296,7 +1327,7 @@ class AgentRuntime:
                 input=input,
                 provider_state=provider_state,
                 tools=tool_definitions,
-                hosted_tools=hosted_tools,
+                hosted_tools=effective_hosted_tools,
                 output_schema=output_schema,
                 output_strategy=output_strategy,
                 cache=cache,
@@ -1318,7 +1349,7 @@ class AgentRuntime:
                 or (output_schema is not None and output_strategy == "finalizer_tool")
                 else None
             ),
-            hosted_tools=list(hosted_tools or []),
+            hosted_tools=effective_hosted_tools,
             hosted_tool_handlers=hosted_tool_handlers or HostedToolHandlers(),
             approval_policy=approval_policy,
             policy=policy,
@@ -1330,39 +1361,10 @@ class AgentRuntime:
             ),
         )
         self._active_loops[run_id] = loop
-        sequence = 0
-        if opened_workspace is not None:
-            workspace_provider_obj, _, _ = opened_workspace
-            for event in workspace_provider_obj.drain_events():
-                stamped = trace_context.stamp(
-                    event,
-                    run_id=run_id,
-                    sequence=sequence,
-                    preserve_sequence=False,
-                )
-                sequence += 1
-                await self.event_store.append(stamped)
-                yield stamped
-
-        async for event in loop.run(
-            input=input,
-            provider_state=provider_state,
-            provider_id=provider_ref.provider_key,
-            mock_tools=mock_tools,
-        ):
-            stamped = trace_context.stamp(
-                event,
-                run_id=run_id,
-                sequence=sequence,
-                preserve_sequence=False,
-            )
-            sequence += 1
-            await self.event_store.append(stamped)
-            yield stamped
-        if opened_workspace is not None and not workspace_preserve:
-            workspace_provider_obj, workspace_ref, should_close = opened_workspace
-            if should_close:
-                await workspace_provider_obj.close(workspace_ref)
+        try:
+            sequence = 0
+            if opened_workspace is not None:
+                workspace_provider_obj, _, _ = opened_workspace
                 for event in workspace_provider_obj.drain_events():
                     stamped = trace_context.stamp(
                         event,
@@ -1373,7 +1375,40 @@ class AgentRuntime:
                     sequence += 1
                     await self.event_store.append(stamped)
                     yield stamped
-        self._active_loops.pop(run_id, None)
+
+            async for event in loop.run(
+                input=input,
+                provider_state=provider_state,
+                provider_id=provider_ref.provider_key,
+                mock_tools=mock_tools,
+            ):
+                stamped = trace_context.stamp(
+                    event,
+                    run_id=run_id,
+                    sequence=sequence,
+                    preserve_sequence=False,
+                )
+                sequence += 1
+                await self.event_store.append(stamped)
+                yield stamped
+            if opened_workspace is not None and not workspace_preserve:
+                workspace_provider_obj, workspace_ref, should_close = opened_workspace
+                if should_close:
+                    await workspace_provider_obj.close(workspace_ref)
+                    for event in workspace_provider_obj.drain_events():
+                        stamped = trace_context.stamp(
+                            event,
+                            run_id=run_id,
+                            sequence=sequence,
+                            preserve_sequence=False,
+                        )
+                        sequence += 1
+                        await self.event_store.append(stamped)
+                        yield stamped
+        finally:
+            self._active_loops.pop(run_id, None)
+            for connector in active_mcp_connectors:
+                await connector.stop()
 
     async def run(
         self,
@@ -1394,6 +1429,7 @@ class AgentRuntime:
         output_spec: OutputSpec | None = None,
         provider_state: ProviderState | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
+        toolsets: list[MCPToolset] | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
         tool_search: ToolSearchControl | None = None,
@@ -1478,6 +1514,7 @@ class AgentRuntime:
                         mock_tools=mock_tools,
                         provider_state=captured_state,
                         hosted_tools=hosted_tools,
+                        toolsets=toolsets,
                         hosted_tool_handlers=hosted_tool_handlers,
                         output_schema=output_schema,
                         output_strategy=effective_strategy if output_schema is not None else None,

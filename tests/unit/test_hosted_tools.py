@@ -79,6 +79,35 @@ def test_remote_mcp_serializes_for_openai() -> None:
     }
 
 
+def test_remote_mcp_serializes_connector_id_for_openai() -> None:
+    spec = RemoteMCP(
+        server_label="github",
+        connector_id="conn_github",
+        allowed_tools={"tool_names": ["list_issues"]},
+    )
+
+    assert to_openai_tool(spec) == {
+        "type": "mcp",
+        "server_label": "github",
+        "connector_id": "conn_github",
+        "allowed_tools": {"tool_names": ["list_issues"]},
+    }
+
+
+def test_remote_mcp_rejects_openai_missing_or_ambiguous_endpoint() -> None:
+    with pytest.raises(UnsupportedFeatureError):
+        to_openai_tool(RemoteMCP(server_label="github"))
+
+    with pytest.raises(UnsupportedFeatureError):
+        to_openai_tool(
+            RemoteMCP(
+                server_label="github",
+                server_url="https://mcp.example.com/sse",
+                connector_id="conn_github",
+            )
+        )
+
+
 def test_remote_mcp_rejects_openai_denylist() -> None:
     spec = RemoteMCP(
         server_label="github",

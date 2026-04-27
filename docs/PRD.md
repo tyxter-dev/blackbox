@@ -891,6 +891,16 @@ Runtime control requirements:
 - raw and redacted event preservation,
 - capability negotiation per provider.
 
+Current implementation status: `MCPConnector` owns local stdio/HTTP/SSE
+dispatch, lifecycle initialization, tool discovery cache invalidation, MCP
+result normalization, redacted specs/auth, and namespaced runtime-tool
+bridging. Provider-native remote MCP remains represented by `RemoteMCP`.
+`MCPToolset` is the routing convenience layer that chooses local dispatch or
+provider-native remote MCP without merging those execution paths. Full
+browser/device OAuth and direct connector-level pending approval resume remain
+future work; high-level runtime approval pausing still applies before
+namespaced MCP tool execution.
+
 ## 17. Approval and safety requirements
 
 The runtime must support approval workflows for:

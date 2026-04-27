@@ -286,13 +286,7 @@ class AgentLoop:
             allowed_calls: list[tuple[int, _PendingToolCall]] = []
             for index, call in enumerate(pending_calls):
                 if effective_policy is not None:
-                    decision = await effective_policy.check(
-                        PolicyRequest(
-                            checkpoint="before_tool_call",
-                            action=call.name,
-                            arguments=dict(call.arguments),
-                        )
-                    )
+                    decision = await effective_policy.check(_policy_request_for_call(call))
                 else:
                     decision = PolicyDecision.allow()
 
@@ -606,6 +600,26 @@ def _hosted_call_from_event(event: AgentEvent) -> HostedToolCall | None:
         arguments=dict(arguments),
         raw=event.raw,
         metadata=dict(event.data.get("metadata") or {}),
+    )
+
+
+def _policy_request_for_call(call: _PendingToolCall) -> PolicyRequest:
+    if call.name.startswith("mcp:"):
+        server_tool = call.name[4:]
+        server, sep, tool = server_tool.partition(".")
+        return PolicyRequest(
+            checkpoint="before_mcp_call",
+            action=call.name,
+            arguments=dict(call.arguments),
+            metadata={
+                "server": server if sep else None,
+                "tool": tool if sep else server_tool,
+            },
+        )
+    return PolicyRequest(
+        checkpoint="before_tool_call",
+        action=call.name,
+        arguments=dict(call.arguments),
     )
 
 

@@ -89,6 +89,7 @@ async def test_mcp_connector_lists_namespaced_tools() -> None:
     assert tools[0]["ref"] == "mcp:tickets.lookup"
     assert tools[0]["server"] == "tickets"
     assert [event.type for event in connector.drain_events()] == [
+        EventTypes.MCP_LIST_TOOLS_STARTED,
         EventTypes.MCP_LIST_TOOLS_COMPLETED
     ]
 
@@ -123,7 +124,9 @@ async def test_mcp_connector_gates_calls_with_policy() -> None:
 
     assert policy.seen[0].checkpoint == "before_mcp_call"
     assert policy.seen[0].action == "mcp:tickets.lookup"
-    assert connector.drain_events() == []
+    assert [event.type for event in connector.drain_events()] == [
+        EventTypes.MCP_CALL_FAILED
+    ]
 
 
 async def test_mcp_connector_surfaces_required_approval() -> None:
@@ -138,7 +141,10 @@ async def test_mcp_connector_surfaces_required_approval() -> None:
         await connector.call_tool("tickets", "lookup", {"ticket_id": "T-1"})
 
     events = connector.drain_events()
-    assert [event.type for event in events] == [EventTypes.MCP_APPROVAL_REQUIRED]
+    assert [event.type for event in events] == [
+        EventTypes.MCP_APPROVAL_REQUIRED,
+        EventTypes.APPROVAL_REQUESTED,
+    ]
     assert events[0].data["ref"] == "mcp:tickets.lookup"
 
 
@@ -161,7 +167,10 @@ async def test_mcp_connector_discovers_and_calls_managed_transport() -> None:
         "tools/call",
     ]
     assert [event.type for event in connector.drain_events()] == [
+        EventTypes.MCP_LIST_TOOLS_STARTED,
+        EventTypes.MCP_TOOLS_CACHE_MISS,
         EventTypes.MCP_LIST_TOOLS_COMPLETED,
+        EventTypes.MCP_TOOLS_CACHE_HIT,
         EventTypes.MCP_CALL_STARTED,
         EventTypes.MCP_CALL_COMPLETED,
     ]
@@ -196,4 +205,13 @@ async def test_mcp_connector_registers_runtime_tool_bridge() -> None:
 
     assert definitions[0].name == "mcp:tickets.lookup"
     assert definitions[0].metadata["mcp"] is True
-    assert result.payload == {"content": [{"type": "text", "text": {"ticket_id": "T-2"}}]}
+    assert result.payload == {
+        "mcp": {
+            "server": "tickets",
+            "tool": "lookup",
+            "ref": "mcp:tickets.lookup",
+            "structured_content": None,
+            "content": [{"type": "text", "text": {"ticket_id": "T-2"}}],
+            "is_error": False,
+        }
+    }
