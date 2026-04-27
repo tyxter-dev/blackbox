@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Slice 15 — Managed-agent result collector
+
+`runtime.agents.run(...)` now starts a provider-managed session and returns an
+`AgentSessionResult[T]` instead of forcing callers to consume the event stream
+manually.
+
+- Adds `AgentSessionResult[T]` with typed `output`, final `text`, strict
+  `status`, collected events, artifacts, `session_ref`, `provider_state`,
+  `usage`, `trace`, and metadata.
+- Extends agent session creation with direct `workspace`, input artifact,
+  metadata, and provider-extra arguments so the collector supports coding-agent
+  handoff in one call.
+- Stores stamped agent-session events in `AgentRuntime.event_store` and writes
+  compact session/provider cursor state to `RunStore`.
+- Keeps `runtime.agents.stream(...)` as the lower-level supervision API for
+  applications that need live event handling.
+
 ### Slice 14 — Workflow tracing, replay, OpenTelemetry, and eval hooks
 
 Observability now covers full workflow-level traces instead of only compact

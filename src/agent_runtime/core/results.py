@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Generic, Literal, TypeVar
 
+from agent_runtime.core.accounting import ModelUsage
 from agent_runtime.core.artifacts import Artifact
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.items import RunItem
+from agent_runtime.core.sessions import SessionRef
 from agent_runtime.core.state import ProviderState
 
 T = TypeVar("T")
@@ -18,6 +20,13 @@ OutputStrategy = Literal[
     "posthoc_parse_with_retry",
 ]
 OutputFallback = Literal["error", "finalizer_tool", "posthoc_parse"]
+AgentSessionResultStatus = Literal[
+    "completed",
+    "failed",
+    "cancelled",
+    "waiting_for_approval",
+    "timeout",
+]
 
 
 @dataclass(slots=True)
@@ -78,4 +87,26 @@ class AgentResult(Generic[T]):
     artifacts: list[Artifact] = field(default_factory=list)
     payloads: list[ToolPayload] = field(default_factory=list)
     provider_state: ProviderState | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class AgentSessionResult(Generic[T]):
+    """Collected output of ``runtime.agents.run(...)``.
+
+    ``session_ref`` preserves the provider/session handle for follow-ups,
+    replay, artifact listing, or cancellation. ``output`` is the validated
+    projection of the final session text when an ``output_type`` is supplied;
+    otherwise it is the same string as ``text``.
+    """
+
+    output: T
+    text: str
+    session_ref: SessionRef
+    status: AgentSessionResultStatus = "completed"
+    events: list[AgentEvent] = field(default_factory=list)
+    artifacts: list[Artifact] = field(default_factory=list)
+    provider_state: ProviderState | None = None
+    usage: ModelUsage | None = None
+    trace: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)

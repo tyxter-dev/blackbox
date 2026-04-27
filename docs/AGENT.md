@@ -160,7 +160,23 @@ session = await runtime.agents.create_session(
 Provider-managed tools, workspace operations, and approvals should map into the
 runtime stream without pretending the cloud agent is a local function tool.
 
-### A3: Pause For Approval And Resume
+### A3: Collect A Provider-Managed Agent Result
+
+```python
+result = await runtime.agents.run(
+    provider="claude-code",
+    agent="repo-maintainer",
+    task="Fix the failing test.",
+    workspace=WorkspaceSpec.local("./repo"),
+    output_type=PatchSummary,
+)
+```
+
+The collector starts a session, stores stamped events, lists artifacts, exposes
+a strict result `status`, keeps the `SessionRef` for follow-up work, and
+validates final session text into the requested output type.
+
+### A4: Pause For Approval And Resume
 
 ```python
 async for event in runtime.agents.stream(session):
@@ -175,7 +191,7 @@ async for event in runtime.agents.stream(session):
 The provider may implement approval natively, or the local `AgentLoop` may pause
 before executing a policy-gated tool or workspace operation.
 
-### A4: Send Follow-Up Work
+### A5: Send Follow-Up Work
 
 ```python
 invocation = await runtime.agents.send_message(
@@ -187,7 +203,7 @@ invocation = await runtime.agents.send_message(
 Every follow-up returns an `InvocationRef` so applications can correlate future
 events and artifacts with the user action that caused them.
 
-### A5: Cancel Or List Artifacts
+### A6: Cancel Or List Artifacts
 
 ```python
 await runtime.agents.cancel(session)
@@ -323,8 +339,8 @@ provider-specific `data` fields.
 | A-P1-4 | Workspace handoff | Partial | `TaskSpec.workspace` reaches capable providers; local provider should integrate with `WorkspaceProvider` without ad hoc tool setup. |
 | A-P1-5 | MCP handoff | Partial | `AgentSpec.mcp_servers` is part of the contract; providers map it where their SDK supports MCP. |
 | A-P1-6 | Artifact normalization | Partial | Provider files, patches, logs, checkpoints, screenshots, and reports normalize into `Artifact` records. |
-| A-P1-7 | Session persistence | Planned | Session refs, cursor state, status, and provider-native IDs persist through `RunStore` or a dedicated session store. |
-| A-P1-8 | Agent result collector | Planned | A helper can collect a session stream into a typed result/artifact summary without replacing the low-level stream. |
+| A-P1-7 | Session persistence | Partial | `runtime.agents.run(...)` saves session refs, status, provider state, and replay cursors into `RunStore`; a dedicated session store is still open. |
+| A-P1-8 | Agent result collector | Implemented | `runtime.agents.run(...)` returns `AgentSessionResult[T]` with typed output, text, strict status, events, artifacts, session ref, provider state, usage, trace, and metadata. |
 
 ### P2 - Later
 
@@ -357,15 +373,13 @@ implement downstream admin, team, billing, or scheduling products
 2. **Local artifact collection:** Local sessions currently return an empty
    artifact page even when the underlying loop can emit artifacts. Define how
    those artifacts are stored by session.
-3. **Session persistence:** Decide whether session persistence belongs in
-   `RunStore`, a new `SessionStore`, or provider-specific metadata only.
+3. **Session persistence:** `runtime.agents.run(...)` writes a compact
+   `RunState`; decide whether richer multi-invocation history belongs in a new
+   `SessionStore`.
 4. **Workspace handoff:** Route `TaskSpec.workspace` through the
    `WorkspaceProvider` layer for local sessions instead of requiring users to
    manually register workspace tools.
-5. **`runtime.agents.run(...)` shape:** It currently returns an async event
-   iterator. Decide whether a collector API should exist for users who want a
-   final `AgentResult`-style summary.
-6. **Vertex scope:** Keep Vertex AI Agent Engine as a scaffold until its exact
+5. **Vertex scope:** Keep Vertex AI Agent Engine as a scaffold until its exact
    session, event, artifact, eval, and deployment contract is implemented and
    tested.
 

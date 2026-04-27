@@ -27,7 +27,12 @@ from agent_runtime.core.capabilities import (
 from agent_runtime.core.errors import OutputValidationError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.results import AgentResult, ToolPayload
+from agent_runtime.core.results import (
+    AgentResult,
+    AgentSessionResult,
+    AgentSessionResultStatus,
+    ToolPayload,
+)
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.hosted_tools import (
@@ -101,6 +106,8 @@ __all__ = [
     "AgentRuntime",
     "AgentRuntimeFacade",
     "AgentSession",
+    "AgentSessionResult",
+    "AgentSessionResultStatus",
     "AgentSpec",
     "ApplyPatch",
     "ApprovalDecision",

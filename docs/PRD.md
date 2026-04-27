@@ -569,6 +569,24 @@ behavior is opt-in via `posthoc_parse_with_retry`). The error carries the raw
 text and the underlying validator error so the application can decide how to
 recover.
 
+### 10.8 AgentSessionResult[T]
+
+`AgentSessionResult[T]` is the collected output of a high-level
+`runtime.agents.run(...)` provider-managed session.
+
+Required fields:
+
+- `output`: validated structured output of type `T`, or plain text when no output type is requested,
+- `text`: final session text projection,
+- `status`: strict collector status: `completed`, `failed`, `cancelled`, `waiting_for_approval`, or `timeout`,
+- `events`: collected and stored `AgentEvent` stream,
+- `artifacts`: artifacts collected from inline events and provider artifact pages,
+- `session_ref`: provider/session handle for follow-ups, replay, and artifact listing,
+- `provider_state`: provider-native continuation state synthesized from session metadata and cursor state,
+- `usage`: normalized usage when providers expose accounting metadata,
+- `trace`: reconstructed workflow trace metadata,
+- `metadata`: session, usage, artifact, and diagnostic metadata.
+
 ## 11. Canonical event taxonomy
 
 The library must define stable constants for common lifecycle events. Providers may emit additional provider-specific event types, but should map shared concepts to these canonical names.
@@ -626,6 +644,7 @@ The library must define stable constants for common lifecycle events. Providers 
 | P1-R10 | Observability | Event sinks can receive all runtime events. |
 | P1-R11 | Local autonomous tool loop | Local model-backed runtime detects tool calls, executes local tools, feeds results back through provider-native continuation, and stops only on final answer, error, cancellation, or approval pause. |
 | P1-R12 | Structured output validation | Runtime validates final output against Pydantic models, dataclasses, TypedDict-like schemas, or provider-native structured-output mechanisms where available. |
+| P1-R13 | Managed-agent result collector | `runtime.agents.run(...)` starts a session and returns `AgentSessionResult[T]` with typed output, text, strict status, events, artifacts, session ref, provider state, usage, trace, and metadata. |
 
 ### 12.3 P2 requirements
 

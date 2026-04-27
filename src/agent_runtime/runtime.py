@@ -3,7 +3,7 @@ from __future__ import annotations
 import builtins
 import json
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, TypeVar, cast
 from uuid import uuid4
 
@@ -16,7 +16,7 @@ from agent_runtime.core.accounting import (
     usage_to_dict,
 )
 from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.artifacts import Artifact, ArtifactPage
+from agent_runtime.core.artifacts import Artifact, ArtifactPage, ArtifactRef
 from agent_runtime.core.cache import (
     InMemoryProviderCacheStore,
     ProviderCacheRecord,
@@ -33,9 +33,16 @@ from agent_runtime.core.errors import (
 )
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import RunItem
-from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, ToolPayload
+from agent_runtime.core.results import (
+    AgentResult,
+    AgentSessionResult,
+    AgentSessionResultStatus,
+    OutputSpec,
+    OutputStrategy,
+    ToolPayload,
+)
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
-from agent_runtime.core.state import ProviderState
+from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
 from agent_runtime.hosted_tools import HostedToolHandlers, HostedToolSpec
 from agent_runtime.models.capability_validation import (
@@ -299,6 +306,8 @@ class ModelRuntime:
 @dataclass(slots=True)
 class AgentRuntimeFacade:
     registry: ProviderRegistry
+    event_store: EventStore | None = None
+    run_store: RunStore | None = None
     _sessions: dict[str, AgentSession] = field(default_factory=dict)
 
     async def create_agent(self, *, provider: str, spec: AgentSpec) -> AgentRef:
@@ -312,9 +321,20 @@ class AgentRuntimeFacade:
         agent: AgentRef | str,
         task: str | TaskSpec,
         model: str | None = None,
+        workspace: Any | None = None,
+        inputs: list[ArtifactRef] | None = None,
+        metadata: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> AgentSession:
         adapter = self.registry.get_agent(ProviderRef.parse(provider).provider_key)
-        task_spec = task if isinstance(task, TaskSpec) else TaskSpec(prompt=task, model=model)
+        task_spec = _agent_task_spec(
+            task,
+            model=model,
+            workspace=workspace,
+            inputs=inputs,
+            metadata=metadata,
+            extra=extra,
+        )
         session = await adapter.start_session(agent, task_spec)
         self._sessions[session.id] = session
         return session
@@ -324,18 +344,27 @@ class AgentRuntimeFacade:
         session: SessionRef | AgentSession,
         *,
         after_event_id: str | None = None,
+        run_id: str | None = None,
+        trace_id: str | None = None,
+        parent_span_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
         adapter = self.registry.get_agent(session.provider)
-        run_id = f"run_{uuid4().hex}"
-        trace_context = TraceContext.for_run(run_id)
+        effective_run_id = run_id or f"run_{uuid4().hex}"
+        trace_context = TraceContext.for_run(
+            trace_id or effective_run_id,
+            root_span_id=parent_span_id,
+        )
         sequence = 0
         async for event in adapter.stream_events(session, after_event_id=after_event_id):
-            yield trace_context.stamp(
+            stamped = trace_context.stamp(
                 event,
-                run_id=run_id,
+                run_id=effective_run_id,
                 sequence=sequence,
             )
             sequence += 1
+            if self.event_store is not None:
+                await self.event_store.append(stamped)
+            yield stamped
 
     async def run(
         self,
@@ -344,10 +373,150 @@ class AgentRuntimeFacade:
         agent: AgentRef | str,
         task: str | TaskSpec,
         model: str | None = None,
-    ) -> AsyncIterator[AgentEvent]:
-        session = await self.create_session(provider=provider, agent=agent, task=task, model=model)
-        async for event in self.stream(session):
-            yield event
+        workspace: Any | None = None,
+        inputs: list[ArtifactRef] | None = None,
+        metadata: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
+        output_type: type[T] | None = None,
+        output_spec: OutputSpec | None = None,
+        artifact_type: str | None = None,
+        artifact_limit: int = 100,
+        collect_artifacts: bool = True,
+        run_id: str | None = None,
+    ) -> AgentSessionResult[T]:
+        """Run a provider-managed agent session and collect the useful result."""
+        session = await self.create_session(
+            provider=provider,
+            agent=agent,
+            task=task,
+            model=model,
+            workspace=workspace,
+            inputs=inputs,
+            metadata=metadata,
+            extra=extra,
+        )
+        events: list[AgentEvent] = []
+        text_parts: list[str] = []
+        terminal_text: str | None = None
+        artifacts: list[Artifact] = []
+        artifact_ids: set[str] = set()
+        captured_state: ProviderState | None = None
+        usage: ModelUsage | None = None
+
+        async for event in self.stream(session, run_id=run_id):
+            events.append(event)
+            delta = _agent_event_text_delta(event)
+            if delta is not None:
+                text_parts.append(delta)
+            if event.type == EventTypes.SESSION_COMPLETED:
+                terminal_text = _agent_event_text(event) or terminal_text
+            artifact = _artifact_from_event(event)
+            if artifact is not None and (
+                artifact_type is None or artifact.type == artifact_type
+            ):
+                _append_artifact_unique(artifacts, artifact_ids, artifact)
+            maybe_state = event.data.get("provider_state")
+            if isinstance(maybe_state, ProviderState):
+                captured_state = maybe_state
+            usage = add_usage(usage, _event_usage(event))
+
+        if collect_artifacts:
+            for artifact in await self._collect_session_artifacts(
+                session,
+                type=artifact_type,
+                limit=artifact_limit,
+            ):
+                _append_artifact_unique(artifacts, artifact_ids, artifact)
+
+        text = terminal_text if terminal_text is not None else "".join(text_parts)
+        spec = _resolve_output_spec(output_type, output_spec)
+        output = _validate_output(text, spec.schema, allow_dict_schema=True)
+        usage = add_usage(usage, _tool_usage_from_events(events))
+        result_status = _agent_session_result_status(session, events)
+        provider_state = captured_state or _provider_state_from_session(session, events=events)
+        usage_dict = usage_to_dict(usage)
+        trace = trace_metadata_from_events(events, metadata={"usage": usage_dict} if usage_dict else {})
+        session_ref = session.ref
+        result_metadata: dict[str, Any] = {
+            "status": result_status,
+            "session": {
+                "provider": session_ref.provider,
+                "id": session_ref.id,
+                "agent_id": session_ref.agent_id,
+                "status": result_status,
+                "lifecycle_status": session.status,
+            },
+            "event_count": len(events),
+            "artifact_count": len(artifacts),
+        }
+        if usage_dict is not None:
+            result_metadata["usage"] = usage_dict
+        provider_usage = usage_provider_details(usage)
+        if provider_usage is not None:
+            result_metadata["usage_provider_details"] = provider_usage
+        if trace["spans"]:
+            result_metadata["trace"] = trace
+        _attach_accounting_metadata(result_metadata)
+
+        if self.run_store is not None:
+            await self.run_store.save(
+                RunState(
+                    session_id=session.id,
+                    provider=session.provider,
+                    model=session.model,
+                    provider_state=provider_state,
+                    metadata={
+                        "run_id": events[0].run_id if events else None,
+                        "session": result_metadata["session"],
+                        "last_event_id": events[-1].id if events else None,
+                        "status": result_status,
+                        "lifecycle_status": session.status,
+                    },
+                )
+            )
+
+        return AgentSessionResult(
+            output=cast(T, output),
+            text=text,
+            session_ref=session_ref,
+            status=result_status,
+            events=events,
+            artifacts=artifacts,
+            provider_state=provider_state,
+            usage=usage,
+            trace=trace,
+            metadata=result_metadata,
+        )
+
+    async def _collect_session_artifacts(
+        self,
+        session: SessionRef | AgentSession,
+        *,
+        type: str | None,
+        limit: int,
+    ) -> list[Artifact]:
+        if limit <= 0:
+            return []
+        collected: list[Artifact] = []
+        after: str | None = None
+        seen_cursors: set[str] = set()
+        while len(collected) < limit:
+            page_limit = min(100, limit - len(collected))
+            page = await self.list_artifacts(
+                session,
+                type=type,
+                after=after,
+                limit=page_limit,
+            )
+            collected.extend(page.items)
+            if not page.has_more or not page.items:
+                break
+            next_after = page.next_cursor or page.items[-1].id
+            if next_after in seen_cursors:
+                break
+            seen_cursors.add(next_after)
+            after = next_after
+        return collected
 
     async def send_message(
         self, session: SessionRef | AgentSession, message: str
@@ -650,7 +819,11 @@ class AgentRuntime:
             provider_cache_store=self.provider_cache_store,
         )
         self.chat = ChatRuntimeFacade(self.models)
-        self.agents = AgentRuntimeFacade(self.registry)
+        self.agents = AgentRuntimeFacade(
+            self.registry,
+            event_store=self.event_store,
+            run_store=self.run_store,
+        )
         self.caches = ProviderCacheRuntime(self.registry, self.provider_cache_store)
         self.tools = ToolRuntimeFacade()
         self._active_loops: dict[str, Any] = {}
@@ -1172,6 +1345,149 @@ def _resolve_output_spec(
     if output_spec is not None:
         return output_spec
     return OutputSpec(schema=output_type, strategy="posthoc_parse")
+
+
+def _agent_task_spec(
+    task: str | TaskSpec,
+    *,
+    model: str | None,
+    workspace: Any | None,
+    inputs: list[ArtifactRef] | None,
+    metadata: dict[str, Any] | None,
+    extra: dict[str, Any] | None,
+) -> TaskSpec:
+    if isinstance(task, TaskSpec):
+        return replace(
+            task,
+            model=model if model is not None else task.model,
+            workspace=workspace if workspace is not None else task.workspace,
+            inputs=list(inputs) if inputs is not None else list(task.inputs),
+            metadata={**task.metadata, **dict(metadata or {})},
+            extra={**task.extra, **dict(extra or {})},
+        )
+    return TaskSpec(
+        prompt=task,
+        model=model,
+        workspace=workspace,
+        inputs=list(inputs or []),
+        metadata=dict(metadata or {}),
+        extra=dict(extra or {}),
+    )
+
+
+def _agent_event_text_delta(event: AgentEvent) -> str | None:
+    if event.type != EventTypes.MODEL_TEXT_DELTA:
+        return None
+    return _first_text(event.data, "delta", "message", "text")
+
+
+def _agent_event_text(event: AgentEvent) -> str | None:
+    return _first_text(event.data, "output", "message", "text", "result")
+
+
+def _first_text(data: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _artifact_from_event(event: AgentEvent) -> Artifact | None:
+    artifact = event.data.get("artifact")
+    if isinstance(artifact, Artifact):
+        return artifact
+    if not isinstance(artifact, dict):
+        return None
+    metadata = dict(artifact.get("metadata") or {})
+    metadata.setdefault("event_id", event.id)
+    if event.provider is not None:
+        metadata.setdefault("provider", event.provider)
+    artifact_kwargs: dict[str, Any] = {
+        "type": str(artifact.get("type", "provider_ref")),
+        "name": str(
+            artifact.get("name")
+            or artifact.get("path")
+            or artifact.get("id")
+            or "artifact"
+        ),
+        "data": artifact.get("data"),
+        "uri": artifact.get("uri"),
+        "metadata": metadata,
+    }
+    if artifact.get("id") is not None:
+        artifact_kwargs["id"] = str(artifact["id"])
+    return Artifact(**artifact_kwargs)
+
+
+def _append_artifact_unique(
+    artifacts: list[Artifact],
+    artifact_ids: set[str],
+    artifact: Artifact,
+) -> None:
+    if artifact.id in artifact_ids:
+        return
+    artifact_ids.add(artifact.id)
+    artifacts.append(artifact)
+
+
+def _agent_session_result_status(
+    session: AgentSession,
+    events: list[AgentEvent],
+) -> AgentSessionResultStatus:
+    for event in reversed(events):
+        if _agent_event_is_timeout(event):
+            return "timeout"
+        if event.type == EventTypes.SESSION_COMPLETED:
+            return "completed"
+        if event.type == EventTypes.SESSION_FAILED:
+            return "failed"
+        if event.type == EventTypes.SESSION_CANCELLED:
+            return "cancelled"
+
+    if session.status == "completed":
+        return "completed"
+    if session.status == "failed":
+        return "failed"
+    if session.status == "cancelled":
+        return "cancelled"
+    if session.status == "waiting":
+        return "waiting_for_approval"
+    return "failed"
+
+
+def _agent_event_is_timeout(event: AgentEvent) -> bool:
+    if event.type.endswith(".timeout") or event.type.endswith(".timed_out"):
+        return True
+    status = event.data.get("status")
+    reason = event.data.get("reason")
+    error = event.data.get("error")
+    return status == "timeout" or reason == "timeout" or error == "timeout"
+
+
+def _provider_state_from_session(
+    session: AgentSession,
+    *,
+    events: list[AgentEvent],
+) -> ProviderState:
+    metadata = {key: value for key, value in session.metadata.items() if key != "raw"}
+    continuation: dict[str, Any] = {
+        "session_id": session.id,
+        "status": session.status,
+    }
+    if session.agent_id is not None:
+        continuation["agent_id"] = session.agent_id
+    if events:
+        continuation["last_event_id"] = events[-1].id
+        continuation["last_sequence"] = events[-1].sequence
+        continuation["run_id"] = events[-1].run_id
+    if metadata:
+        continuation["metadata"] = metadata
+    return ProviderState(
+        provider=session.provider,
+        conversation_id=session.id,
+        continuation=continuation,
+    )
 
 
 def _can_fallback_provider_native(

@@ -15,6 +15,7 @@ class FakeClaudeCodeClient:
     approvals: list[tuple[str, ApprovalDecision]] = field(default_factory=list)
     cancelled: list[str] = field(default_factory=list)
     messages: list[tuple[str, str]] = field(default_factory=list)
+    started_tasks: list[TaskSpec] = field(default_factory=list)
 
     async def create_agent(self, spec: AgentSpec) -> dict[str, Any]:
         return {
@@ -23,6 +24,7 @@ class FakeClaudeCodeClient:
         }
 
     async def start_session(self, agent: Any, task: TaskSpec) -> dict[str, Any]:
+        self.started_tasks.append(task)
         agent_id = getattr(agent, "id", agent)
         return {
             "id": "provider_sess_1",
@@ -72,4 +74,3 @@ class FakeClaudeCodeClient:
             if type is None or artifact.get("type") == type
         ]
         return {"items": items[:limit], "has_more": len(items) > limit}
-

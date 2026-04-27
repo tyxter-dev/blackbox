@@ -221,6 +221,22 @@ async for event in runtime.agents.stream(session):
     print(event.type, event.data)
 ```
 
+Use `runtime.agents.run(...)` when you want the managed session collected into
+one result:
+
+```python
+result = await runtime.agents.run(
+    provider="local",
+    agent="default",
+    task="Explain this traceback",
+    model="echo/echo-mini",
+)
+
+print(result.text)
+print(result.status)
+print(result.session_ref.id)
+```
+
 ## Workspace agent packages
 
 `WorkspaceAgentSpec` describes a governed agent as a portable package:
