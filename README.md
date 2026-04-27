@@ -611,6 +611,14 @@ patch = await ws_runtime.apply_patch(ws, Patch(
 ))
 ```
 
+Runnable WorkspaceProvider examples live in `examples/`:
+
+- `examples/workspace_provider_local_files.py` opens a local workspace, writes
+  files, applies a patch, runs a command, lists artifacts, and leaves the
+  generated files under `examples/workspaces/local-demo/`.
+- `examples/workspace_provider_snapshot_restore.py` snapshots a local
+  workspace and restores it under `examples/workspaces/restored-demo/`.
+
 Path traversal is blocked (relative paths cannot escape the workspace
 root). Workspace operations can also be exposed to the high-level model loop as
 a run-scoped compatibility tool bridge:

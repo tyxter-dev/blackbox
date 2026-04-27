@@ -36,3 +36,4 @@ venv/
 /.claude
 requirements.txt
 examples/artifacts/
+examples/workspaces/
