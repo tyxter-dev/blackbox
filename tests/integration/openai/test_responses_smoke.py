@@ -97,7 +97,7 @@ async def test_real_provider_native_structured_output_through_runtime_run() -> N
             strategy="provider_native",
             name="smoke_decision",
         ),
-        max_output_tokens=128,
+        max_output_tokens=512,
     )
 
     assert result.output.word.lower() == "pong"

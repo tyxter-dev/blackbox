@@ -154,6 +154,43 @@ def test_xai_drops_unsupported_instructions_control() -> None:
     assert kwargs["temperature"] == 0.2
 
 
+def test_xai_sanitizes_openai_strict_tool_schema() -> None:
+    request = TurnRequest(
+        model="grok-test",
+        input="hi",
+        tools=[
+            {
+                "type": "function",
+                "name": "lookup",
+                "strict": True,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "filters": {
+                            "type": "object",
+                            "additionalProperties": False,
+                        }
+                    },
+                    "additionalProperties": False,
+                },
+            }
+        ],
+    )
+
+    kwargs = XAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["tools"] == [
+        {
+            "type": "function",
+            "name": "lookup",
+            "parameters": {
+                "type": "object",
+                "properties": {"filters": {"type": "object"}},
+            },
+        }
+    ]
+
+
 def test_anthropic_messages_maps_common_controls_to_native_kwargs() -> None:
     request = TurnRequest(
         model="claude-test",
@@ -176,6 +213,34 @@ def test_anthropic_messages_maps_common_controls_to_native_kwargs() -> None:
     assert kwargs["top_p"] == 0.9
     assert kwargs["max_tokens"] == 64
     assert kwargs["tool_choice"] == {"type": "auto"}
+
+
+def test_anthropic_maps_reasoning_effort_to_thinking_budget() -> None:
+    request = TurnRequest(
+        model="claude-sonnet-4-20250514",
+        input="hi",
+        controls=ModelRequestControls(reasoning_effort="medium"),
+    )
+
+    kwargs = AnthropicMessagesProvider._build_request_kwargs(
+        request, [{"role": "user", "content": "hi"}]
+    )
+
+    assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 4096}
+    assert kwargs["max_tokens"] == 5120
+
+
+def test_anthropic_rejects_temperature_with_thinking() -> None:
+    request = TurnRequest(
+        model="claude-sonnet-4-20250514",
+        input="hi",
+        controls=ModelRequestControls(reasoning_effort="low", temperature=0.2),
+    )
+
+    with pytest.raises(UnsupportedFeatureError, match="temperature"):
+        AnthropicMessagesProvider._build_request_kwargs(
+            request, [{"role": "user", "content": "hi"}]
+        )
 
 
 def test_anthropic_maps_cache_controls_to_system_and_message_blocks() -> None:
@@ -222,6 +287,79 @@ def test_gemini_generate_content_maps_common_controls_to_config() -> None:
     assert kwargs["config"]["temperature"] == 0.2
     assert kwargs["config"]["top_p"] == 0.9
     assert kwargs["config"]["max_output_tokens"] == 64
+
+
+def test_gemini_maps_tool_choice_and_reasoning_effort_to_config() -> None:
+    request = TurnRequest(
+        model="gemini-2.5-flash",
+        input="hi",
+        controls=ModelRequestControls(
+            tool_choice={"type": "function", "name": "lookup"},
+            reasoning_effort="high",
+        ),
+    )
+
+    kwargs = GeminiGenerateContentProvider._build_request_kwargs(request)
+
+    assert kwargs["config"]["tool_config"] == {
+        "function_calling_config": {
+            "mode": "ANY",
+            "allowed_function_names": ["lookup"],
+        }
+    }
+    assert kwargs["config"]["thinking_config"] == {"thinking_budget": 8192}
+
+
+def test_gemini_strips_additional_properties_from_function_declarations() -> None:
+    request = TurnRequest(
+        model="gemini-test",
+        input="hi",
+        tools=[
+            {
+                "type": "function",
+                "name": "lookup",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "filters": {
+                            "type": "object",
+                            "additionalProperties": False,
+                        }
+                    },
+                    "additionalProperties": False,
+                },
+            }
+        ],
+    )
+
+    kwargs = GeminiGenerateContentProvider._build_request_kwargs(request)
+
+    assert kwargs["config"]["tools"] == [
+        {
+            "function_declarations": [
+                {
+                    "name": "lookup",
+                    "description": "",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"filters": {"type": "object"}},
+                    },
+                }
+            ]
+        }
+    ]
+
+
+def test_gemini_3_maps_reasoning_effort_to_thinking_level() -> None:
+    request = TurnRequest(
+        model="gemini-3-flash-preview",
+        input="hi",
+        controls=ModelRequestControls(reasoning_effort="medium"),
+    )
+
+    kwargs = GeminiGenerateContentProvider._build_request_kwargs(request)
+
+    assert kwargs["config"]["thinking_config"] == {"thinking_level": "medium"}
 
 
 def test_gemini_maps_cached_content_to_config() -> None:
@@ -437,6 +575,29 @@ def test_anthropic_maps_remote_mcp_to_server_and_toolset() -> None:
     assert kwargs["betas"] == ["mcp-client-2025-11-20"]
 
 
+def test_anthropic_selects_web_search_version_by_model() -> None:
+    older_request = TurnRequest(
+        model="claude-sonnet-4-20250514",
+        input="hi",
+        hosted_tools=[WebSearch()],
+    )
+    newer_request = TurnRequest(
+        model="claude-sonnet-4-6-20260209",
+        input="hi",
+        hosted_tools=[WebSearch()],
+    )
+
+    older_kwargs = AnthropicMessagesProvider._build_request_kwargs(
+        older_request, [{"role": "user", "content": "hi"}]
+    )
+    newer_kwargs = AnthropicMessagesProvider._build_request_kwargs(
+        newer_request, [{"role": "user", "content": "hi"}]
+    )
+
+    assert older_kwargs["tools"][0]["type"] == "web_search_20250305"
+    assert newer_kwargs["tools"][0]["type"] == "web_search_20260209"
+
+
 def test_gemini_maps_web_search_hosted_tool_to_config() -> None:
     request = TurnRequest(model="gemini-test", input="hi", hosted_tools=[WebSearch()])
 
@@ -445,7 +606,7 @@ def test_gemini_maps_web_search_hosted_tool_to_config() -> None:
     assert kwargs["config"]["tools"] == [{"google_search": {}}]
 
 
-def test_xai_only_accepts_raw_hosted_tools() -> None:
+def test_xai_accepts_raw_and_web_search_hosted_tools() -> None:
     raw_request = TurnRequest(
         model="grok-test",
         input="hi",
@@ -456,9 +617,6 @@ def test_xai_only_accepts_raw_hosted_tools() -> None:
     ]
 
     typed_request = TurnRequest(model="grok-test", input="hi", hosted_tools=[WebSearch()])
-    try:
-        XAIResponsesProvider._build_request_kwargs(typed_request)
-    except Exception as exc:
-        assert "xAI hosted tool mapping" in str(exc)
-    else:
-        raise AssertionError("expected typed hosted tools to fail for xAI")
+    assert XAIResponsesProvider._build_request_kwargs(typed_request)["tools"] == [
+        {"type": "web_search"}
+    ]

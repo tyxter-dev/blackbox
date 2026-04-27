@@ -5,10 +5,11 @@ from typing import Any
 
 from agent_runtime.core.capabilities import (
     CapabilityDetail,
+    HostedToolSupport,
     ModelCapabilities,
     ModelCapabilityProfile,
 )
-from agent_runtime.hosted_tools import to_raw_hosted_tool
+from agent_runtime.hosted_tools import HostedToolRaw, WebSearch
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.providers.base import TurnRequest
 
@@ -49,7 +50,10 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
             supports_remote_mcp=False,
             supports_reasoning_items=True,
             supports_provider_state=True,
-            supports_structured_output=False,
+            supports_structured_output=True,
+            hosted_tools={
+                "web_search": HostedToolSupport("web_search", True, True, True, False),
+            },
         )
 
     def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
@@ -59,7 +63,7 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
             model=model,
             hosted_tools={
                 "raw": CapabilityDetail(status="passthrough"),
-                "web_search": CapabilityDetail(status="unsupported"),
+                "web_search": CapabilityDetail(status="supported", native_name="web_search"),
                 "file_search": CapabilityDetail(status="unsupported"),
                 "code_interpreter": CapabilityDetail(status="unsupported"),
                 "remote_mcp": CapabilityDetail(status="unsupported"),
@@ -68,7 +72,9 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
                 "image_generation": CapabilityDetail(status="unsupported"),
             },
             output_strategies={
-                "provider_native": CapabilityDetail(status="unsupported"),
+                "provider_native": CapabilityDetail(
+                    status="supported", native_name="text.format"
+                ),
                 "finalizer_tool": CapabilityDetail(status="supported"),
                 "posthoc_parse": CapabilityDetail(status="supported"),
                 "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
@@ -108,7 +114,38 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
     @staticmethod
     def _build_request_kwargs(request: TurnRequest) -> dict[str, Any]:
         for hosted_tool in request.hosted_tools:
-            to_raw_hosted_tool(hosted_tool, provider="xAI")
+            _validate_xai_hosted_tool(hosted_tool)
         kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
         kwargs.pop("instructions", None)
+        if "tools" in kwargs:
+            kwargs["tools"] = [_sanitize_xai_tool(tool) for tool in kwargs["tools"]]
         return kwargs
+
+
+def _validate_xai_hosted_tool(hosted_tool: Any) -> None:
+    if isinstance(hosted_tool, (HostedToolRaw, WebSearch)):
+        return
+    from agent_runtime.hosted_tools import to_raw_hosted_tool
+
+    to_raw_hosted_tool(hosted_tool, provider="xAI")
+
+
+def _sanitize_xai_tool(tool: Any) -> Any:
+    if not isinstance(tool, dict):
+        return tool
+    return _strip_xai_schema_strictness(tool)
+
+
+def _strip_xai_schema_strictness(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_strip_xai_schema_strictness(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    sanitized: dict[str, Any] = {}
+    for key, nested in value.items():
+        if key == "strict" and nested is True:
+            continue
+        if key == "additionalProperties" and nested is False:
+            continue
+        sanitized[key] = _strip_xai_schema_strictness(nested)
+    return sanitized

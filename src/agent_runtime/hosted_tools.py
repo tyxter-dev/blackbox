@@ -354,10 +354,10 @@ def to_gemini_tool(spec: HostedToolSpec) -> dict[str, Any]:
     )
 
 
-def to_anthropic_tool(spec: HostedToolSpec) -> dict[str, Any]:
+def to_anthropic_tool(spec: HostedToolSpec, *, model: str | None = None) -> dict[str, Any]:
     if isinstance(spec, WebSearch):
         payload: dict[str, Any] = {
-            "type": spec.version or "web_search_20260209",
+            "type": spec.version or _anthropic_web_search_version(model),
             "name": "web_search",
         }
         if spec.max_uses is not None:
@@ -434,6 +434,15 @@ def to_anthropic_tool(spec: HostedToolSpec) -> dict[str, Any]:
     raise UnsupportedFeatureError(
         f"Anthropic hosted tool mapping is not implemented for {type(spec).__name__}."
     )
+
+
+def _anthropic_web_search_version(model: str | None) -> str:
+    if model is None:
+        return "web_search_20260209"
+    normalized = model.lower().replace("_", "-")
+    if "sonnet-4-6" in normalized or "opus-4-6" in normalized or "4.6" in normalized:
+        return "web_search_20260209"
+    return "web_search_20250305"
 
 
 def anthropic_mcp_servers(specs: list[HostedToolSpec]) -> list[dict[str, Any]]:

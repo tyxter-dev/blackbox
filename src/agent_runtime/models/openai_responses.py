@@ -153,8 +153,8 @@ class OpenAIResponsesProvider:
                 "apply_patch": HostedToolSupport(
                     "apply_patch", True, True, False, True, requires_handler=True
                 ),
-                "computer": HostedToolSupport(
-                    "computer", True, True, False, True, requires_handler=True
+                "computer_use": HostedToolSupport(
+                    "computer_use", True, True, False, True, requires_handler=True
                 ),
                 "image_generation": HostedToolSupport(
                     "image_generation", True, True, True, False
@@ -162,7 +162,7 @@ class OpenAIResponsesProvider:
                 "tool_search": HostedToolSupport(
                     "tool_search", True, True, True, False
                 ),
-                "mcp": HostedToolSupport("mcp", True, True, True, False),
+                "remote_mcp": HostedToolSupport("remote_mcp", True, True, True, False),
             },
         )
 
@@ -236,7 +236,11 @@ class OpenAIResponsesProvider:
                     status="supported", native_name="conversation"
                 ),
                 "tool_search": CapabilityDetail(status="supported", native_name="tools.tool_search"),
-                "compaction": CapabilityDetail(status="supported", native_name="truncation"),
+                "compaction": CapabilityDetail(
+                    status="supported",
+                    native_name="truncation",
+                    supported_values=("auto", "disabled"),
+                ),
                 "modalities": CapabilityDetail(
                     status="unsupported",
                     reason="Responses text generation does not expose a typed modalities control "

@@ -71,13 +71,13 @@ class GeminiGenerateContentProvider:
             supports_structured_output=True,
             hosted_tools={
                 "web_search": HostedToolSupport("web_search", True, True, True, False),
-                "code_execution": HostedToolSupport(
-                    "code_execution", True, True, True, False
+                "code_interpreter": HostedToolSupport(
+                    "code_interpreter", True, True, True, False
                 ),
                 "url_context": HostedToolSupport("url_context", True, True, True, False),
                 "file_search": HostedToolSupport("file_search", True, True, True, False),
-                "computer": HostedToolSupport(
-                    "computer", True, True, False, True, requires_handler=True
+                "computer_use": HostedToolSupport(
+                    "computer_use", True, True, False, True, requires_handler=True
                 ),
             },
         )
@@ -90,23 +90,22 @@ class GeminiGenerateContentProvider:
             hosted_tools={
                 "web_search": CapabilityDetail(status="supported", native_name="google_search"),
                 "file_search": CapabilityDetail(
-                    status="unsupported",
-                    reason="Gemini File Search exists, but adapter typed mapping is not part of "
-                    "the stable granular contract yet.",
+                    status="conditional",
+                    native_name="file_search",
+                    reason="Requires Gemini corpus_ids or raw_config.",
                 ),
                 "code_interpreter": CapabilityDetail(
-                    status="unsupported",
-                    reason="Gemini code execution exists, but adapter typed mapping is not part "
-                    "of the stable granular contract yet.",
+                    status="supported",
+                    native_name="code_execution",
                 ),
                 "computer_use": CapabilityDetail(
-                    status="unsupported",
-                    reason="Adapter typed mapping is not part of the stable granular contract yet.",
+                    status="conditional",
+                    native_name="computer_use",
+                    requires=("hosted_tool_handler",),
                 ),
                 "url_context": CapabilityDetail(
-                    status="unsupported",
-                    reason="Adapter mapping exists but is not part of the stable granular "
-                    "contract yet.",
+                    status="supported",
+                    native_name="url_context",
                 ),
                 "remote_mcp": CapabilityDetail(status="unsupported"),
                 "raw": CapabilityDetail(status="passthrough"),
@@ -129,8 +128,8 @@ class GeminiGenerateContentProvider:
                     status="supported", native_name="max_output_tokens"
                 ),
                 "tool_choice": CapabilityDetail(
-                    status="unsupported",
-                    reason="Current adapter does not map tool_choice.",
+                    status="supported",
+                    native_name="config.tool_config.function_calling_config",
                 ),
                 "parallel_tool_calls": CapabilityDetail(
                     status="conditional",
@@ -144,8 +143,9 @@ class GeminiGenerateContentProvider:
                 "cache_key": CapabilityDetail(status="unsupported"),
                 "cache_ttl": CapabilityDetail(status="unsupported"),
                 "reasoning_effort": CapabilityDetail(
-                    status="unsupported",
-                    reason="Current adapter does not map thinking controls.",
+                    status="supported",
+                    native_name="config.thinking_config",
+                    supported_values=("minimal", "low", "medium", "high", "xhigh"),
                 ),
                 "safety_settings": CapabilityDetail(
                     status="passthrough", native_name="config.safety_settings"
@@ -376,6 +376,16 @@ class GeminiGenerateContentProvider:
             config.setdefault("top_p", controls.top_p)
         if controls.max_output_tokens is not None:
             config.setdefault("max_output_tokens", controls.max_output_tokens)
+        if controls.tool_choice is not None and "tool_config" not in config:
+            config["tool_config"] = {
+                "function_calling_config": _gemini_function_calling_config(
+                    controls.tool_choice
+                )
+            }
+        if controls.reasoning_effort is not None and "thinking_config" not in config:
+            config["thinking_config"] = _gemini_thinking_config(
+                request.model, controls.reasoning_effort
+            )
         if controls.cache is not None:
             if controls.cache.strategy == "bypass":
                 raise UnsupportedFeatureError(
@@ -407,6 +417,62 @@ def _merge_output_schema_config(config: dict[str, Any], request: TurnRequest) ->
         )
     config["response_mime_type"] = "application/json"
     config["response_json_schema"] = request.output_schema.schema
+
+
+_GEMINI_THINKING_BUDGETS = {
+    "minimal": 0,
+    "low": 1024,
+    "medium": 4096,
+    "high": 8192,
+    "xhigh": 16384,
+}
+
+
+def _gemini_thinking_config(model: str, effort: str) -> dict[str, Any]:
+    normalized_effort = effort.lower()
+    if normalized_effort not in _GEMINI_THINKING_BUDGETS:
+        raise UnsupportedFeatureError(
+            f"Unsupported Gemini reasoning_effort={effort!r}; expected one of "
+            f"{tuple(_GEMINI_THINKING_BUDGETS)}."
+        )
+    if "gemini-3" in model.lower():
+        level = "high" if normalized_effort == "xhigh" else normalized_effort
+        return {"thinking_level": level}
+    return {"thinking_budget": _GEMINI_THINKING_BUDGETS[normalized_effort]}
+
+
+def _gemini_function_calling_config(tool_choice: Any) -> dict[str, Any]:
+    if isinstance(tool_choice, str):
+        value = tool_choice.lower()
+        if value == "auto":
+            return {"mode": "AUTO"}
+        if value in {"required", "any"}:
+            return {"mode": "ANY"}
+        if value == "none":
+            return {"mode": "NONE"}
+        if value == "validated":
+            return {"mode": "VALIDATED"}
+    if isinstance(tool_choice, dict):
+        if "function_calling_config" in tool_choice:
+            config = tool_choice["function_calling_config"]
+            if isinstance(config, dict):
+                return dict(config)
+        if "mode" in tool_choice:
+            config = {"mode": str(tool_choice["mode"]).upper()}
+            allowed = tool_choice.get("allowed_function_names")
+            if allowed is not None:
+                config["allowed_function_names"] = list(allowed)
+            return config
+        name = tool_choice.get("name")
+        function = tool_choice.get("function")
+        if name is None and isinstance(function, dict):
+            name = function.get("name")
+        if tool_choice.get("type") == "function" and isinstance(name, str):
+            return {"mode": "ANY", "allowed_function_names": [name]}
+    raise UnsupportedFeatureError(
+        "Gemini tool_choice must be auto, required/any, none, validated, or a "
+        "specific function tool choice."
+    )
 
 
 def _compose_contents(request: TurnRequest) -> Any:
@@ -466,12 +532,26 @@ def _convert_tools(tools: list[Any]) -> list[dict[str, Any]]:
             {
                 "name": tool.get("name", ""),
                 "description": tool.get("description", ""),
-                "parameters": tool.get("parameters") or {"type": "object", "properties": {}},
+                "parameters": _gemini_function_schema(
+                    tool.get("parameters") or {"type": "object", "properties": {}}
+                ),
             }
         )
     if declarations:
         passthrough.insert(0, {"function_declarations": declarations})
     return passthrough
+
+
+def _gemini_function_schema(schema: Any) -> Any:
+    if isinstance(schema, list):
+        return [_gemini_function_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    return {
+        key: _gemini_function_schema(value)
+        for key, value in schema.items()
+        if key != "additionalProperties"
+    }
 
 
 def _map_chunk(

@@ -204,6 +204,8 @@ def _control_values(controls: ModelRequestControls) -> dict[ControlName, object]
             values[name] = controls.cache.cached_content if controls.cache else None
         elif name == "cache_breakpoints":
             values[name] = tuple(controls.cache.breakpoints) if controls.cache else ()
+        elif name == "compaction":
+            values[name] = controls.compaction.strategy if controls.compaction else None
         else:
             values[name] = getattr(controls, name)
     return values

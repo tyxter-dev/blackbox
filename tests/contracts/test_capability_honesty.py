@@ -96,7 +96,8 @@ def test_xai_responses_capabilities_match_prd() -> None:
     assert caps.supports_remote_mcp is False
     assert caps.supports_reasoning_items
     assert caps.supports_provider_state
-    assert caps.supports_structured_output is False
+    assert caps.supports_structured_output
+    assert caps.hosted_tools["web_search"].request_mapping is True
 
 
 @pytest.mark.parametrize(
@@ -139,6 +140,13 @@ def test_granular_profiles_do_not_contradict_flat_summary(provider: ModelProvide
     finalizer_tool = profile.output_strategies.get("finalizer_tool")
     if finalizer_tool is not None and finalizer_tool.status == "supported":
         assert profile.summary.supports_function_tools is True
+    for tool_name in profile.summary.hosted_tools:
+        detail = profile.hosted_tools.get(tool_name)
+        assert detail is not None, f"{profile.provider} missing profile for {tool_name}"
+        assert detail.status != "unsupported", (
+            f"{profile.provider} advertises {tool_name} in capabilities() but marks it "
+            "unsupported in capability_profile()"
+        )
 
 
 def test_local_agent_capabilities_default_no_approvals() -> None:

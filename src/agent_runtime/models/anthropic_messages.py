@@ -31,7 +31,11 @@ from agent_runtime.core.capabilities import (
     ModelCapabilities,
     ModelCapabilityProfile,
 )
-from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
+from agent_runtime.core.errors import (
+    ProviderExecutionError,
+    ProviderNotConfiguredError,
+    UnsupportedFeatureError,
+)
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
@@ -87,16 +91,13 @@ class AnthropicMessagesProvider:
                     "code_interpreter", True, True, True, False
                 ),
                 "tool_search": HostedToolSupport("tool_search", True, True, True, False),
-                "shell": HostedToolSupport(
-                    "shell", True, True, False, True, requires_handler=True
+                "bash": HostedToolSupport(
+                    "bash", True, True, False, True, requires_handler=True
                 ),
-                "computer": HostedToolSupport(
-                    "computer", True, True, False, True, requires_handler=True
+                "computer_use": HostedToolSupport(
+                    "computer_use", True, True, False, True, requires_handler=True
                 ),
-                "text_editor": HostedToolSupport(
-                    "text_editor", True, True, False, True, requires_handler=True
-                ),
-                "mcp": HostedToolSupport("mcp", True, True, True, False),
+                "remote_mcp": HostedToolSupport("remote_mcp", True, True, True, False),
             },
         )
 
@@ -110,27 +111,25 @@ class AnthropicMessagesProvider:
                     status="supported", native_name="mcp_servers/mcp_toolset"
                 ),
                 "web_search": CapabilityDetail(
-                    status="unsupported",
-                    reason="Provider supports server web search, but adapter support is not part "
-                    "of the stable granular contract yet.",
+                    status="supported", native_name="web_search"
                 ),
-                "web_fetch": CapabilityDetail(
-                    status="unsupported",
-                    reason="Provider supports server web fetch, but adapter support is not part "
-                    "of the stable granular contract yet.",
-                ),
+                "web_fetch": CapabilityDetail(status="supported", native_name="web_fetch"),
                 "code_interpreter": CapabilityDetail(
-                    status="unsupported",
-                    reason="Provider supports server code execution, but adapter support is not "
-                    "part of the stable granular contract yet.",
+                    status="supported", native_name="code_execution"
                 ),
                 "tool_search": CapabilityDetail(
-                    status="unsupported",
-                    reason="Provider support exists, adapter mapping is not part of the stable "
-                    "granular contract yet.",
+                    status="supported", native_name="tool_search"
                 ),
-                "bash": CapabilityDetail(status="unsupported"),
-                "computer_use": CapabilityDetail(status="unsupported"),
+                "bash": CapabilityDetail(
+                    status="supported",
+                    native_name="bash",
+                    requires=("hosted_tool_handler",),
+                ),
+                "computer_use": CapabilityDetail(
+                    status="supported",
+                    native_name="computer",
+                    requires=("hosted_tool_handler",),
+                ),
                 "text_editor": CapabilityDetail(status="unsupported"),
                 "raw": CapabilityDetail(status="passthrough"),
             },
@@ -158,8 +157,9 @@ class AnthropicMessagesProvider:
                     status="supported", native_name="cache_control"
                 ),
                 "reasoning_effort": CapabilityDetail(
-                    status="unsupported",
-                    reason="Current adapter does not map thinking/adaptive thinking controls.",
+                    status="supported",
+                    native_name="thinking.budget_tokens",
+                    supported_values=("minimal", "low", "medium", "high", "xhigh"),
                 ),
                 "tool_search": CapabilityDetail(status="unsupported"),
                 "compaction": CapabilityDetail(status="unsupported"),
@@ -304,7 +304,7 @@ class AnthropicMessagesProvider:
         tools = [
             *request.tools,
             *anthropic_deferred_tools(request.hosted_tools),
-            *(to_anthropic_tool(tool) for tool in request.hosted_tools),
+            *(to_anthropic_tool(tool, model=request.model) for tool in request.hosted_tools),
         ]
         if not tools:
             tools = tools_from_extra
@@ -326,10 +326,71 @@ class AnthropicMessagesProvider:
             kwargs["top_p"] = controls.top_p
         if controls.max_output_tokens is not None:
             kwargs["max_tokens"] = controls.max_output_tokens
+        if controls.reasoning_effort is not None:
+            _validate_anthropic_thinking_controls(controls)
+            thinking, max_tokens = _anthropic_thinking_config(
+                controls.reasoning_effort,
+                max_tokens=kwargs["max_tokens"],
+                explicit_max_tokens=controls.max_output_tokens is not None,
+            )
+            if thinking is not None:
+                kwargs["max_tokens"] = max_tokens
+                kwargs["thinking"] = thinking
         if controls.tool_choice is not None:
             kwargs["tool_choice"] = controls.tool_choice
         kwargs.update(extra)
         return kwargs
+
+
+_ANTHROPIC_THINKING_BUDGETS = {
+    "minimal": 1024,
+    "low": 1024,
+    "medium": 4096,
+    "high": 8192,
+    "xhigh": 16384,
+}
+
+
+def _validate_anthropic_thinking_controls(controls: Any) -> None:
+    if controls.temperature is not None:
+        raise UnsupportedFeatureError(
+            "Anthropic thinking is not compatible with temperature; omit temperature."
+        )
+    if controls.top_p is not None and not 0.95 <= controls.top_p <= 1:
+        raise UnsupportedFeatureError(
+            "Anthropic thinking requires top_p to be between 0.95 and 1."
+        )
+    if controls.tool_choice is None:
+        return
+    tool_choice = controls.tool_choice
+    if isinstance(tool_choice, str) and tool_choice in {"auto", "none"}:
+        return
+    if isinstance(tool_choice, dict) and tool_choice.get("type") in {"auto", "none"}:
+        return
+    raise UnsupportedFeatureError(
+        "Anthropic thinking only supports tool_choice auto or none."
+    )
+
+
+def _anthropic_thinking_config(
+    effort: str,
+    *,
+    max_tokens: int,
+    explicit_max_tokens: bool,
+) -> tuple[dict[str, Any], int]:
+    budget = _ANTHROPIC_THINKING_BUDGETS.get(effort)
+    if budget is None:
+        raise UnsupportedFeatureError(
+            f"Unsupported Anthropic reasoning_effort={effort!r}; expected one of "
+            f"{tuple(_ANTHROPIC_THINKING_BUDGETS)}."
+        )
+    if budget >= max_tokens:
+        if explicit_max_tokens:
+            raise UnsupportedFeatureError(
+                "Anthropic thinking budget must be lower than max_output_tokens."
+            )
+        max_tokens = budget + 1024
+    return {"type": "enabled", "budget_tokens": budget}, max_tokens
 
 
 def _compose_messages(request: TurnRequest) -> list[dict[str, Any]]:

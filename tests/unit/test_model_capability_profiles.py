@@ -15,12 +15,15 @@ from agent_runtime.core.capabilities import (
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import OutputSpec
 from agent_runtime.hosted_tools import WebSearch, hosted_tool_kind
+from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.capability_validation import (
     requested_controls,
     resolve_output_strategy,
 )
 from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.output.schema import build_output_schema
 from agent_runtime.providers.base import (
     CompactionControl,
@@ -131,7 +134,25 @@ def test_openai_profile_exposes_hardened_tool_and_control_surfaces() -> None:
     assert profile.hosted_tools["shell"].status == "supported"
     assert profile.controls["tool_search"].status == "supported"
     assert profile.controls["compaction"].status == "supported"
+    assert profile.controls["compaction"].supported_values == ("auto", "disabled")
     assert profile.controls["modalities"].status == "unsupported"
+
+
+def test_provider_profiles_expose_new_adapter_mappings() -> None:
+    anthropic = AnthropicMessagesProvider(api_key="x").capability_profile("claude-test")
+    gemini = GeminiGenerateContentProvider(api_key="x").capability_profile("gemini-test")
+    xai = XAIResponsesProvider(api_key="x").capability_profile("grok-test")
+
+    assert anthropic.hosted_tools["web_search"].status == "supported"
+    assert anthropic.hosted_tools["bash"].status == "supported"
+    assert anthropic.controls["reasoning_effort"].status == "supported"
+    assert gemini.hosted_tools["code_interpreter"].status == "supported"
+    assert gemini.hosted_tools["url_context"].status == "supported"
+    assert gemini.controls["tool_choice"].status == "supported"
+    assert gemini.controls["reasoning_effort"].status == "supported"
+    assert xai.hosted_tools["web_search"].status == "supported"
+    assert xai.output_strategies["provider_native"].status == "supported"
+    assert xai.summary.supports_structured_output is True
 
 
 def test_build_output_schema_keeps_posthoc_runtime_strategy_available() -> None:
