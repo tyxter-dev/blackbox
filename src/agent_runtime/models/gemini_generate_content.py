@@ -16,6 +16,7 @@ from typing import Any
 from agent_runtime.core.accounting import add_usage, usage_from_gemini_chunk
 from agent_runtime.core.cache import ProviderCacheRecord
 from agent_runtime.core.capabilities import (
+    CapabilityConstraint,
     CapabilityDetail,
     HostedToolSupport,
     ModelCapabilities,
@@ -84,6 +85,7 @@ class GeminiGenerateContentProvider:
 
     def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
         summary = self.capabilities(model)
+        structured_with_tools = _gemini_supports_structured_output_with_tools(model)
         return ModelCapabilityProfile(
             provider=self.provider_id,
             model=model,
@@ -170,6 +172,39 @@ class GeminiGenerateContentProvider:
                 "zdr": CapabilityDetail(status="conditional"),
                 "encrypted_reasoning": CapabilityDetail(status="unsupported"),
             },
+            constraints=(
+                ()
+                if structured_with_tools
+                else (
+                    CapabilityConstraint(
+                        name="gemini_structured_output_hosted_tools_requires_gemini_3",
+                        status="unsupported",
+                        reason=(
+                            "Gemini structured output with built-in tools is available only "
+                            "on Gemini 3 series models."
+                        ),
+                        hosted_tools_any=(
+                            "web_search",
+                            "file_search",
+                            "code_interpreter",
+                            "url_context",
+                            "computer_use",
+                            "raw",
+                        ),
+                        output_strategies_any=("provider_native",),
+                    ),
+                    CapabilityConstraint(
+                        name="gemini_structured_output_function_tools_requires_gemini_3",
+                        status="unsupported",
+                        reason=(
+                            "Gemini structured output with function calling is available only "
+                            "on Gemini 3 series models."
+                        ),
+                        output_strategies_any=("provider_native",),
+                        has_function_tools=True,
+                    ),
+                )
+            ),
             summary=summary,
         )
 
@@ -289,6 +324,9 @@ class GeminiGenerateContentProvider:
         assistant_parts: list[dict[str, Any]] = []
         thought_signatures: list[Any] = []
         tool_call_ids: list[str] = []
+        server_tool_ids: list[dict[str, Any]] = []
+        source_references: list[dict[str, Any]] = []
+        file_handles: list[dict[str, Any]] = []
         usage = None
 
         attempt = 0
@@ -297,6 +335,9 @@ class GeminiGenerateContentProvider:
             assistant_parts.clear()
             thought_signatures.clear()
             tool_call_ids.clear()
+            server_tool_ids.clear()
+            source_references.clear()
+            file_handles.clear()
             usage = None
             try:
                 stream = client.aio.models.generate_content_stream(**kwargs)
@@ -311,6 +352,9 @@ class GeminiGenerateContentProvider:
                         assistant_parts=assistant_parts,
                         thought_signatures=thought_signatures,
                         tool_call_ids=tool_call_ids,
+                        server_tool_ids=server_tool_ids,
+                        source_references=source_references,
+                        file_handles=file_handles,
                     ):
                         emitted_provider_output = True
                         yield event
@@ -337,6 +381,9 @@ class GeminiGenerateContentProvider:
             response_id=response_id,
             thought_signatures=thought_signatures,
             tool_call_ids=tool_call_ids,
+            server_tool_ids=server_tool_ids,
+            source_references=source_references,
+            file_handles=file_handles,
         )
         data: dict[str, Any] = {"model": request.model, "provider_state": provider_state}
         if usage is not None:
@@ -366,7 +413,13 @@ class GeminiGenerateContentProvider:
             if isinstance(config_tools, list):
                 tools = config_tools
         if tools:
-            config["tools"] = _convert_tools(tools)
+            converted_tools = _convert_tools(tools)
+            config["tools"] = converted_tools
+            if (
+                _gemini_supports_structured_output_with_tools(request.model)
+                and _has_builtin_and_function_tools(converted_tools)
+            ):
+                config.setdefault("include_server_side_tool_invocations", True)
         controls = request.controls
         if controls.instructions is not None:
             config.setdefault("system_instruction", controls.instructions)
@@ -426,6 +479,10 @@ _GEMINI_THINKING_BUDGETS = {
     "high": 8192,
     "xhigh": 16384,
 }
+
+
+def _gemini_supports_structured_output_with_tools(model: str | None) -> bool:
+    return "gemini-3" in (model or "").lower()
 
 
 def _gemini_thinking_config(model: str, effort: str) -> dict[str, Any]:
@@ -542,6 +599,39 @@ def _convert_tools(tools: list[Any]) -> list[dict[str, Any]]:
     return passthrough
 
 
+def _has_builtin_and_function_tools(tools: list[dict[str, Any]]) -> bool:
+    has_function = any(
+        isinstance(tool, dict)
+        and (
+            "function_declarations" in tool
+            or "functionDeclarations" in tool
+        )
+        for tool in tools
+    )
+    has_builtin = any(
+        isinstance(tool, dict)
+        and any(
+            key in tool
+            for key in (
+                "google_search",
+                "googleSearch",
+                "google_maps",
+                "googleMaps",
+                "code_execution",
+                "codeExecution",
+                "url_context",
+                "urlContext",
+                "file_search",
+                "fileSearch",
+                "computer_use",
+                "computerUse",
+            )
+        )
+        for tool in tools
+    )
+    return has_function and has_builtin
+
+
 def _gemini_function_schema(schema: Any) -> Any:
     if isinstance(schema, list):
         return [_gemini_function_schema(item) for item in schema]
@@ -561,9 +651,13 @@ def _map_chunk(
     assistant_parts: list[dict[str, Any]],
     thought_signatures: list[Any],
     tool_call_ids: list[str],
+    server_tool_ids: list[dict[str, Any]],
+    source_references: list[dict[str, Any]],
+    file_handles: list[dict[str, Any]],
 ) -> list[AgentEvent]:
     events: list[AgentEvent] = []
     for candidate in _attr(chunk, "candidates") or []:
+        source_references.extend(_candidate_source_references(candidate))
         content = _attr(candidate, "content")
         for index, part in enumerate(_attr(content, "parts") or []):
             part_dict = _part_to_dict(part)
@@ -571,6 +665,7 @@ def _map_chunk(
             signature = _attr(part, "thought_signature")
             if signature is not None:
                 thought_signatures.append(signature)
+            file_handles.extend(_part_file_handles(part_dict))
 
             function_call = _attr(part, "function_call")
             if function_call is not None:
@@ -598,6 +693,73 @@ def _map_chunk(
                             "item": item,
                             "index": index,
                         },
+                        raw=part,
+                    )
+                )
+                continue
+
+            tool_call = _attr(part, "tool_call")
+            if tool_call is not None:
+                call_id = _attr(tool_call, "id") or f"gemini_tool_{len(server_tool_ids) + 1}"
+                tool_type = _attr(tool_call, "tool_type") or "server_tool"
+                server_tool_ids.append(
+                    {
+                        "id": call_id,
+                        "tool_type": tool_type,
+                    }
+                )
+                item = RunItem(
+                    type=ItemTypes.HOSTED_TOOL_CALL,
+                    provider=provider,
+                    status="completed",
+                    id=call_id,
+                    data={
+                        "call_id": call_id,
+                        "hosted_tool_type": tool_type,
+                        "provider_item_type": "tool_call",
+                    },
+                    raw=tool_call,
+                )
+                events.append(
+                    AgentEvent(
+                        type=EventTypes.HOSTED_TOOL_CALL_COMPLETED,
+                        provider=provider,
+                        item_id=item.id,
+                        data={**item.data, "item": item, "index": index},
+                        raw=part,
+                    )
+                )
+                continue
+
+            tool_response = _attr(part, "tool_response")
+            if tool_response is not None:
+                response_id = _attr(tool_response, "id") or f"gemini_tool_result_{len(server_tool_ids) + 1}"
+                tool_type = _attr(tool_response, "tool_type") or "server_tool"
+                server_tool_ids.append(
+                    {
+                        "id": response_id,
+                        "tool_type": tool_type,
+                        "result": True,
+                    }
+                )
+                item = RunItem(
+                    type=ItemTypes.HOSTED_TOOL_RESULT,
+                    provider=provider,
+                    status="completed",
+                    id=response_id,
+                    data={
+                        "call_id": response_id,
+                        "hosted_tool_type": tool_type,
+                        "provider_item_type": "tool_response",
+                    },
+                    raw=tool_response,
+                )
+                events.append(
+                    AgentEvent(
+                        type=EventTypes.HOSTED_TOOL_CALL_COMPLETED,
+                        provider=provider,
+                        item_id=item.id,
+                        data={**item.data, "item": item, "index": index},
                         raw=part,
                     )
                 )
@@ -693,6 +855,9 @@ def _build_provider_state(
     response_id: str | None,
     thought_signatures: list[Any],
     tool_call_ids: list[str],
+    server_tool_ids: list[dict[str, Any]],
+    source_references: list[dict[str, Any]],
+    file_handles: list[dict[str, Any]],
 ) -> ProviderState:
     history = _compose_contents(request)
     if not isinstance(history, list):
@@ -704,9 +869,33 @@ def _build_provider_state(
         conversation_id=response_id,
         native_history=history,
         reasoning_state={"thought_signatures": thought_signatures},
-        tool_state={"tool_call_ids": tool_call_ids},
+        tool_state=_gemini_tool_state(
+            tool_call_ids=tool_call_ids,
+            server_tool_ids=server_tool_ids,
+            source_references=source_references,
+            file_handles=file_handles,
+        ),
         continuation={"response_id": response_id} if response_id else {},
     )
+
+
+def _gemini_tool_state(
+    *,
+    tool_call_ids: list[str],
+    server_tool_ids: list[dict[str, Any]],
+    source_references: list[dict[str, Any]],
+    file_handles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    state: dict[str, Any] = {}
+    if tool_call_ids:
+        state["tool_call_ids"] = list(tool_call_ids)
+    if server_tool_ids:
+        state["server_tool_ids"] = _dedupe_dicts(server_tool_ids)
+    if source_references:
+        state["source_references"] = _dedupe_dicts(source_references)
+    if file_handles:
+        state["file_handles"] = _dedupe_dicts(file_handles)
+    return state
 
 
 def _part_to_dict(part: Any) -> dict[str, Any]:
@@ -741,7 +930,62 @@ def _part_to_dict(part: Any) -> dict[str, Any]:
             "outcome": _attr(code_execution_result, "outcome"),
             "output": _attr(code_execution_result, "output"),
         }
+    tool_call = _attr(part, "tool_call")
+    if tool_call is not None:
+        out["tool_call"] = {
+            "id": _attr(tool_call, "id"),
+            "tool_type": _attr(tool_call, "tool_type"),
+        }
+    tool_response = _attr(part, "tool_response")
+    if tool_response is not None:
+        out["tool_response"] = {
+            "id": _attr(tool_response, "id"),
+            "tool_type": _attr(tool_response, "tool_type"),
+        }
+    file_data = _attr(part, "file_data")
+    if file_data is not None:
+        out["file_data"] = _plain_mapping(file_data)
     return out
+
+
+def _candidate_source_references(candidate: Any) -> list[dict[str, Any]]:
+    references: list[dict[str, Any]] = []
+    for name in (
+        "grounding_metadata",
+        "groundingMetadata",
+        "url_context_metadata",
+        "urlContextMetadata",
+        "citation_metadata",
+        "citationMetadata",
+    ):
+        value = _attr(candidate, name)
+        if value is not None:
+            references.append({"field": name, "value": _plain_mapping(value)})
+    return references
+
+
+def _part_file_handles(part: dict[str, Any]) -> list[dict[str, Any]]:
+    handles: list[dict[str, Any]] = []
+    file_data = part.get("file_data")
+    if isinstance(file_data, dict):
+        handles.append({"field": "file_data", "value": file_data})
+    for key in ("file_uri", "fileUri", "file_id", "fileId"):
+        value = part.get(key)
+        if value is not None:
+            handles.append({"field": key, "value": value})
+    return handles
+
+
+def _dedupe_dicts(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for value in values:
+        key = repr(sorted(value.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+    return deduped
 
 
 def _attr(obj: Any, name: str) -> Any:

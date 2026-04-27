@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Slice 18 — Provider-native tool and structured-output hardening
+
+Provider capability profiles now distinguish model-version support for
+provider-native structured output, tool combinations, and compaction instead of
+advertising one broad provider-wide surface.
+
+- Adds typed Anthropic `TextEditor` and `Memory` hosted-tool specs while
+  preserving `HostedToolRaw` as the explicit future-provider escape hatch.
+- Maps Anthropic provider-native structured output through
+  `output_config.format` for supported Claude model versions, and maps
+  supported Claude 4.6 compaction controls to `context_management.edits`.
+- Gates Gemini structured output plus built-in/function tools to Gemini 3
+  model profiles, raising `UnsupportedFeatureError` before SDK dispatch for
+  unsupported model/tool combinations.
+- Preserves OpenAI output item IDs, hosted/MCP IDs, function call IDs, source
+  references, file handles, Anthropic tool/MCP state, and Gemini grounding/file
+  metadata in `ProviderState.tool_state`.
+- Adds contract/runtime/golden tests proving unsupported requests fail before
+  provider calls and continuation state retains native IDs.
+
 ### Slice 17 — MCP integration hardening and toolset routing
 
 MCP is now a hardened external tool/server boundary with explicit local versus

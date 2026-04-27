@@ -26,6 +26,7 @@ from typing import Any, cast
 
 from agent_runtime.core.accounting import usage_from_anthropic_message
 from agent_runtime.core.capabilities import (
+    CapabilityConstraint,
     CapabilityDetail,
     HostedToolSupport,
     ModelCapabilities,
@@ -75,6 +76,7 @@ class AnthropicMessagesProvider:
         self._owns_client = client is None
 
     def capabilities(self, model: str | None = None) -> ModelCapabilities:
+        supports_structured_output = _anthropic_supports_structured_outputs(model)
         return ModelCapabilities(
             supports_streaming_events=True,
             supports_function_tools=True,
@@ -83,7 +85,7 @@ class AnthropicMessagesProvider:
             supports_remote_mcp=True,
             supports_reasoning_items=True,
             supports_provider_state=True,
-            supports_structured_output=False,
+            supports_structured_output=supports_structured_output,
             hosted_tools={
                 "web_search": HostedToolSupport("web_search", True, True, True, False),
                 "web_fetch": HostedToolSupport("web_fetch", True, True, True, False),
@@ -97,12 +99,20 @@ class AnthropicMessagesProvider:
                 "computer_use": HostedToolSupport(
                     "computer_use", True, True, False, True, requires_handler=True
                 ),
+                "text_editor": HostedToolSupport(
+                    "text_editor", True, True, False, True, requires_handler=True
+                ),
+                "memory": HostedToolSupport(
+                    "memory", True, True, False, True, requires_handler=True
+                ),
                 "remote_mcp": HostedToolSupport("remote_mcp", True, True, True, False),
             },
         )
 
     def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
         summary = self.capabilities(model)
+        structured_output = _anthropic_supports_structured_outputs(model)
+        compaction = _anthropic_supports_compaction(model)
         return ModelCapabilityProfile(
             provider=self.provider_id,
             model=model,
@@ -130,13 +140,28 @@ class AnthropicMessagesProvider:
                     native_name="computer",
                     requires=("hosted_tool_handler",),
                 ),
-                "text_editor": CapabilityDetail(status="unsupported"),
+                "text_editor": CapabilityDetail(
+                    status="supported",
+                    native_name="text_editor",
+                    requires=("hosted_tool_handler",),
+                ),
+                "memory": CapabilityDetail(
+                    status="supported",
+                    native_name="memory",
+                    requires=("hosted_tool_handler",),
+                ),
                 "raw": CapabilityDetail(status="passthrough"),
             },
             output_strategies={
                 "provider_native": CapabilityDetail(
-                    status="unsupported",
-                    reason="Structured output beta is not mapped by AnthropicMessagesProvider.",
+                    status="supported" if structured_output else "unsupported",
+                    native_name="output_config.format",
+                    reason=(
+                        None
+                        if structured_output
+                        else "Anthropic structured output is only enabled for supported Claude "
+                        "4.5+ / 4.6+ / 4.7 model versions."
+                    ),
                 ),
                 "finalizer_tool": CapabilityDetail(status="supported"),
                 "posthoc_parse": CapabilityDetail(status="supported"),
@@ -162,7 +187,17 @@ class AnthropicMessagesProvider:
                     supported_values=("minimal", "low", "medium", "high", "xhigh"),
                 ),
                 "tool_search": CapabilityDetail(status="unsupported"),
-                "compaction": CapabilityDetail(status="unsupported"),
+                "compaction": CapabilityDetail(
+                    status="supported" if compaction else "unsupported",
+                    native_name="context_management.edits",
+                    supported_values=("auto", "disabled") if compaction else (),
+                    reason=(
+                        None
+                        if compaction
+                        else "Anthropic compaction is available only on Claude Opus 4.6 and "
+                        "later supported compaction model versions in this adapter."
+                    ),
+                ),
                 "modalities": CapabilityDetail(status="unsupported"),
                 "extra": CapabilityDetail(status="passthrough"),
             },
@@ -183,6 +218,15 @@ class AnthropicMessagesProvider:
                     "reasoning state mode.",
                 ),
             },
+            constraints=(
+                CapabilityConstraint(
+                    name="anthropic_structured_output_citations",
+                    status="unsupported",
+                    reason="Anthropic output_config.format is incompatible with citations.",
+                    output_strategies_any=("provider_native",),
+                    controls_any=("include",),
+                ),
+            ),
             summary=summary,
         )
 
@@ -296,6 +340,10 @@ class AnthropicMessagesProvider:
     ) -> dict[str, Any]:
         extra = dict(request.extra)
         tools_from_extra = extra.pop("tools", None)
+        beta_values = [
+            *list(extra.pop("betas", []) or []),
+            *anthropic_beta_values(request.hosted_tools),
+        ]
         kwargs: dict[str, Any] = {
             "model": request.model,
             "messages": messages,
@@ -313,10 +361,6 @@ class AnthropicMessagesProvider:
         mcp_servers = anthropic_mcp_servers(request.hosted_tools)
         if mcp_servers:
             kwargs["mcp_servers"] = mcp_servers
-        beta_values = anthropic_beta_values(request.hosted_tools)
-        if beta_values:
-            existing_betas = extra.pop("betas", []) or []
-            kwargs["betas"] = [*existing_betas, *beta_values]
         controls = request.controls
         if controls.instructions is not None:
             kwargs["system"] = _system_payload(controls.instructions, controls.cache)
@@ -338,6 +382,13 @@ class AnthropicMessagesProvider:
                 kwargs["thinking"] = thinking
         if controls.tool_choice is not None:
             kwargs["tool_choice"] = controls.tool_choice
+        if controls.compaction is not None and controls.compaction.strategy != "disabled":
+            _merge_compaction_config(kwargs, controls.compaction, extra)
+            beta_values.append("compact-2026-01-12")
+        if request.output_schema is not None and request.output_strategy == "provider_native":
+            _merge_output_config(kwargs, request, extra)
+        if beta_values:
+            kwargs["betas"] = _dedupe(beta_values)
         kwargs.update(extra)
         return kwargs
 
@@ -349,6 +400,108 @@ _ANTHROPIC_THINKING_BUDGETS = {
     "high": 8192,
     "xhigh": 16384,
 }
+
+
+def _merge_output_config(
+    kwargs: dict[str, Any],
+    request: TurnRequest,
+    extra: dict[str, Any],
+) -> None:
+    assert request.output_schema is not None
+    response_format = {
+        "type": "json_schema",
+        "schema": request.output_schema.schema,
+    }
+    existing = extra.pop("output_config", None)
+    if existing is not None:
+        if not isinstance(existing, dict):
+            raise ValueError("extra['output_config'] must be a dict.")
+        existing_format = existing.get("format")
+        if existing_format is not None and existing_format != response_format:
+            raise ValueError(
+                "extra['output_config']['format'] conflicts with provider_native output schema."
+            )
+        kwargs["output_config"] = {**existing, "format": response_format}
+        return
+    kwargs["output_config"] = {"format": response_format}
+
+
+def _merge_compaction_config(
+    kwargs: dict[str, Any],
+    compaction: Any,
+    extra: dict[str, Any],
+) -> None:
+    if compaction.strategy == "aggressive":
+        raise UnsupportedFeatureError(
+            "Anthropic compaction supports 'auto' and 'disabled'; 'aggressive' is not mapped."
+        )
+    if compaction.preserve_recent_turns is not None:
+        raise UnsupportedFeatureError(
+            "Anthropic compaction does not support preserve_recent_turns through "
+            "CompactionControl."
+        )
+    edit: dict[str, Any] = {"type": "compact_20260112"}
+    if compaction.max_context_tokens is not None:
+        edit["trigger"] = {
+            "type": "input_tokens",
+            "value": compaction.max_context_tokens,
+        }
+    edit.update(compaction.extra)
+
+    existing = extra.pop("context_management", None)
+    if existing is not None:
+        if not isinstance(existing, dict):
+            raise ValueError("extra['context_management'] must be a dict.")
+        edits = [*list(existing.get("edits") or ()), edit]
+        kwargs["context_management"] = {**existing, "edits": edits}
+        return
+    kwargs["context_management"] = {"edits": [edit]}
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _normalized_model(model: str | None) -> str:
+    return (model or "").lower().replace("_", "-")
+
+
+def _anthropic_supports_structured_outputs(model: str | None) -> bool:
+    normalized = _normalized_model(model)
+    if not normalized:
+        return False
+    return any(
+        token in normalized
+        for token in (
+            "mythos",
+            "opus-4-7",
+            "opus-4-6",
+            "opus-4-5",
+            "sonnet-4-6",
+            "sonnet-4-5",
+            "haiku-4-5",
+        )
+    )
+
+
+def _anthropic_supports_compaction(model: str | None) -> bool:
+    normalized = _normalized_model(model)
+    return any(
+        token in normalized
+        for token in (
+            "mythos",
+            "opus-4-7",
+            "opus-4-6",
+            "sonnet-4-6",
+        )
+    )
 
 
 def _validate_anthropic_thinking_controls(controls: Any) -> None:
@@ -485,13 +638,15 @@ def _convert_tools(tools: list[Any]) -> list[dict[str, Any]]:
         if tool.get("type") not in {None, "function"}:
             converted.append(tool)
             continue
-        converted.append(
-            {
-                "name": tool.get("name", ""),
-                "description": tool.get("description", ""),
-                "input_schema": tool.get("parameters") or {"type": "object", "properties": {}},
-            }
-        )
+        converted_tool = {
+            "name": tool.get("name", ""),
+            "description": tool.get("description", ""),
+            "input_schema": tool.get("parameters") or {"type": "object", "properties": {}},
+        }
+        for key in ("strict", "cache_control"):
+            if key in tool:
+                converted_tool[key] = tool[key]
+        converted.append(converted_tool)
     return converted
 
 
@@ -756,8 +911,87 @@ def _build_provider_state(
     return ProviderState(
         provider="anthropic",
         native_history=history,
+        reasoning_state=_anthropic_reasoning_state(assistant_content),
+        tool_state=_anthropic_tool_state(assistant_content),
         continuation={"last_message_id": message_id} if message_id else {},
     )
+
+
+def _anthropic_reasoning_state(content: Any) -> dict[str, Any]:
+    if not isinstance(content, list):
+        return {}
+    signatures = [
+        block.get("signature")
+        for block in content
+        if isinstance(block, dict)
+        and block.get("type") == "thinking"
+        and block.get("signature") is not None
+    ]
+    return {"thinking_signatures": signatures} if signatures else {}
+
+
+def _anthropic_tool_state(content: Any) -> dict[str, Any]:
+    if not isinstance(content, list):
+        return {}
+    tool_uses: list[dict[str, Any]] = []
+    hosted_tool_calls: list[dict[str, Any]] = []
+    hosted_tool_results: list[dict[str, Any]] = []
+    mcp_items: list[dict[str, Any]] = []
+    tool_references: list[dict[str, Any]] = []
+    source_references: list[dict[str, Any]] = []
+
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if block_type == "tool_use":
+            item = {
+                "id": block.get("id"),
+                "name": block.get("name"),
+                "input": block.get("input"),
+            }
+            hosted_tool_type = _anthropic_client_tool_type(str(block.get("name", "")))
+            if hosted_tool_type is None:
+                tool_uses.append(item)
+            else:
+                hosted_tool_calls.append({**item, "hosted_tool_type": hosted_tool_type})
+        elif block_type == "server_tool_use":
+            hosted_tool_calls.append(
+                {
+                    "id": block.get("id"),
+                    "name": block.get("name"),
+                    "input": block.get("input"),
+                    "hosted_tool_type": _anthropic_server_tool_type(block, str(block_type)),
+                }
+            )
+        elif block_type in {"mcp_tool_use", "mcp_tool_result"}:
+            mcp_items.append(_mcp_block_data(block, block_type=str(block_type)))
+        elif isinstance(block_type, str) and block_type.endswith("_tool_result"):
+            hosted_tool_results.append(
+                {
+                    "tool_use_id": block.get("tool_use_id"),
+                    "type": block_type,
+                    "hosted_tool_type": _anthropic_server_tool_type(block, block_type),
+                }
+            )
+        elif block_type == "tool_reference":
+            tool_references.append(dict(block))
+        source_references.extend(_anthropic_source_references(block))
+
+    state: dict[str, Any] = {}
+    if tool_uses:
+        state["tool_uses"] = tool_uses
+    if hosted_tool_calls:
+        state["hosted_tool_calls"] = hosted_tool_calls
+    if hosted_tool_results:
+        state["hosted_tool_results"] = hosted_tool_results
+    if mcp_items:
+        state["mcp_items"] = mcp_items
+    if tool_references:
+        state["tool_references"] = tool_references
+    if source_references:
+        state["source_references"] = _dedupe_dicts(source_references)
+    return state
 
 
 def _final_message_content(final_message: Any) -> Any:
@@ -845,8 +1079,10 @@ def _anthropic_client_tool_type(name: str) -> str | None:
         return "shell"
     if name == "computer":
         return "computer"
-    if name in {"text_editor", "str_replace_editor"}:
+    if name in {"text_editor", "str_replace_editor", "str_replace_based_edit_tool"}:
         return "text_editor"
+    if name == "memory":
+        return "memory"
     return None
 
 
@@ -883,6 +1119,36 @@ def _block_to_dict(block: Any) -> dict[str, Any]:
         if value is not None:
             out[name] = value
     return out
+
+
+def _anthropic_source_references(block: dict[str, Any]) -> list[dict[str, Any]]:
+    references: list[dict[str, Any]] = []
+    content = block.get("content")
+    if isinstance(content, list):
+        for entry in content:
+            if isinstance(entry, dict) and (
+                "url" in entry
+                or "source" in entry
+                or str(entry.get("type", "")).endswith("_result")
+            ):
+                references.append(dict(entry))
+    for key in ("citations", "sources", "annotations"):
+        value = block.get(key)
+        if isinstance(value, list):
+            references.extend(dict(item) for item in value if isinstance(item, dict))
+    return references
+
+
+def _dedupe_dicts(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for value in values:
+        key = repr(sorted(value.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+    return deduped
 
 
 async def _get_final_message(stream: Any) -> Any:

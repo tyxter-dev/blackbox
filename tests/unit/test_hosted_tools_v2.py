@@ -10,7 +10,9 @@ from agent_runtime.hosted_tools import (
     ContainerSpec,
     FileSearch,
     ImageGeneration,
+    Memory,
     Shell,
+    TextEditor,
     ToolNamespace,
     ToolSearch,
     URLContext,
@@ -88,6 +90,15 @@ def test_anthropic_v2_hosted_tools_serialize() -> None:
     assert to_anthropic_tool(ToolSearch(variant="bm25")) == {
         "type": "tool_search_tool_bm25_20251119",
         "name": "tool_search",
+    }
+    assert to_anthropic_tool(TextEditor(max_characters=10000), model="claude-opus-4-7") == {
+        "type": "text_editor_20250728",
+        "name": "str_replace_based_edit_tool",
+        "max_characters": 10000,
+    }
+    assert to_anthropic_tool(Memory()) == {
+        "type": "memory_20250818",
+        "name": "memory",
     }
 
 

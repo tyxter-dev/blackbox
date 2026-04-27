@@ -30,7 +30,7 @@ Status legend:
 | Dataclass structured output | Supported | `runtime.run(output_type=MyDataclass)` | Parses final JSON and constructs the dataclass. |
 | String output | Supported | `runtime.run(output_type=str)` | Explicit or implicit default. |
 | Fail-fast validation errors | Supported | `OutputValidationError` | Carries `raw_text` and the original validation/JSON error when available. |
-| Provider-native structured output | Supported | `OutputSpec.strategy="provider_native"` | Runtime builds JSON Schema contracts and wires them into OpenAI Responses `text.format` and Gemini `response_json_schema`; unsupported providers raise unless an explicit fallback is selected. |
+| Provider-native structured output | Supported | `OutputSpec.strategy="provider_native"` | Runtime builds JSON Schema contracts and wires them into OpenAI Responses `text.format`, Gemini `response_json_schema`, and Anthropic `output_config.format` for supported Claude model versions; unsupported providers/models raise unless an explicit fallback is selected. |
 | Finalizer tool structured output | Supported | `OutputSpec.strategy="finalizer_tool"` | Runtime injects a hidden `submit_final_output` tool, terminates when the model calls it, and validates the tool arguments as final output. |
 | Raw JSON Schema post-hoc output | Supported | `OutputSpec(schema={...}, strategy="posthoc_parse")` | Dict JSON Schemas validate common JSON Schema constraints after generation, including type, required fields, additional properties, arrays, enums, constants, `anyOf`, and `oneOf`. |
 | Structured output retry/repair | Supported | `OutputSpec.strategy="posthoc_parse_with_retry"` | On validation failure, the runtime feeds a repair prompt back to the model up to `max_validation_retries`. |
@@ -63,7 +63,7 @@ Status legend:
 
 | Feature | Status | Public surface | Notes |
 |---|---|---|---|
-| Typed hosted tool specs | Supported | `WebSearch`, `FileSearch`, `CodeInterpreter`, `RemoteMCP`, `HostedToolRaw` | Provider-managed tools are passed via `hosted_tools` and remain distinct from local function tools. |
+| Typed hosted tool specs | Supported | `WebSearch`, `FileSearch`, `CodeInterpreter`, `RemoteMCP`, `ToolSearch`, `ImageGeneration`, `TextEditor`, `Memory`, `HostedToolRaw` | Provider-managed tools are passed via `hosted_tools` and remain distinct from local function tools. |
 | OpenAI hosted tool mapping | Supported | `runtime.run(..., hosted_tools=[...])` | Maps web search, file search, code interpreter, remote MCP, and raw hosted payloads into Responses `tools`; file search result inclusion is wired through `include`. |
 | OpenAI hosted tool events | Supported | `RunItem(type="hosted_tool_call")` | Known hosted output items are normalized into typed run items while preserving provider raw payloads. |
 | Hosted tool result metadata | Supported | `result.metadata["hosted_tools"]` | Summarizes observed hosted tool calls by type, item ID, status, query/call ID, and result count where available. |
@@ -96,6 +96,7 @@ Status legend:
 | In-memory run store | Supported | `InMemoryRunStore` | Save/load/all-runs operations are implemented. |
 | Provider-native continuation state | Supported | `ProviderState` | Preserves provider continuation IDs and native state outside chat history. |
 | OpenAI previous response continuation | Supported | `ProviderState.previous_response_id` | OpenAI Responses adapter round-trips `previous_response_id`. |
+| Provider tool/source state preservation | Supported | `ProviderState.tool_state`, `ProviderState.reasoning_state` | Adapters retain native tool IDs, hosted/MCP IDs, output item IDs, source references, file handles, and reasoning signatures where providers expose them. |
 | Provider-native request controls | Supported | `ModelRequestControls` / `TurnRequest.controls` | Common controls such as instructions, sampling, output token caps, tool choice, parallel tool calls, reasoning effort, verbosity, tool search, compaction/truncation, background mode, store, and include are mapped by adapters where native support exists; `extra` remains the escape hatch. |
 | Model usage and cost accounting | Supported | `ModelUsage`, `ModelCatalog`, `ModelPricing` | Provider adapters normalize usage, split cache read/cache creation tokens where available, count tool calls, preserve provider usage details, and applications can register current pricing to add cost estimates to result metadata. |
 | Native provider cache controls | Supported | `ModelCacheControl`, `cache=...` | OpenAI/xAI map prompt cache keys/retention, Anthropic maps ephemeral cache controls, and Gemini consumes `cached_content` names. Result metadata reports cache hit metrics where provider usage exposes them. |
@@ -116,7 +117,7 @@ Status legend:
 | State mode validation | Supported | `ModelRequestControls.state_mode` | Explicit unsupported state modes raise before provider calls. |
 | Compatibility profile derivation | Supported | `get_model_capability_profile(...)` | Providers without `capability_profile(...)` still get a conservative profile derived from flat `ModelCapabilities`. |
 | OpenAI tool-search control | Supported | `ToolSearchControl` / `ToolSearch` | OpenAI can request provider tool search directly or through hosted namespace specs without duplicate tool-search entries. |
-| OpenAI compaction control | Supported | `CompactionControl(strategy="auto" | "disabled")` | Maps to Responses `truncation`; aggressive/custom compaction raises until a full compaction workflow exists. |
+| Provider-native compaction control | Supported | `CompactionControl(strategy="auto" | "disabled")` | OpenAI maps to Responses `truncation`; supported Anthropic Claude 4.6 models map to `context_management.edits`; aggressive/custom compaction raises until a full compaction workflow exists. |
 | Modalities control | Contract only | `ModelRequestControls.modalities` | Explicit typed surface exists and unsupported providers reject it; no adapter maps it yet. |
 
 ## Provider Runtime
@@ -135,8 +136,8 @@ Status legend:
 | Echo model provider | Supported | `EchoModelProvider` | Dependency-free provider for tests/examples. |
 | OpenAI Responses model provider | Supported | `OpenAIResponsesProvider` | Native Responses streaming adapter with typed event mapping and raw payload preservation. |
 | xAI Responses model provider | Supported | `XAIResponsesProvider` | OpenAI-compatible Responses adapter pointed at xAI, with typed event mapping, raw payload preservation, and conservative capability flags for unsupported hosted search/MCP surfaces. |
-| Anthropic Messages model provider | Supported | `AnthropicMessagesProvider` | Native Messages streaming adapter with typed event mapping, tool conversion, reasoning deltas, provider state, and raw payload preservation. |
-| Gemini GenerateContent model provider | Supported | `GeminiGenerateContentProvider` | Native GenerateContent streaming adapter with text, reasoning, function-call mapping, function-response continuation, and provider state. |
+| Anthropic Messages model provider | Supported | `AnthropicMessagesProvider` | Native Messages streaming adapter with typed event mapping, tool conversion, reasoning deltas, model-gated structured output/compaction, provider state, and raw payload preservation. |
+| Gemini GenerateContent model provider | Supported | `GeminiGenerateContentProvider` | Native GenerateContent streaming adapter with text, reasoning, function-call mapping, function-response continuation, provider state, and Gemini-3-gated structured-output-with-tools support. |
 
 ## Agent Sessions
 

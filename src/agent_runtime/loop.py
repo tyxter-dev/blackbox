@@ -33,7 +33,9 @@ from agent_runtime.hosted_tools import (
     ComputerUse,
     HostedToolHandlers,
     HostedToolSpec,
+    Memory,
     Shell,
+    TextEditor,
 )
 from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext
 from agent_runtime.tools.hosted_runtime import HostedToolRunner
@@ -632,5 +634,9 @@ def _find_matching_hosted_spec(
         if call.hosted_tool_type == "apply_patch" and isinstance(spec, ApplyPatch):
             return spec
         if call.hosted_tool_type == "computer" and isinstance(spec, ComputerUse):
+            return spec
+        if call.hosted_tool_type == "text_editor" and isinstance(spec, TextEditor):
+            return spec
+        if call.hosted_tool_type == "memory" and isinstance(spec, Memory):
             return spec
     return None

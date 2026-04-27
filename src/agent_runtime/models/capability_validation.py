@@ -230,4 +230,9 @@ def _constraint_matches(
         return False
     if constraint.state_modes_any and requirement.state_mode not in constraint.state_modes_any:
         return False
+    if (
+        constraint.has_function_tools is not None
+        and constraint.has_function_tools != requirement.has_function_tools
+    ):
+        return False
     return True

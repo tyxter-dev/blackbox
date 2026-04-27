@@ -12,8 +12,10 @@ from agent_runtime.hosted_tools import (
     HostedToolRaw,
     HostedToolSpec,
     ImageGeneration,
+    Memory,
     RemoteMCP,
     Shell,
+    TextEditor,
     ToolSearch,
     URLContext,
     WebFetch,
@@ -156,6 +158,7 @@ class CapabilityConstraint:
     output_strategies_any: tuple[OutputStrategyKind, ...] = ()
     controls_any: tuple[ControlName, ...] = ()
     state_modes_any: tuple[StateMode, ...] = ()
+    has_function_tools: bool | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -327,6 +330,7 @@ def capability_profile_from_dict(data: dict[str, Any]) -> ModelCapabilityProfile
                 "output_strategies_any": tuple(value.get("output_strategies_any") or ()),
                 "controls_any": tuple(value.get("controls_any") or ()),
                 "state_modes_any": tuple(value.get("state_modes_any") or ()),
+                "has_function_tools": value.get("has_function_tools"),
             }
         )
         for value in data.get("constraints") or ()
@@ -375,7 +379,11 @@ def hosted_tool_type(spec: HostedToolSpec) -> str:
     if isinstance(spec, ApplyPatch):
         return "apply_patch"
     if isinstance(spec, ComputerUse):
-        return "computer"
+        return "computer_use"
+    if isinstance(spec, TextEditor):
+        return "text_editor"
+    if isinstance(spec, Memory):
+        return "memory"
     if isinstance(spec, ImageGeneration):
         return "image_generation"
     if isinstance(spec, ToolSearch):

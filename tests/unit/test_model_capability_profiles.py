@@ -155,6 +155,35 @@ def test_provider_profiles_expose_new_adapter_mappings() -> None:
     assert xai.summary.supports_structured_output is True
 
 
+def test_anthropic_profile_is_model_version_specific() -> None:
+    provider = AnthropicMessagesProvider(api_key="x")
+
+    supported = provider.capability_profile("claude-sonnet-4-6-20260201")
+    unsupported = provider.capability_profile("claude-3-5-sonnet-20241022")
+
+    assert supported.summary.supports_structured_output is True
+    assert supported.output_strategies["provider_native"].status == "supported"
+    assert supported.controls["compaction"].status == "supported"
+    assert supported.hosted_tools["memory"].status == "supported"
+    assert supported.hosted_tools["text_editor"].status == "supported"
+    assert unsupported.summary.supports_structured_output is False
+    assert unsupported.output_strategies["provider_native"].status == "unsupported"
+    assert unsupported.controls["compaction"].status == "unsupported"
+
+
+def test_gemini_profile_gates_structured_output_tool_combinations_by_model() -> None:
+    provider = GeminiGenerateContentProvider(api_key="x")
+
+    gemini_3 = provider.capability_profile("gemini-3-flash-preview")
+    gemini_25 = provider.capability_profile("gemini-2.5-flash")
+
+    assert gemini_3.constraints == ()
+    assert any(
+        constraint.name == "gemini_structured_output_function_tools_requires_gemini_3"
+        for constraint in gemini_25.constraints
+    )
+
+
 def test_build_output_schema_keeps_posthoc_runtime_strategy_available() -> None:
     schema = build_output_schema(OutputSpec(schema={"type": "object"}))
 

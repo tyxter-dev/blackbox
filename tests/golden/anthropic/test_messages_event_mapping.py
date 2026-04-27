@@ -96,6 +96,10 @@ async def test_tool_use_block_emits_tool_call_requested_with_parsed_input() -> N
     assert payload["call_id"] == "toolu_abc"
     assert payload["name"] == "lookup_weather"
     assert payload["arguments"] == {"city": "Paris"}
+    assert result.provider_state is not None
+    assert result.provider_state.tool_state["tool_uses"] == [
+        {"id": "toolu_abc", "name": "lookup_weather", "input": {"city": "Paris"}}
+    ]
 
 
 async def test_thinking_block_emits_reasoning_deltas() -> None:
@@ -166,7 +170,24 @@ async def test_mcp_blocks_map_to_typed_run_items() -> None:
             block_start(1, result_block),
             block_stop(1),
         ],
-        final_message=final_message(id_="msg_mcp"),
+        final_message=final_message(
+            id_="msg_mcp",
+            content=[
+                {
+                    "type": "mcp_tool_use",
+                    "id": "mcptoolu_1",
+                    "name": "list_issues",
+                    "server_name": "github",
+                    "input": {"state": "open"},
+                },
+                {
+                    "type": "mcp_tool_result",
+                    "tool_use_id": "mcptoolu_1",
+                    "is_error": False,
+                    "content": [{"type": "text", "text": "2 issues"}],
+                },
+            ],
+        ),
     )
 
     runtime = _runtime_with(client)
@@ -185,6 +206,22 @@ async def test_mcp_blocks_map_to_typed_run_items() -> None:
     assert completed.data["call_id"] == "mcptoolu_1"
     assert completed.data["output"] == [{"type": "text", "text": "2 issues"}]
     assert completed.data["item"].status == "completed"
+    assert result.provider_state is not None
+    assert result.provider_state.tool_state["mcp_items"] == [
+        {
+            "mcp_item_type": "mcp_tool_use",
+            "call_id": "mcptoolu_1",
+            "server_label": "github",
+            "name": "list_issues",
+            "arguments": {"state": "open"},
+        },
+        {
+            "mcp_item_type": "mcp_tool_result",
+            "call_id": "mcptoolu_1",
+            "output": [{"type": "text", "text": "2 issues"}],
+            "is_error": False,
+        },
+    ]
 
 
 async def test_function_result_run_items_become_tool_result_blocks() -> None:

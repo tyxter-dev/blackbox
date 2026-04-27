@@ -110,6 +110,23 @@ class ComputerUse:
 
 
 @dataclass(slots=True, frozen=True)
+class TextEditor:
+    """Anthropic-schema client text editor tool."""
+
+    name: str = "str_replace_based_edit_tool"
+    version: str | None = None
+    max_characters: int | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class Memory:
+    """Anthropic-schema client memory tool."""
+
+    name: str = "memory"
+    version: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
 class ImageGeneration:
     size: str | None = None
     quality: str | None = None
@@ -173,6 +190,7 @@ class HostedToolHandlers:
     apply_patch: HostedToolHandler | None = None
     computer: HostedToolHandler | None = None
     text_editor: HostedToolHandler | None = None
+    memory: HostedToolHandler | None = None
     custom: dict[str, HostedToolHandler] = field(default_factory=dict)
 
 
@@ -185,6 +203,8 @@ HostedToolSpec: TypeAlias = (
     | Shell
     | ApplyPatch
     | ComputerUse
+    | TextEditor
+    | Memory
     | ImageGeneration
     | ToolSearch
     | RemoteMCP
@@ -209,6 +229,10 @@ def hosted_tool_kind(spec: HostedToolSpec) -> str:
         return "apply_patch"
     if isinstance(spec, ComputerUse):
         return "computer_use"
+    if isinstance(spec, TextEditor):
+        return "text_editor"
+    if isinstance(spec, Memory):
+        return "memory"
     if isinstance(spec, ImageGeneration):
         return "image_generation"
     if isinstance(spec, ToolSearch):
@@ -273,6 +297,10 @@ def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
         if spec.display_height is not None:
             payload["display_height"] = spec.display_height
         return payload
+    if isinstance(spec, TextEditor):
+        raise UnsupportedFeatureError("OpenAI hosted tool mapping is not implemented for TextEditor.")
+    if isinstance(spec, Memory):
+        raise UnsupportedFeatureError("OpenAI hosted tool mapping is not implemented for Memory.")
     if isinstance(spec, ImageGeneration):
         payload = {"type": "image_generation"}
         if spec.size is not None:
@@ -347,6 +375,10 @@ def to_gemini_tool(spec: HostedToolSpec) -> dict[str, Any]:
         if spec.environment:
             computer_payload["environment"] = spec.environment
         return {"computer_use": computer_payload}
+    if isinstance(spec, TextEditor):
+        raise UnsupportedFeatureError("Gemini hosted tool mapping is not implemented for TextEditor.")
+    if isinstance(spec, Memory):
+        raise UnsupportedFeatureError("Gemini hosted tool mapping is not implemented for Memory.")
     if isinstance(spec, HostedToolRaw):
         return dict(spec.payload)
     raise UnsupportedFeatureError(
@@ -402,6 +434,19 @@ def to_anthropic_tool(spec: HostedToolSpec, *, model: str | None = None) -> dict
         if spec.display_height is not None:
             computer_payload["display_height_px"] = spec.display_height
         return computer_payload
+    if isinstance(spec, TextEditor):
+        editor_payload: dict[str, Any] = {
+            "type": spec.version or _anthropic_text_editor_version(model),
+            "name": spec.name,
+        }
+        if spec.max_characters is not None:
+            editor_payload["max_characters"] = spec.max_characters
+        return editor_payload
+    if isinstance(spec, Memory):
+        return {
+            "type": spec.version or "memory_20250818",
+            "name": spec.name,
+        }
     if isinstance(spec, RemoteMCP):
         if spec.server_url is None:
             raise UnsupportedFeatureError("Anthropic RemoteMCP mapping requires server_url.")
@@ -443,6 +488,15 @@ def _anthropic_web_search_version(model: str | None) -> str:
     if "sonnet-4-6" in normalized or "opus-4-6" in normalized or "4.6" in normalized:
         return "web_search_20260209"
     return "web_search_20250305"
+
+
+def _anthropic_text_editor_version(model: str | None) -> str:
+    if model is None:
+        return "text_editor_20250728"
+    normalized = model.lower().replace("_", "-")
+    if "claude-4" in normalized or "-4-" in normalized:
+        return "text_editor_20250728"
+    return "text_editor_20250124"
 
 
 def anthropic_mcp_servers(specs: list[HostedToolSpec]) -> list[dict[str, Any]]:

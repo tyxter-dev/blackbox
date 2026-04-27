@@ -13,7 +13,9 @@ from agent_runtime.hosted_tools import (
     ComputerUse,
     HostedToolHandlers,
     HostedToolSpec,
+    Memory,
     Shell,
+    TextEditor,
 )
 from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext, HostedToolOutput
 
@@ -73,6 +75,8 @@ def _handler_for(hosted_tool_type: str, handlers: HostedToolHandlers) -> Any:
         return handlers.computer
     if hosted_tool_type == "text_editor" and handlers.text_editor is not None:
         return handlers.text_editor
+    if hosted_tool_type == "memory" and handlers.memory is not None:
+        return handlers.memory
     custom = handlers.custom.get(hosted_tool_type)
     if custom is not None:
         return custom
@@ -93,6 +97,12 @@ def _policy_request(call: HostedToolCall, *, spec: HostedToolSpec | None) -> Pol
         arguments["command_preview"] = call.arguments.get("command") or call.arguments.get("cmd")
     elif isinstance(spec, ComputerUse):
         arguments["action_preview"] = call.arguments.get("action") or call.arguments.get("type")
+    elif isinstance(spec, TextEditor):
+        arguments["path_preview"] = call.arguments.get("path")
+        arguments["command_preview"] = call.arguments.get("command")
+    elif isinstance(spec, Memory):
+        arguments["path_preview"] = call.arguments.get("path") or call.arguments.get("old_path")
+        arguments["command_preview"] = call.arguments.get("command")
     return PolicyRequest(
         checkpoint="before_hosted_tool_call",
         action=call.hosted_tool_type,

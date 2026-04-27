@@ -40,6 +40,17 @@ async def test_openai_shell_call_maps_to_hosted_call_requested() -> None:
     assert requested.data["requires_continuation"] is True
     assert requested.data["item"].type == ItemTypes.HOSTED_TOOL_CALL
     assert requested.data["item"].status == "requires_action"
+    assert result.provider_state is not None
+    assert result.provider_state.tool_state["hosted_tool_calls"] == [
+        {
+            "id": "sh_1",
+            "type": "shell_call",
+            "call_id": "call_shell",
+            "status": "requires_action",
+            "hosted_tool_type": "shell",
+        }
+    ]
+    assert result.provider_state.continuation["output_item_ids"] == ["sh_1"]
 
 
 async def test_openai_apply_patch_call_output_maps_to_hosted_result() -> None:
@@ -65,3 +76,13 @@ async def test_openai_apply_patch_call_output_maps_to_hosted_result() -> None:
     assert completed.data["hosted_tool_type"] == "apply_patch"
     assert completed.data["item"].type == ItemTypes.HOSTED_TOOL_RESULT
     assert completed.data["item"].data["output"] == "applied"
+    assert result.provider_state is not None
+    assert result.provider_state.tool_state["hosted_tool_results"] == [
+        {
+            "id": "apo_1",
+            "type": "apply_patch_call_output",
+            "call_id": "patch_1",
+            "status": "completed",
+            "hosted_tool_type": "apply_patch",
+        }
+    ]

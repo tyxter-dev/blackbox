@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from agent_runtime import AgentRuntime
 from agent_runtime.core.events import EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
@@ -167,4 +169,45 @@ async def test_function_result_run_items_become_function_response_parts() -> Non
                 }
             ],
         }
+    ]
+
+
+async def test_provider_state_preserves_tool_ids_sources_and_file_handles() -> None:
+    client = FakeGeminiClient()
+    client.queue(
+        [
+            SimpleNamespace(
+                response_id="resp_state",
+                candidates=[
+                    SimpleNamespace(
+                        grounding_metadata={"web_search_queries": ["agent runtime"]},
+                        content=SimpleNamespace(
+                            parts=[
+                                function_call_part(
+                                    id_="call_9",
+                                    name="lookup_ticket",
+                                    args={"ticket_id": "T-9"},
+                                ),
+                                SimpleNamespace(file_data={"file_uri": "gs://bucket/doc.pdf"}),
+                            ]
+                        ),
+                    )
+                ],
+            )
+        ]
+    )
+    runtime = _runtime_with(client)
+
+    result = await runtime.models.run(provider="google/gemini-test", input="lookup")
+
+    assert result.provider_state is not None
+    assert result.provider_state.tool_state["tool_call_ids"] == ["call_9"]
+    assert result.provider_state.tool_state["source_references"] == [
+        {
+            "field": "grounding_metadata",
+            "value": {"web_search_queries": ["agent runtime"]},
+        }
+    ]
+    assert result.provider_state.tool_state["file_handles"] == [
+        {"field": "file_data", "value": {"file_uri": "gs://bucket/doc.pdf"}}
     ]

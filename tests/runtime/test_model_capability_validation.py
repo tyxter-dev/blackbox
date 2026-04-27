@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime import AgentRuntime, FileSearch, HostedToolRaw
+from agent_runtime import AgentRuntime, FileSearch, HostedToolRaw, WebSearch
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import AgentResult, OutputSpec
+from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
+from agent_runtime.output.schema import build_output_schema
+from tests.fixtures.fake_anthropic_client import FakeAnthropicClient, final_message
+from tests.fixtures.fake_gemini_client import FakeGeminiClient, chunk, text_part
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 
@@ -101,3 +106,145 @@ async def test_runtime_allows_passthrough_raw_hosted_tool() -> None:
 
     assert result.text == "ok"
     assert scripted.calls[0].hosted_tools == [HostedToolRaw({"type": "future_tool"})]
+
+
+async def test_anthropic_rejects_native_structured_output_before_provider_call() -> None:
+    runtime = AgentRuntime()
+    client = FakeAnthropicClient()
+    runtime.registry.register_model(AnthropicMessagesProvider(client=client))
+    schema = build_output_schema(
+        OutputSpec(
+            schema={
+                "type": "object",
+                "properties": {"summary": {"type": "string"}},
+                "required": ["summary"],
+            },
+            strategy="provider_native",
+        )
+    )
+    assert schema is not None
+
+    with pytest.raises(UnsupportedFeatureError, match="provider-native structured output"):
+        async for _ in runtime.models.stream(
+            provider="anthropic",
+            model="claude-3-5-sonnet-20241022",
+            input="summarize",
+            output_schema=schema,
+            output_strategy="provider_native",
+        ):
+            pass
+    assert client.messages.seen_kwargs == []
+
+
+async def test_anthropic_native_structured_output_can_be_sent_with_tools() -> None:
+    runtime = AgentRuntime()
+    client = FakeAnthropicClient()
+    client.queue([], final_message=final_message(id_="msg_1", content=[]))
+    runtime.registry.register_model(AnthropicMessagesProvider(client=client))
+    schema = build_output_schema(
+        OutputSpec(
+            schema={
+                "type": "object",
+                "properties": {"summary": {"type": "string"}},
+                "required": ["summary"],
+            },
+            strategy="provider_native",
+        )
+    )
+    assert schema is not None
+
+    await runtime.models.run(
+        provider="anthropic",
+        model="claude-sonnet-4-6-20260201",
+        input="summarize",
+        tools=[
+            {
+                "type": "function",
+                "name": "lookup",
+                "description": "Lookup data.",
+                "parameters": {"type": "object", "properties": {}},
+                "strict": True,
+            }
+        ],
+        hosted_tools=[WebSearch()],
+        output_schema=schema,
+        output_strategy="provider_native",
+    )
+
+    sent = client.messages.seen_kwargs[0]
+    assert sent["output_config"] == {
+        "format": {"type": "json_schema", "schema": schema.schema}
+    }
+    assert {"type": "web_search_20260209", "name": "web_search"} in sent["tools"]
+    assert any(tool.get("name") == "lookup" and tool.get("strict") is True for tool in sent["tools"])
+
+
+async def test_gemini_rejects_structured_output_with_tools_for_non_gemini3() -> None:
+    runtime = AgentRuntime()
+    client = FakeGeminiClient()
+    runtime.registry.register_model(GeminiGenerateContentProvider(client=client))
+    schema = build_output_schema(
+        OutputSpec(
+            schema={
+                "type": "object",
+                "properties": {"summary": {"type": "string"}},
+                "required": ["summary"],
+            },
+            strategy="provider_native",
+        )
+    )
+    assert schema is not None
+
+    with pytest.raises(UnsupportedFeatureError, match="Gemini structured output"):
+        async for _ in runtime.models.stream(
+            provider="google",
+            model="gemini-2.5-flash",
+            input="summarize",
+            hosted_tools=[WebSearch()],
+            output_schema=schema,
+            output_strategy="provider_native",
+        ):
+            pass
+    assert client.calls == []
+
+
+async def test_gemini3_allows_structured_output_with_builtin_and_function_tools() -> None:
+    runtime = AgentRuntime()
+    client = FakeGeminiClient()
+    client.queue([chunk(response_id="resp_1", parts=[text_part('{"summary":"ok"}')])])
+    runtime.registry.register_model(GeminiGenerateContentProvider(client=client))
+    schema = build_output_schema(
+        OutputSpec(
+            schema={
+                "type": "object",
+                "properties": {"summary": {"type": "string"}},
+                "required": ["summary"],
+            },
+            strategy="provider_native",
+        )
+    )
+    assert schema is not None
+
+    await runtime.models.run(
+        provider="google",
+        model="gemini-3-flash-preview",
+        input="summarize",
+        tools=[
+            {
+                "type": "function",
+                "name": "lookup",
+                "description": "Lookup data.",
+                "parameters": {"type": "object", "properties": {}},
+            }
+        ],
+        hosted_tools=[WebSearch()],
+        output_schema=schema,
+        output_strategy="provider_native",
+    )
+
+    config = client.calls[0]["config"]
+    assert config["response_mime_type"] == "application/json"
+    assert config["response_json_schema"] == schema.schema
+    assert config["include_server_side_tool_invocations"] is True
+    assert {"google_search": {}} in config["tools"]
+    assert any("function_declarations" in tool for tool in config["tools"])

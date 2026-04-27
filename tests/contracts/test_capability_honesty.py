@@ -12,6 +12,8 @@ expectations apply across every adapter the runtime exposes.
 """
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from agent_runtime import AgentRuntime, AgentSpec
@@ -22,6 +24,7 @@ from agent_runtime.agents.vertex_agent_engine import VertexAIAgentEngineProvider
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.capabilities import (
     AgentCapabilities,
+    HostedToolKind,
     ModelCapabilities,
     ModelCapabilityProfile,
     get_model_capability_profile,
@@ -32,15 +35,20 @@ from agent_runtime.core.errors import (
     SessionError,
     UnsupportedFeatureError,
 )
+from agent_runtime.core.results import OutputSpec
 from agent_runtime.core.sessions import SessionRef
+from agent_runtime.hosted_tools import WebSearch
 from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.models.echo import EchoModelProvider
 from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.models.xai_responses import XAIResponsesProvider
+from agent_runtime.output.schema import build_output_schema
 from agent_runtime.providers.base import AgentProvider, ModelProvider, TaskSpec, TurnRequest
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
+from tests.fixtures.fake_anthropic_client import FakeAnthropicClient
+from tests.fixtures.fake_gemini_client import FakeGeminiClient
 from tests.fixtures.scripted_model import ScriptedModelProvider, tool_call_turn
 
 # --- positive: capabilities surfaces match the PRD --------------------------
@@ -141,7 +149,7 @@ def test_granular_profiles_do_not_contradict_flat_summary(provider: ModelProvide
     if finalizer_tool is not None and finalizer_tool.status == "supported":
         assert profile.summary.supports_function_tools is True
     for tool_name in profile.summary.hosted_tools:
-        detail = profile.hosted_tools.get(tool_name)
+        detail = profile.hosted_tools.get(cast(HostedToolKind, tool_name))
         assert detail is not None, f"{profile.provider} missing profile for {tool_name}"
         assert detail.status != "unsupported", (
             f"{profile.provider} advertises {tool_name} in capabilities() but marks it "
@@ -318,3 +326,52 @@ async def test_gemini_client_satisfies_streaming_capability() -> None:
         async for event in provider.stream_turn(TurnRequest(model="gemini-test", input="hi"))
     ]
     assert events[-1].type == "model.completed"
+
+
+async def test_model_runtime_rejects_unsupported_provider_native_before_sdk_call() -> None:
+    runtime = AgentRuntime()
+    client = FakeAnthropicClient()
+    runtime.registry.register_model(AnthropicMessagesProvider(client=client))
+    schema = build_output_schema(
+        OutputSpec(
+            schema={"type": "object", "properties": {"summary": {"type": "string"}}},
+            strategy="provider_native",
+        )
+    )
+    assert schema is not None
+
+    with pytest.raises(UnsupportedFeatureError, match="provider-native structured output"):
+        async for _ in runtime.models.stream(
+            provider="anthropic",
+            model="claude-3-5-sonnet-20241022",
+            input="summarize",
+            output_schema=schema,
+            output_strategy="provider_native",
+        ):
+            pass
+    assert client.messages.seen_kwargs == []
+
+
+async def test_model_runtime_rejects_unsupported_profile_constraint_before_sdk_call() -> None:
+    runtime = AgentRuntime()
+    client = FakeGeminiClient()
+    runtime.registry.register_model(GeminiGenerateContentProvider(client=client))
+    schema = build_output_schema(
+        OutputSpec(
+            schema={"type": "object", "properties": {"summary": {"type": "string"}}},
+            strategy="provider_native",
+        )
+    )
+    assert schema is not None
+
+    with pytest.raises(UnsupportedFeatureError, match="Gemini structured output"):
+        async for _ in runtime.models.stream(
+            provider="google",
+            model="gemini-2.5-flash",
+            input="summarize",
+            hosted_tools=[WebSearch()],
+            output_schema=schema,
+            output_strategy="provider_native",
+        ):
+            pass
+    assert client.calls == []

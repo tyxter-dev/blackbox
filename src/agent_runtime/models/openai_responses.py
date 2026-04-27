@@ -779,12 +779,85 @@ def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
 def _build_provider_state(final_response: Any, *, provider: str) -> ProviderState:
     response_id = _attr(final_response, "id")
     output = _attr(final_response, "output") or []
+    native_history = list(output) if isinstance(output, list) else []
+    tool_state = _provider_tool_state(native_history)
+    continuation: dict[str, Any] = {"previous_response_id": response_id} if response_id else {}
+    output_item_ids = tool_state.get("output_item_ids")
+    if output_item_ids:
+        continuation["output_item_ids"] = output_item_ids
     return ProviderState(
         provider=provider,
         previous_response_id=response_id,
-        native_history=list(output) if isinstance(output, list) else [],
-        continuation={"previous_response_id": response_id} if response_id else {},
+        native_history=native_history,
+        tool_state=tool_state,
+        continuation=continuation,
     )
+
+
+def _provider_tool_state(output: list[Any]) -> dict[str, Any]:
+    output_item_ids: list[str] = []
+    function_calls: list[dict[str, Any]] = []
+    hosted_tool_calls: list[dict[str, Any]] = []
+    hosted_tool_results: list[dict[str, Any]] = []
+    mcp_items: list[dict[str, Any]] = []
+    file_handles: list[dict[str, Any]] = []
+    source_references: list[dict[str, Any]] = []
+
+    for item in output:
+        item_type = _attr(item, "type")
+        item_id = _attr(item, "id")
+        if isinstance(item_id, str):
+            output_item_ids.append(item_id)
+        call_id = _attr(item, "call_id")
+        state_item = {
+            key: value
+            for key, value in {
+                "id": item_id,
+                "type": item_type,
+                "call_id": call_id,
+                "status": _attr(item, "status"),
+                "name": _attr(item, "name"),
+            }.items()
+            if value is not None
+        }
+        if item_type == "function_call":
+            function_calls.append(state_item)
+        elif item_type in _HOSTED_TOOL_CALL_TYPES:
+            hosted_tool_calls.append(
+                {
+                    **state_item,
+                    "hosted_tool_type": _HOSTED_TOOL_CALL_TYPES[item_type],
+                }
+            )
+        elif item_type in _HOSTED_TOOL_RESULT_TYPES:
+            hosted_tool_results.append(
+                {
+                    **state_item,
+                    "hosted_tool_type": _HOSTED_TOOL_RESULT_TYPES[item_type],
+                }
+            )
+        elif isinstance(item_type, str) and item_type.startswith("mcp_"):
+            mcp_items.append({**state_item, **_mcp_item_data(item, item_type=item_type)})
+
+        file_handles.extend(_collect_file_handles(item))
+        source_references.extend(_collect_source_references(item))
+
+    state: dict[str, Any] = {}
+    if output_item_ids:
+        state["output_item_ids"] = output_item_ids
+    if function_calls:
+        state["function_calls"] = function_calls
+    if hosted_tool_calls:
+        state["hosted_tool_calls"] = hosted_tool_calls
+    if hosted_tool_results:
+        state["hosted_tool_results"] = hosted_tool_results
+    if mcp_items:
+        state["mcp_items"] = mcp_items
+    if file_handles:
+        state["file_handles"] = _dedupe_dicts(file_handles)
+    if source_references:
+        state["source_references"] = _dedupe_dicts(source_references)
+    return state
 
 
 async def _get_final_response(stream: Any) -> Any:
@@ -908,3 +981,117 @@ def _parse_arguments(value: Any) -> dict[str, Any]:
         except json.JSONDecodeError:
             return {"_raw": value}
     return {"_raw": value}
+
+
+def _collect_file_handles(value: Any) -> list[dict[str, Any]]:
+    handles: list[dict[str, Any]] = []
+
+    def visit(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, item in node.items():
+                if key in {
+                    "file_id",
+                    "file_ids",
+                    "container_id",
+                    "vector_store_id",
+                    "vector_store_ids",
+                }:
+                    handles.append({"field": key, "value": item})
+                visit(item)
+            return
+        if isinstance(node, list):
+            for item in node:
+                visit(item)
+            return
+        dump = getattr(node, "model_dump", None)
+        if callable(dump):
+            try:
+                dumped = dump(exclude_none=True)
+            except TypeError:
+                dumped = dump()
+            if isinstance(dumped, dict):
+                visit(dumped)
+                return
+        if hasattr(node, "__dict__"):
+            visit(
+                {
+                    key: item
+                    for key, item in vars(node).items()
+                    if not str(key).startswith("_")
+                }
+            )
+
+    visit(value)
+    return handles
+
+
+def _collect_source_references(value: Any) -> list[dict[str, Any]]:
+    references: list[dict[str, Any]] = []
+
+    def visit(node: Any) -> None:
+        if isinstance(node, dict):
+            for key in ("annotations", "citations", "sources", "results"):
+                item = node.get(key)
+                if isinstance(item, list):
+                    references.extend(
+                        _public_source_reference(entry) for entry in item if entry is not None
+                    )
+            for item in node.values():
+                visit(item)
+            return
+        if isinstance(node, list):
+            for item in node:
+                visit(item)
+            return
+        dump = getattr(node, "model_dump", None)
+        if callable(dump):
+            try:
+                dumped = dump(exclude_none=True)
+            except TypeError:
+                dumped = dump()
+            if isinstance(dumped, dict):
+                visit(dumped)
+                return
+        if hasattr(node, "__dict__"):
+            visit(
+                {
+                    key: item
+                    for key, item in vars(node).items()
+                    if not str(key).startswith("_")
+                }
+            )
+
+    visit(value)
+    return references
+
+
+def _public_source_reference(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        try:
+            dumped = dump(exclude_none=True)
+        except TypeError:
+            dumped = dump()
+        if isinstance(dumped, dict):
+            return dumped
+    if hasattr(value, "__dict__"):
+        return {
+            key: item
+            for key, item in vars(value).items()
+            if not str(key).startswith("_")
+        }
+    return {"value": repr(value)}
+
+
+def _dedupe_dicts(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for value in values:
+        key = repr(sorted(value.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+    return deduped
