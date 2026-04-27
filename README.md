@@ -357,8 +357,10 @@ provider-specific values override the common controls.
 ## Usage accounting
 
 Provider adapters normalize token usage onto `result.metadata["usage"]` when
-the provider returns usage data. Register prices in `runtime.model_catalog` to
-also receive `result.metadata["cost"]`:
+the provider returns usage data. The same usage view includes cache read/write
+token splits, reasoning tokens where available, and runtime-counted tool calls.
+Register prices in `runtime.model_catalog` to also receive
+`result.metadata["cost"]`:
 
 ```python
 from agent_runtime import ModelPricing
@@ -373,6 +375,30 @@ runtime.model_catalog.register_pricing(ModelPricing(
 
 The runtime does not ship hard-coded prices; applications should register the
 current prices they want to account against.
+
+Cache usage is summarized in `result.metadata["cache"]` when cache controls are
+requested or the provider reports cached tokens. Explicit cache keys and
+provider cache IDs are tracked in `runtime.caches`, backed by either the default
+in-memory registry or `SQLiteProviderCacheStore`:
+
+```python
+from agent_runtime import ModelCacheControl, SQLiteProviderCacheStore
+
+runtime = AgentRuntime(provider_cache_store=SQLiteProviderCacheStore("caches.sqlite"))
+result = await runtime.models.run(
+    provider="openai:gpt-5.4",
+    input=prompt,
+    cache=ModelCacheControl(key="tenant-a", ttl="24h"),
+)
+
+print(result.metadata["cache"]["hit"])
+print((await runtime.caches.get(provider="openai", model="gpt-5.4", key="tenant-a")).hits)
+```
+
+For providers with native cache lifecycle APIs, `runtime.caches.create(...)` and
+`runtime.caches.invalidate(..., delete_provider_cache=True)` bridge to the
+provider. The Gemini adapter supports context cache create/delete through
+`client.caches.create/delete`.
 
 ## Anthropic Messages-native model provider
 

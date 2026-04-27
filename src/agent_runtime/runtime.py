@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import json
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
@@ -9,12 +10,20 @@ from uuid import uuid4
 from agent_runtime.compat.chat import ChatMessage, messages_to_input
 from agent_runtime.core.accounting import (
     ModelCatalog,
+    ModelUsage,
     add_usage,
     usage_provider_details,
     usage_to_dict,
 )
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage
+from agent_runtime.core.cache import (
+    InMemoryProviderCacheStore,
+    ProviderCacheRecord,
+    ProviderCacheStore,
+    cache_usage_from_usage,
+    record_provider_cache_usage,
+)
 from agent_runtime.core.capabilities import ModelCapabilityProfile, get_model_capability_profile
 from agent_runtime.core.errors import (
     ApprovalError,
@@ -58,6 +67,9 @@ _FINALIZER_TOOL_NAME = "submit_final_output"
 class ModelRuntime:
     registry: ProviderRegistry
     model_catalog: ModelCatalog = field(default_factory=ModelCatalog)
+    provider_cache_store: ProviderCacheStore = field(
+        default_factory=InMemoryProviderCacheStore
+    )
 
     def capabilities(
         self,
@@ -239,6 +251,7 @@ class ModelRuntime:
                 model_value = event.data.get("model")
                 if isinstance(model_value, str):
                     completed_model = model_value
+        usage = add_usage(usage, _tool_usage_from_events(events))
         metadata: dict[str, Any] = {}
         usage_dict = usage_to_dict(usage)
         if usage_dict is not None:
@@ -252,6 +265,15 @@ class ModelRuntime:
             )
             if cost is not None:
                 metadata["cost"] = cost
+        cache_metadata = await _provider_cache_metadata(
+            provider=completed_provider,
+            model=completed_model,
+            cache=cache,
+            usage=usage,
+            provider_cache_store=self.provider_cache_store,
+        )
+        if cache_metadata:
+            metadata["cache"] = cache_metadata
         mcp_metadata = _mcp_metadata_from_events(events)
         if mcp_metadata:
             metadata["mcp"] = mcp_metadata
@@ -264,6 +286,7 @@ class ModelRuntime:
         trace_metadata = trace_metadata_from_events(events, metadata=metadata)
         if trace_metadata["spans"]:
             metadata["trace"] = trace_metadata
+        _attach_accounting_metadata(metadata)
         return TurnResult(
             text="".join(text_parts),
             events=events,
@@ -460,6 +483,139 @@ class ToolRuntimeFacade:
         return register_workspace_tools(self.register, workspace, ref, prefix=prefix)
 
 
+@dataclass(slots=True)
+class ProviderCacheRuntime:
+    """Facade for provider cache lifecycle and local cache registry operations."""
+
+    registry: ProviderRegistry
+    store: ProviderCacheStore
+
+    async def create(
+        self,
+        *,
+        provider: str,
+        contents: Any,
+        model: str | None = None,
+        key: str | None = None,
+        system_instruction: str | None = None,
+        ttl: str | None = None,
+        display_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ProviderCacheRecord:
+        provider_ref = ProviderRef.parse(provider)
+        model_name = model or provider_ref.resource
+        if not model_name:
+            raise ValueError("model must be provided explicitly or as 'provider/model'.")
+        adapter = self.registry.get_model(provider_ref.provider_key)
+        create_cache = getattr(adapter, "create_cache", None)
+        if not callable(create_cache):
+            raise ConfigurationError(
+                f"Provider '{provider_ref.provider_key}' does not expose provider-side cache creation."
+            )
+        result = create_cache(
+            model=model_name,
+            contents=contents,
+            key=key,
+            system_instruction=system_instruction,
+            ttl=ttl,
+            display_name=display_name,
+            metadata=metadata,
+            **kwargs,
+        )
+        record = await result if hasattr(result, "__await__") else result
+        if not isinstance(record, ProviderCacheRecord):
+            raise ProviderExecutionError(
+                f"Provider '{provider_ref.provider_key}' returned an invalid cache record."
+            )
+        if key is not None and record.key is None:
+            record.key = key
+        if metadata:
+            record.metadata.update(metadata)
+        await self.store.save(record)
+        return record
+
+    async def get(
+        self,
+        *,
+        provider: str,
+        key: str | None = None,
+        model: str | None = None,
+        provider_cache_id: str | None = None,
+    ) -> ProviderCacheRecord | None:
+        provider_ref = ProviderRef.parse(provider)
+        if provider_cache_id is not None:
+            return await self.store.load_by_provider_cache_id(
+                provider=provider_ref.provider_key,
+                provider_cache_id=provider_cache_id,
+            )
+        if key is None:
+            raise ValueError("Pass key or provider_cache_id.")
+        return await self.store.load(
+            provider=provider_ref.provider_key,
+            model=model or provider_ref.resource,
+            key=key,
+        )
+
+    async def list(
+        self,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        include_expired: bool = True,
+    ) -> builtins.list[ProviderCacheRecord]:
+        provider_key = ProviderRef.parse(provider).provider_key if provider else None
+        return await self.store.list_records(
+            provider=provider_key,
+            model=model,
+            include_expired=include_expired,
+        )
+
+    async def invalidate(
+        self,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        key: str | None = None,
+        provider_cache_id: str | None = None,
+        record_id: str | None = None,
+        delete_provider_cache: bool = False,
+    ) -> builtins.list[ProviderCacheRecord]:
+        provider_key = ProviderRef.parse(provider).provider_key if provider else None
+        deleted = await self.store.delete(
+            provider=provider_key,
+            model=model,
+            key=key,
+            provider_cache_id=provider_cache_id,
+            record_id=record_id,
+        )
+        if delete_provider_cache:
+            await self._delete_provider_caches(deleted)
+        return deleted
+
+    async def evict_expired(
+        self, *, delete_provider_cache: bool = False
+    ) -> builtins.list[ProviderCacheRecord]:
+        evicted = await self.store.evict_expired()
+        if delete_provider_cache:
+            await self._delete_provider_caches(evicted)
+        return evicted
+
+    async def _delete_provider_caches(
+        self, records: builtins.list[ProviderCacheRecord]
+    ) -> None:
+        for record in records:
+            if record.provider_cache_id is None:
+                continue
+            adapter = self.registry.get_model(record.provider)
+            delete_cache = getattr(adapter, "delete_cache", None)
+            if not callable(delete_cache):
+                continue
+            result = delete_cache(record.provider_cache_id)
+            if hasattr(result, "__await__"):
+                await result
+
+
 class AgentRuntime:
     """Top-level runtime.
 
@@ -479,14 +635,23 @@ class AgentRuntime:
         *,
         event_store: EventStore | None = None,
         run_store: RunStore | None = None,
+        provider_cache_store: ProviderCacheStore | None = None,
     ) -> None:
         self.registry = registry or ProviderRegistry()
         self.model_catalog = ModelCatalog()
         self.event_store: EventStore = event_store or InMemoryEventStore()
         self.run_store: RunStore = run_store or InMemoryRunStore()
-        self.models = ModelRuntime(self.registry, model_catalog=self.model_catalog)
+        self.provider_cache_store: ProviderCacheStore = (
+            provider_cache_store or InMemoryProviderCacheStore()
+        )
+        self.models = ModelRuntime(
+            self.registry,
+            model_catalog=self.model_catalog,
+            provider_cache_store=self.provider_cache_store,
+        )
         self.chat = ChatRuntimeFacade(self.models)
         self.agents = AgentRuntimeFacade(self.registry)
+        self.caches = ProviderCacheRuntime(self.registry, self.provider_cache_store)
         self.tools = ToolRuntimeFacade()
         self._active_loops: dict[str, Any] = {}
 
@@ -876,6 +1041,7 @@ class AgentRuntime:
                 )
                 continue
 
+            usage = add_usage(usage, _tool_usage_from_events(events))
             metadata: dict[str, Any] = {"validation_attempts": attempt + 1}
             if provider_native_fallback is not None:
                 metadata["provider_native_fallback"] = provider_native_fallback
@@ -891,6 +1057,15 @@ class AgentRuntime:
                 )
                 if cost is not None:
                     metadata["cost"] = cost
+            cache_metadata = await _provider_cache_metadata(
+                provider=completed_provider,
+                model=completed_model,
+                cache=cache,
+                usage=usage,
+                provider_cache_store=self.provider_cache_store,
+            )
+            if cache_metadata:
+                metadata["cache"] = cache_metadata
             mcp_metadata = _mcp_metadata_from_events(events)
             if mcp_metadata:
                 metadata["mcp"] = mcp_metadata
@@ -903,6 +1078,7 @@ class AgentRuntime:
             trace_metadata = trace_metadata_from_events(events, metadata=metadata)
             if trace_metadata["spans"]:
                 metadata["trace"] = trace_metadata
+            _attach_accounting_metadata(metadata)
             return AgentResult(
                 output=cast(T, output),
                 text=last_text,
@@ -1146,6 +1322,88 @@ def _workspace_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
                 if artifact.id not in snapshots:
                     snapshots.append(artifact.id)
     return workspaces
+
+
+async def _provider_cache_metadata(
+    *,
+    provider: str | None,
+    model: str | None,
+    cache: ModelCacheControl | None,
+    usage: Any,
+    provider_cache_store: ProviderCacheStore,
+) -> dict[str, Any]:
+    if provider is None or model is None:
+        return {}
+    cache_usage = cache_usage_from_usage(
+        provider=provider,
+        model=model,
+        usage=usage,
+        requested=cache is not None,
+        key=cache.key if cache is not None else None,
+        provider_cache_id=cache.cached_content if cache is not None else None,
+        strategy=cache.strategy if cache is not None else None,
+        ttl=cache.ttl if cache is not None else None,
+    )
+    if cache_usage is None:
+        return {}
+    metadata = cache_usage.to_dict()
+    if cache is not None:
+        record = await record_provider_cache_usage(
+            provider_cache_store,
+            provider=provider,
+            model=model,
+            key=cache.key,
+            provider_cache_id=cache.cached_content,
+            strategy=cache.strategy,
+            ttl=cache.ttl,
+            usage=usage,
+        )
+        if record is not None:
+            metadata["record"] = record.to_summary()
+    return metadata
+
+
+def _tool_usage_from_events(events: list[AgentEvent]) -> ModelUsage | None:
+    tool_calls = _tool_call_count(events)
+    if tool_calls == 0:
+        return None
+    return ModelUsage(tool_calls=tool_calls)
+
+
+def _tool_call_count(events: list[AgentEvent]) -> int:
+    counted_types = {
+        EventTypes.TOOL_CALL_REQUESTED,
+        EventTypes.HOSTED_TOOL_CALL_REQUESTED,
+        EventTypes.MCP_CALL_STARTED,
+        EventTypes.TOOL_SEARCH_REQUESTED,
+    }
+    seen: set[tuple[str, str]] = set()
+    for event in events:
+        if event.type not in counted_types:
+            continue
+        key = _event_call_key(event)
+        seen.add((event.type, key))
+    return len(seen)
+
+
+def _event_call_key(event: AgentEvent) -> str:
+    for key in ("call_id", "id", "name"):
+        value = event.data.get(key)
+        if isinstance(value, str) and value:
+            return value
+    if event.item_id:
+        return event.item_id
+    return event.id
+
+
+def _attach_accounting_metadata(metadata: dict[str, Any]) -> None:
+    accounting: dict[str, Any] = {}
+    for key in ("usage", "cost", "cache"):
+        value = metadata.get(key)
+        if value is not None:
+            accounting[key] = value
+    if accounting:
+        metadata["accounting"] = accounting
 
 
 def _event_usage(event: AgentEvent) -> Any:

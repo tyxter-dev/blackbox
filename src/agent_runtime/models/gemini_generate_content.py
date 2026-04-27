@@ -10,9 +10,11 @@ from __future__ import annotations
 import inspect
 import os
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 
 from agent_runtime.core.accounting import add_usage, usage_from_gemini_chunk
+from agent_runtime.core.cache import ProviderCacheRecord
 from agent_runtime.core.capabilities import (
     CapabilityDetail,
     HostedToolSupport,
@@ -210,6 +212,68 @@ class GeminiGenerateContentProvider:
             if hasattr(result, "__await__"):
                 await result
         self._client = None
+
+    async def create_cache(
+        self,
+        *,
+        model: str,
+        contents: Any,
+        key: str | None = None,
+        system_instruction: str | None = None,
+        ttl: str | None = None,
+        display_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> ProviderCacheRecord:
+        client = self._get_client()
+        caches = getattr(client, "caches", None)
+        create = getattr(caches, "create", None)
+        if not callable(create):
+            raise UnsupportedFeatureError(
+                "Gemini provider cache creation requires a client with caches.create(...)."
+            )
+        config = dict(kwargs.pop("config", {}))
+        config.setdefault("contents", contents)
+        if system_instruction is not None:
+            config.setdefault("system_instruction", system_instruction)
+        if ttl is not None:
+            config.setdefault("ttl", ttl)
+        if display_name is not None:
+            config.setdefault("display_name", display_name)
+        result = create(model=model, config=config, **kwargs)
+        cache = await result if inspect.isawaitable(result) else result
+        name = _attr(cache, "name")
+        if not isinstance(name, str) or not name:
+            raise ProviderExecutionError("Gemini caches.create(...) did not return a cache name.")
+        expires_at = _parse_datetime(_attr(cache, "expire_time"))
+        return ProviderCacheRecord(
+            provider=self.provider_id,
+            model=model,
+            key=key,
+            provider_cache_id=name,
+            strategy="provider_managed",
+            ttl=ttl,
+            expires_at=expires_at,
+            metadata={
+                **(metadata or {}),
+                "display_name": display_name,
+                "provider_usage_metadata": _plain_mapping(
+                    _attr(cache, "usage_metadata")
+                ),
+            },
+        )
+
+    async def delete_cache(self, provider_cache_id: str) -> None:
+        client = self._get_client()
+        caches = getattr(client, "caches", None)
+        delete = getattr(caches, "delete", None)
+        if not callable(delete):
+            raise UnsupportedFeatureError(
+                "Gemini provider cache deletion requires a client with caches.delete(...)."
+            )
+        result = delete(name=provider_cache_id)
+        if inspect.isawaitable(result):
+            await result
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         client = self._get_client()
@@ -606,6 +670,36 @@ def _attr(obj: Any, name: str) -> Any:
     if isinstance(obj, dict):
         return obj.get(name)
     return getattr(obj, name, None)
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _plain_mapping(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return dict(value)
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        dumped = dump(exclude_none=True)
+        return dumped if isinstance(dumped, dict) else {"value": dumped}
+    if hasattr(value, "__dict__"):
+        return {
+            key: item
+            for key, item in vars(value).items()
+            if not key.startswith("_")
+        }
+    return {"value": repr(value)}
 
 
 def _coerce_args(value: Any) -> dict[str, Any]:

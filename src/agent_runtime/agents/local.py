@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import ArtifactPage
-from agent_runtime.core.capabilities import AgentCapabilities
+from agent_runtime.core.capabilities import AgentCapabilities, ControlName
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.sessions import (
     AgentRef,
@@ -214,7 +214,9 @@ def _tool_payload(runtime: ToolRuntime | None, names: list[str]) -> list[dict[st
     ]
 
 
-def _supports_model_control(models: ModelRuntime, model_ref: str, control: str) -> bool:
+def _supports_model_control(
+    models: ModelRuntime, model_ref: str, control: ControlName
+) -> bool:
     try:
         detail = models.capabilities(model_ref).controls.get(control)
     except Exception:

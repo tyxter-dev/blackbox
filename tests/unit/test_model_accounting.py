@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_runtime import AgentResult, AgentRuntime, ModelPricing
+from agent_runtime import AgentResult, AgentRuntime, ModelCacheControl, ModelPricing
 from agent_runtime.core.accounting import (
     ModelUsage,
     usage_from_anthropic_message,
@@ -12,6 +12,11 @@ from agent_runtime.core.accounting import (
 )
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from tests.fixtures.fake_openai_client import FakeOpenAIClient, evt, final_response, item
+from tests.fixtures.scripted_model import (
+    ScriptedModelProvider,
+    text_only_turn,
+    tool_call_turn,
+)
 
 
 async def test_model_runtime_collects_usage_and_estimates_cost() -> None:
@@ -55,7 +60,11 @@ async def test_model_runtime_collects_usage_and_estimates_cost() -> None:
         "cache_read_input_tokens": 20,
         "cache_creation_input_tokens": 0,
         "reasoning_tokens": 10,
+        "tool_calls": 0,
     }
+    assert result.metadata["cache"]["requested"] is False
+    assert result.metadata["cache"]["hit"] is True
+    assert result.metadata["accounting"]["usage"] == result.metadata["usage"]
     assert result.metadata["usage_provider_details"]["input_tokens"] == 100
     assert result.metadata["usage_provider_details"]["input_tokens_details"] == {
         "cached_tokens": 20
@@ -86,6 +95,56 @@ async def test_agent_runtime_result_metadata_includes_usage_and_cost() -> None:
 
     assert result.metadata["usage"]["total_tokens"] == 15
     assert result.metadata["cost"]["total"] == 0.00002
+
+
+async def test_model_runtime_tracks_cache_records_for_explicit_cache_key() -> None:
+    client = FakeOpenAIClient()
+    msg = item("message", id_="msg_1")
+    usage = SimpleNamespace(
+        input_tokens=100,
+        output_tokens=5,
+        total_tokens=105,
+        input_tokens_details=SimpleNamespace(cached_tokens=75),
+    )
+    client.queue(
+        events=[
+            evt("response.output_item.added", item=msg),
+            evt("response.output_text.delta", delta="pong", item_id="msg_1"),
+        ],
+        final_response=final_response(id_="resp_1", output=[msg], usage=usage),
+    )
+    runtime = AgentRuntime()
+    runtime.registry.register_model(OpenAIResponsesProvider(client=client))
+
+    result = await runtime.models.run(
+        provider="openai:gpt-test",
+        input="ping",
+        cache=ModelCacheControl(key="tenant-a", ttl="24h"),
+    )
+    record = await runtime.caches.get(
+        provider="openai", model="gpt-test", key="tenant-a"
+    )
+
+    assert result.metadata["cache"]["requested"] is True
+    assert result.metadata["cache"]["record"]["hits"] == 1
+    assert record is not None
+    assert record.hits == 1
+    assert record.cache_read_input_tokens == 75
+
+
+async def test_agent_runtime_usage_counts_tool_calls() -> None:
+    provider = ScriptedModelProvider()
+    provider.queue(tool_call_turn(call_id="call_1", name="lookup", arguments={"q": "x"}))
+    provider.queue(text_only_turn("done"))
+    runtime = AgentRuntime()
+    runtime.registry.register_model(provider)
+    runtime.tools.register(lambda q: f"found {q}", name="lookup")
+
+    result: AgentResult[str] = await runtime.run(
+        provider="scripted:test", input="search", tools=["lookup"]
+    )
+
+    assert result.metadata["usage"]["tool_calls"] == 1
 
 
 async def test_model_runtime_collects_mcp_cache_metadata() -> None:
@@ -195,6 +254,7 @@ def test_usage_accumulates_and_estimates_cached_input_cost() -> None:
         "cache_read_input_tokens": 0,
         "cache_creation_input_tokens": 0,
         "reasoning_tokens": 0,
+        "tool_calls": 0,
     }
     assert estimate["total"] == 0.000183
 
@@ -243,6 +303,7 @@ def test_usage_accumulates_split_cache_fields_and_estimates_split_cost() -> None
         "cache_read_input_tokens": 30,
         "cache_creation_input_tokens": 7,
         "reasoning_tokens": 4,
+        "tool_calls": 0,
     }
     assert total.provider_details == {
         "turns": [{"provider": "first"}, {"provider": "second"}]
@@ -276,6 +337,7 @@ def test_anthropic_usage_extraction_handles_cache_tokens() -> None:
         "cache_read_input_tokens": 10,
         "cache_creation_input_tokens": 5,
         "reasoning_tokens": 0,
+        "tool_calls": 0,
     }
     assert usage.provider_details["cache_read_input_tokens"] == 10
 
@@ -302,5 +364,6 @@ def test_gemini_usage_extraction_handles_thought_tokens() -> None:
         "cache_read_input_tokens": 3,
         "cache_creation_input_tokens": 0,
         "reasoning_tokens": 7,
+        "tool_calls": 0,
     }
     assert usage.provider_details["cached_content_token_count"] == 3

@@ -9,6 +9,13 @@ from agent_runtime.compat.providers import (
 from agent_runtime.core.accounting import ModelCatalog, ModelPricing, ModelUsage
 from agent_runtime.core.approvals import ApprovalDecision, ApprovalRequest
 from agent_runtime.core.artifacts import Artifact, ArtifactRef
+from agent_runtime.core.cache import (
+    InMemoryProviderCacheStore,
+    ProviderCacheRecord,
+    ProviderCacheStore,
+    ProviderCacheUsage,
+    SQLiteProviderCacheStore,
+)
 from agent_runtime.core.capabilities import (
     AgentCapabilities,
     CapabilityConstraint,
@@ -54,7 +61,13 @@ from agent_runtime.providers.base import (
     TurnResult,
 )
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
-from agent_runtime.runtime import AgentRuntime, AgentRuntimeFacade, ChatRuntimeFacade, ModelRuntime
+from agent_runtime.runtime import (
+    AgentRuntime,
+    AgentRuntimeFacade,
+    ChatRuntimeFacade,
+    ModelRuntime,
+    ProviderCacheRuntime,
+)
 from agent_runtime.tools.session import ToolSession
 from agent_runtime.workspace_agents import (
     ApprovalRequirement,
@@ -110,6 +123,7 @@ __all__ = [
     "HostedToolRaw",
     "HostedToolSupport",
     "ImageGeneration",
+    "InMemoryProviderCacheStore",
     "InMemoryWorkspaceAgentRegistry",
     "ItemTypes",
     "MemorySpec",
@@ -125,6 +139,10 @@ __all__ = [
     "ModelUsage",
     "OutputSchema",
     "OutputValidationError",
+    "ProviderCacheRecord",
+    "ProviderCacheRuntime",
+    "ProviderCacheStore",
+    "ProviderCacheUsage",
     "ProviderRef",
     "ProviderRegistry",
     "ProviderState",
@@ -132,6 +150,7 @@ __all__ = [
     "RemoteMCP",
     "RunItem",
     "RunState",
+    "SQLiteProviderCacheStore",
     "ScheduleSpec",
     "ScheduleTrigger",
     "ScheduledRunRef",

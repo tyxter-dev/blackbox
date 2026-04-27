@@ -15,6 +15,7 @@ class ModelUsage:
     cache_read_input_tokens: int = 0
     cache_creation_input_tokens: int = 0
     reasoning_tokens: int = 0
+    tool_calls: int = 0
     provider_details: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -31,6 +32,7 @@ class ModelUsage:
             "cache_read_input_tokens": self.cache_read_input_tokens,
             "cache_creation_input_tokens": self.cache_creation_input_tokens,
             "reasoning_tokens": self.reasoning_tokens,
+            "tool_calls": self.tool_calls,
         }
 
     def add(self, other: ModelUsage) -> ModelUsage:
@@ -44,6 +46,7 @@ class ModelUsage:
             cache_creation_input_tokens=self.cache_creation_input_tokens
             + other.cache_creation_input_tokens,
             reasoning_tokens=self.reasoning_tokens + other.reasoning_tokens,
+            tool_calls=self.tool_calls + other.tool_calls,
             provider_details=_merge_provider_details(
                 self.provider_details,
                 other.provider_details,
@@ -145,6 +148,7 @@ def usage_from_mapping(value: dict[str, Any] | None) -> ModelUsage:
         cache_read_input_tokens=_int(value.get("cache_read_input_tokens")),
         cache_creation_input_tokens=_int(value.get("cache_creation_input_tokens")),
         reasoning_tokens=_int(value.get("reasoning_tokens")),
+        tool_calls=_int(value.get("tool_calls")),
         provider_details=dict(value.get("provider_details", {}))
         if isinstance(value.get("provider_details"), dict)
         else {},

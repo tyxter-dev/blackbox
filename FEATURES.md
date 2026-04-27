@@ -97,8 +97,10 @@ Status legend:
 | Provider-native continuation state | Supported | `ProviderState` | Preserves provider continuation IDs and native state outside chat history. |
 | OpenAI previous response continuation | Supported | `ProviderState.previous_response_id` | OpenAI Responses adapter round-trips `previous_response_id`. |
 | Provider-native request controls | Supported | `ModelRequestControls` / `TurnRequest.controls` | Common controls such as instructions, sampling, output token caps, tool choice, parallel tool calls, reasoning effort, verbosity, tool search, compaction/truncation, background mode, store, and include are mapped by adapters where native support exists; `extra` remains the escape hatch. |
-| Model usage and cost accounting | Supported | `ModelUsage`, `ModelCatalog`, `ModelPricing` | Provider adapters normalize usage, split cache read/cache creation tokens where available, preserve provider usage details, and applications can register current pricing to add cost estimates to result metadata. |
-| Native provider cache controls | Partial | `ModelCacheControl`, `cache=...` | OpenAI/xAI map prompt cache keys/retention, Anthropic maps ephemeral cache controls, and Gemini consumes `cached_content` names. Provider-side cache creation, eviction/invalidation, and persistent cache registries are not implemented. |
+| Model usage and cost accounting | Supported | `ModelUsage`, `ModelCatalog`, `ModelPricing` | Provider adapters normalize usage, split cache read/cache creation tokens where available, count tool calls, preserve provider usage details, and applications can register current pricing to add cost estimates to result metadata. |
+| Native provider cache controls | Supported | `ModelCacheControl`, `cache=...` | OpenAI/xAI map prompt cache keys/retention, Anthropic maps ephemeral cache controls, and Gemini consumes `cached_content` names. Result metadata reports cache hit metrics where provider usage exposes them. |
+| Provider cache registry | Supported | `ProviderCacheRuntime`, `ProviderCacheStore` | In-memory and SQLite provider cache stores track cache keys, provider cache IDs, TTL/expiry, hit/miss counts, and token totals; runtime APIs support invalidation and expired-entry eviction. |
+| Provider-side cache lifecycle | Partial | `runtime.caches.create(...)`, `runtime.caches.invalidate(..., delete_provider_cache=True)` | Gemini context cache creation/deletion is wired through `client.caches.create/delete`; providers without native create/delete APIs still get local registry invalidation. |
 | Raw provider payload preservation | Supported | `AgentEvent.raw`, `RawEnvelope` | Provider adapters can keep original SDK payloads; `RawEnvelope` supports sensitivity tagging/redaction. |
 | Resume run from persisted state | Supported | `provider_state=...`, `RunStore` | `RunState` can be saved, reloaded in a fresh runtime, and passed back into `AgentRuntime.run`. |
 | JSONL/SQLite stores | Supported | `JSONLEventStore`, `SQLiteRunStore` | JSONL event logs and SQLite run-state persistence are implemented and covered by tests. |
@@ -173,5 +175,4 @@ Status legend:
 ## Explicitly Not Supported Yet
 
 - Vertex Agent Engine execution.
-- Persistent provider cache backends, cache eviction, and provider-side cache creation APIs.
 - Provider-breadth routing through LiteLLM.

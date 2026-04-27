@@ -56,7 +56,7 @@ granular capability profiles
 structured-output request mapping
 provider-native request controls
 raw provider payload preservation
-usage and optional cost metadata
+usage, cache, and optional cost metadata
 ```
 
 ### Out Of Scope
@@ -81,11 +81,11 @@ owns workspace operations. `AgentProvider` owns session lifecycle.
 | Area | Current evidence | State |
 |---|---|---|
 | Core protocol | `src/agent_runtime/providers/base.py` | Implemented. `ModelProvider` exposes provider id, capabilities, and `stream_turn(...)`. |
-| Model runtime facade | `src/agent_runtime/runtime.py` | Implemented. `runtime.models.run/stream` build `TurnRequest`, validate capabilities, stamp events, collect text, provider state, artifacts, usage, cost, MCP, hosted-tool, workspace, and trace metadata. |
+| Model runtime facade | `src/agent_runtime/runtime.py` | Implemented. `runtime.models.run/stream` build `TurnRequest`, validate capabilities, stamp events, collect text, provider state, artifacts, usage, cost, cache, MCP, hosted-tool, workspace, and trace metadata. |
 | Local loop integration | `src/agent_runtime/loop.py` | Implemented. `AgentLoop` drives repeated model turns and dispatches tool results through provider-native continuation. |
 | OpenAI Responses | `src/agent_runtime/models/openai_responses.py` | Implemented. Maps Responses streaming events, hosted tools, remote MCP, provider state, structured output, controls, usage, and retries. |
 | Anthropic Messages | `src/agent_runtime/models/anthropic_messages.py` | Implemented. Preserves native Messages content/history, thinking, tools, MCP blocks, cache controls, and usage. |
-| Gemini GenerateContent | `src/agent_runtime/models/gemini_generate_content.py` | Implemented. Preserves content/part history, function calls, thought signatures, provider-native JSON schema, cache references, and usage. |
+| Gemini GenerateContent | `src/agent_runtime/models/gemini_generate_content.py` | Implemented. Preserves content/part history, function calls, thought signatures, provider-native JSON schema, cache references, provider cache create/delete, and usage. |
 | xAI Responses | `src/agent_runtime/models/xai_responses.py` | Implemented as an OpenAI-compatible Responses adapter with conservative capabilities. |
 | Echo/test providers | `src/agent_runtime/models/echo.py`, `tests/fixtures/scripted_model.py` | Implemented. Used for deterministic local loop and contract coverage. |
 | Capability profiles | `src/agent_runtime/core/capabilities.py`, `src/agent_runtime/models/capability_validation.py` | Implemented. Profiles cover hosted tools, output strategies, controls, state modes, constraints, and pre-dispatch validation. |
@@ -293,7 +293,7 @@ original item type and raw payload preserved.
 | M-P1-1 | Provider-native structured output | Implemented for OpenAI and Gemini, unsupported where not mapped | Strategy support is capability-gated and fallbacks are resolved before dispatch. |
 | M-P1-2 | Hosted tool mapping | Implemented, provider-dependent | Typed hosted tools map to native provider payloads or fail before dispatch. |
 | M-P1-3 | Remote MCP mapping | Implemented for OpenAI and Anthropic | `RemoteMCP` maps to provider-native remote MCP configuration where supported. |
-| M-P1-4 | Usage and cost metadata | Implemented | Usage normalizes into result metadata; optional catalog pricing estimates cost. |
+| M-P1-4 | Usage, cache, and cost metadata | Implemented | Usage normalizes into result metadata with cache token splits and tool-call counts; optional catalog pricing estimates cost; cache-hit metrics are exposed when provider usage includes cached tokens. |
 | M-P1-5 | Model-specific capability profiles | Implemented, mostly static | Profiles can vary by model/API version/provider once adapters expose dynamic data. |
 | M-P1-6 | Request controls | Implemented, provider-dependent | Instructions, temperature, max tokens, tool choice, cache, reasoning, verbosity, tool search, compaction, store/background, include, and extra controls are mapped or rejected. |
 | M-P1-7 | Artifact refs | Partial | `TurnRequest.artifacts` exists; adapters should define provider-visible file/artifact input mapping. |
@@ -305,7 +305,7 @@ original item type and raw payload preserved.
 | ID | Requirement | Acceptance criteria |
 |---|---|---|
 | M-P2-1 | Typed multimodal input parts | Image/audio/video/file content parts are first-class, not ad hoc dicts. |
-| M-P2-2 | Provider-side cache lifecycle | Create/list/delete provider cache resources where APIs support it. |
+| M-P2-2 | Provider-side cache lifecycle | Partially implemented | `runtime.caches` persists provider cache records, supports invalidation/expiry eviction, and creates/deletes Gemini context caches where APIs support it. |
 | M-P2-3 | Dynamic provider discovery | Capability profiles can be populated from provider metadata or model lists. |
 | M-P2-4 | Realtime turns | Realtime/audio session surfaces live beside normal model turns, not inside this protocol unchanged. |
 | M-P2-5 | Provider eval metadata | Adapters can emit eval-related events or metadata where the provider exposes them. |
