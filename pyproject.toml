@@ -72,6 +72,7 @@ markers = [
   "integration_docker: requires Docker CLI and a runnable Docker daemon",
   "integration_openai_sandbox: requires OpenAI sandbox credentials and optional extra",
   "journey_model_provider: live goal-oriented ModelProvider journeys that emit LLM-readable reports",
+  "journey_agent_provider: live goal-oriented AgentProvider journeys that emit LLM-readable reports",
 ]
 
 [tool.mypy]

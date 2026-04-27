@@ -135,6 +135,37 @@ async def test_tool_call_loop_dispatches_and_feeds_results_back() -> None:
     assert follow_up_input[0].data["content"] == "sum=42"
 
 
+async def test_agent_spec_tools_and_instructions_reach_model_turn() -> None:
+    registry = ToolRegistry()
+    registry.register(lambda: ToolResult(content="ok"), name="allowed", description="allowed")
+    registry.register(lambda: ToolResult(content="nope"), name="hidden", description="hidden")
+    tools = ToolRuntime(registry)
+
+    runtime, scripted, _ = _build_runtime(tool_runtime=tools)
+    scripted.queue(text_only_turn("done"))
+
+    await runtime.agents.create_agent(
+        provider="local",
+        spec=AgentSpec(
+            name="tool-aware",
+            instructions="Use local support tools when they help.",
+            tools=["allowed"],
+        ),
+    )
+    session = await runtime.agents.create_session(
+        provider="local",
+        agent="tool-aware",
+        task="go",
+        model="scripted/test",
+    )
+
+    events = [event async for event in runtime.agents.stream(session)]
+
+    assert events[-1].type == EventTypes.SESSION_COMPLETED
+    assert scripted.calls[0].controls.instructions == "Use local support tools when they help."
+    assert [tool["name"] for tool in scripted.calls[0].tools] == ["allowed"]
+
+
 async def test_tool_call_without_tool_runtime_raises() -> None:
     runtime, scripted, _ = _build_runtime()
     scripted.queue(tool_call_turn(call_id="c1", name="missing", arguments={}))

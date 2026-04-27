@@ -86,12 +86,29 @@ class LocalAgentProvider:
         )
 
         model_ref = session_obj.model or "echo/echo-mini"
+        agent_spec = self._agents.get(session_obj.agent_id or "")
+        instructions = (
+            agent_spec.instructions
+            if agent_spec is not None
+            and _supports_model_control(self.models, model_ref, "instructions")
+            else None
+        )
+        tool_definitions = _tool_payload(
+            self.tools,
+            list(agent_spec.tools)
+            if agent_spec is not None and _supports_function_tools(self.models, model_ref)
+            else [],
+        )
 
         async def stream_factory(
             *, input: str | list[Any], provider_state: Any
         ) -> AsyncIterator[AgentEvent]:
             async for event in self.models.stream(
-                provider=model_ref, input=input, provider_state=provider_state,
+                provider=model_ref,
+                input=input,
+                provider_state=provider_state,
+                tools=tool_definitions,
+                instructions=instructions,
             ):
                 yield event
 
@@ -184,3 +201,29 @@ class LocalAgentProvider:
         for loop in self._loops.values():
             merged.update(loop._approvals)
         return merged
+
+
+def _tool_payload(runtime: ToolRuntime | None, names: list[str]) -> list[dict[str, Any]]:
+    if runtime is None or not names:
+        return []
+    wanted = set(names)
+    return [
+        tool
+        for tool in runtime.registry.to_provider_tools()
+        if tool.get("name") in wanted
+    ]
+
+
+def _supports_model_control(models: ModelRuntime, model_ref: str, control: str) -> bool:
+    try:
+        detail = models.capabilities(model_ref).controls.get(control)
+    except Exception:
+        return False
+    return detail is not None and detail.status != "unsupported"
+
+
+def _supports_function_tools(models: ModelRuntime, model_ref: str) -> bool:
+    try:
+        return models.capabilities(model_ref).summary.supports_function_tools
+    except Exception:
+        return False
