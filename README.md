@@ -555,14 +555,31 @@ approvals, artifacts, retries, handoffs, guardrails, and eval events.
 Evaluator hooks can score reconstructed traces and emit canonical
 `eval.started` / `eval.completed` / `eval.failed` events.
 
-## Workspace runtime (M2 local)
+## Workspace providers
 
-`WorkspaceRuntime` backs `"local"` workspaces with file read/write/delete,
-patch application, command execution, and snapshotting. It emits canonical
-workspace events (`WORKSPACE_FILE_READ`, `WORKSPACE_FILE_CHANGED`,
-`WORKSPACE_COMMAND_STARTED/_COMPLETED`, `WORKSPACE_PATCH_CREATED`,
-`ARTIFACT_CREATED`) and consults a `Policy` at three M2 checkpoints:
-`before_workspace_write`, `before_command`, `before_artifact_export`.
+`runtime.workspaces` is the first-class provider layer for coding-agent
+workspaces. Local directories, git checkouts, sandbox clients, Docker-backed
+sandboxes, and opaque cloud workspace refs share the `WorkspaceProvider`
+contract. Provider-managed agents receive a resolved `WorkspaceRef` through
+`TaskSpec.workspace`; provider-native file, command, patch, test, snapshot,
+approval, and artifact events are normalized into the runtime event taxonomy.
+
+```python
+from agent_runtime.workspaces import WorkspaceSpec
+
+workspace = await runtime.workspaces.open(
+    WorkspaceSpec.git(url="https://example.com/org/repo.git", ref="main")
+)
+
+result = await runtime.agents.run(
+    provider="openai-agents",
+    agent="coding-agent",
+    task="Implement the feature and return a patch.",
+    workspace=workspace,
+)
+```
+
+The direct provider API remains available for orchestration:
 
 ```python
 from agent_runtime.workspaces import (
@@ -582,11 +599,8 @@ patch = await ws_runtime.apply_patch(ws, Patch(
 ```
 
 Path traversal is blocked (relative paths cannot escape the workspace
-root). Cloud/sandbox/git workspace kinds raise `WorkspaceError` until their
-adapters land.
-
-Workspace operations can also be exposed to the high-level agent loop as
-ordinary local tools:
+root). Workspace operations can also be exposed to the high-level model loop as
+a run-scoped compatibility tool bridge:
 
 ```python
 workspace_tools = runtime.tools.register_workspace(ws_runtime, ws)

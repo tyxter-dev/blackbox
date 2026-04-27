@@ -7,6 +7,8 @@ import pytest
 from agent_runtime.core.artifacts import ArtifactRef
 from agent_runtime.core.errors import UnsupportedFeatureError, WorkspaceError
 from agent_runtime.workspaces import (
+    CloudWorkspaceProvider,
+    DockerWorkspaceProvider,
     FakeSandboxClient,
     LocalWorkspaceProvider,
     SandboxWorkspaceProvider,
@@ -23,6 +25,7 @@ def test_workspace_provider_capabilities_defaults_are_false() -> None:
 
     assert capabilities.supports_local_files is False
     assert capabilities.supports_sandbox is False
+    assert capabilities.supports_docker is False
     assert capabilities.supports_ports is False
 
 
@@ -53,6 +56,26 @@ async def test_sandbox_workspace_capabilities_are_honest() -> None:
 
     with pytest.raises(UnsupportedFeatureError):
         await provider.open(WorkspaceSpec.local("/tmp/nope"))
+
+
+def test_docker_workspace_provider_uses_docker_kind_contract() -> None:
+    provider = DockerWorkspaceProvider(image="python:3.12")
+
+    capabilities = provider.capabilities()
+    assert capabilities.supports_docker is True
+    assert capabilities.supports_sandbox is False
+    assert WorkspaceSpec.docker(image="python:3.12").kind == "docker"
+
+
+async def test_cloud_workspace_provider_opens_opaque_ref() -> None:
+    provider = CloudWorkspaceProvider()
+
+    ws = await provider.open(WorkspaceSpec.cloud(provider_workspace_id="cloud_ws_1"))
+
+    assert ws.kind == "cloud"
+    assert ws.provider == "cloud-workspace"
+    assert ws.provider_workspace_id == "cloud_ws_1"
+    assert provider.capabilities().supports_cloud_refs is True
 
 
 async def test_workspace_session_state_round_trips(tmp_path: Path) -> None:

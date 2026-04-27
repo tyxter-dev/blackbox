@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from agent_runtime.core.artifacts import ArtifactRef
 
-WorkspaceKind = Literal["local", "git", "sandbox", "cloud"]
+WorkspaceKind = Literal["local", "git", "sandbox", "docker", "cloud"]
 WorkspaceNetwork = Literal["disabled", "default"]
 WorkspacePortProtocol = Literal["http", "https", "tcp"]
 
@@ -16,6 +16,7 @@ WorkspacePortProtocol = Literal["http", "https", "tcp"]
 class WorkspaceProviderCapabilities:
     supports_local_files: bool = False
     supports_sandbox: bool = False
+    supports_docker: bool = False
     supports_git_sources: bool = False
     supports_cloud_refs: bool = False
     supports_commands: bool = False
@@ -100,6 +101,8 @@ class WorkspaceSpec:
     root: str | None = None
     repo: str | None = None
     branch: str | None = None
+    url: str | None = None
+    ref: str | None = None
     inputs: dict[str, str] = field(default_factory=dict)
     env: dict[str, str] = field(default_factory=dict)
     mounts: list[WorkspaceMount] = field(default_factory=list)
@@ -125,13 +128,27 @@ class WorkspaceSpec:
     @classmethod
     def git(
         cls,
-        repo: str,
+        repo: str | None = None,
         *,
+        url: str | None = None,
+        ref: str | None = None,
         branch: str | None = None,
         root: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> WorkspaceSpec:
-        return cls(kind="git", root=root, repo=repo, branch=branch, metadata=metadata or {})
+        source = repo or url
+        if source is None:
+            raise ValueError("WorkspaceSpec.git requires repo or url.")
+        checkout = branch or ref
+        return cls(
+            kind="git",
+            root=root,
+            repo=source,
+            branch=checkout,
+            url=url or source,
+            ref=ref or checkout,
+            metadata=metadata or {},
+        )
 
     @classmethod
     def sandbox(
@@ -164,6 +181,61 @@ class WorkspaceSpec:
             workdir=workdir,
             network=network,
             resources=resources or {},
+        )
+
+    @classmethod
+    def docker(
+        cls,
+        *,
+        image: str,
+        root: str = "/workspace",
+        inputs: dict[str, str] | None = None,
+        env: dict[str, str] | None = None,
+        mounts: list[WorkspaceMount] | None = None,
+        snapshot: ArtifactRef | None = None,
+        session_state: WorkspaceSessionState | None = None,
+        metadata: dict[str, Any] | None = None,
+        user: str | None = None,
+        workdir: str | None = None,
+        network: WorkspaceNetwork = "disabled",
+        resources: dict[str, Any] | None = None,
+    ) -> WorkspaceSpec:
+        return cls(
+            kind="docker",
+            root=root,
+            image=image,
+            inputs=inputs or {},
+            env=env or {},
+            mounts=mounts or [],
+            snapshot=snapshot,
+            session_state=session_state,
+            metadata=metadata or {},
+            user=user,
+            workdir=workdir,
+            network=network,
+            resources=resources or {},
+        )
+
+    @classmethod
+    def cloud(
+        cls,
+        *,
+        provider_workspace_id: str | None = None,
+        provider_session_id: str | None = None,
+        root: str | None = None,
+        session_state: WorkspaceSessionState | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> WorkspaceSpec:
+        cloud_metadata = dict(metadata or {})
+        if provider_workspace_id is not None:
+            cloud_metadata.setdefault("provider_workspace_id", provider_workspace_id)
+        if provider_session_id is not None:
+            cloud_metadata.setdefault("provider_session_id", provider_session_id)
+        return cls(
+            kind="cloud",
+            root=root,
+            session_state=session_state,
+            metadata=cloud_metadata,
         )
 
 

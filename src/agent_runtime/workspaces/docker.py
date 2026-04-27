@@ -16,9 +16,11 @@ from agent_runtime.core.errors import (
     UnsupportedFeatureError,
     WorkspaceError,
 )
+from agent_runtime.core.policy import Policy
 from agent_runtime.workspaces.changes import CommandResult, CommandSpec
 from agent_runtime.workspaces.fake import _list_files, _materialize_inputs, _write_text
 from agent_runtime.workspaces.local import _archive_workspace, _extract_workspace_archive
+from agent_runtime.workspaces.sandbox import SandboxWorkspaceProvider
 from agent_runtime.workspaces.sandbox_client import (
     SandboxCommandEvent,
     SandboxSession,
@@ -353,3 +355,39 @@ def _container_cwd(session: SandboxSession, cwd: str | None, *, default_workdir:
     if Path(cwd).is_absolute() or any(part == ".." for part in Path(cwd).parts):
         raise WorkspaceError(f"Path escapes workspace root: {cwd}")
     return f"{default_workdir.rstrip('/')}/{cwd.replace(os.sep, '/')}"
+
+
+class DockerWorkspaceProvider(SandboxWorkspaceProvider):
+    """Docker-backed WorkspaceProvider using ``DockerSandboxClient``."""
+
+    def __init__(
+        self,
+        *,
+        image: str,
+        docker_bin: str = "docker",
+        workdir: str = "/workspace",
+        network: Literal["none", "default"] = "none",
+        remove_on_close: bool = True,
+        command_output_limit: int = 200_000,
+        default_timeout: float | None = 120.0,
+        metadata: dict[str, object] | None = None,
+        policy: Policy | None = None,
+        provider_id: str = "docker-workspace",
+    ) -> None:
+        client = DockerSandboxClient(
+            image=image,
+            docker_bin=docker_bin,
+            workdir=workdir,
+            network=network,
+            remove_on_close=remove_on_close,
+            command_output_limit=command_output_limit,
+            default_timeout=default_timeout,
+            metadata=dict(metadata or {}),
+        )
+        super().__init__(
+            client=client,
+            policy=policy,
+            provider_id=provider_id,
+            workspace_kind="docker",
+            command_output_limit=command_output_limit,
+        )

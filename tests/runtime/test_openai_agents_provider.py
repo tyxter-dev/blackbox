@@ -3,10 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
+from agent_runtime import AgentRuntime
 from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.events import EventTypes
 from agent_runtime.providers.base import AgentSpec, TaskSpec
+
+
+def test_openai_agents_provider_registers_plural_alias() -> None:
+    runtime = AgentRuntime()
+    provider = OpenAICloudAgentProvider(client=cast(Any, object()))
+
+    runtime.registry.register_agent(provider)
+
+    assert runtime.registry.get_agent("openai-agents") is provider
 
 
 async def test_openai_agents_sdk_lifecycle_streams_and_resumes() -> None:

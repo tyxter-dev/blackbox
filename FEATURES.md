@@ -56,7 +56,7 @@ Status legend:
 | Context injection | Supported | `tool_execution_context={...}` / `ToolRuntime(context=...)` | Private runtime values are injected by parameter name. |
 | Context schema privacy | Supported | Injected context parameters are not added to provider tool schemas. |
 | Tool catalog search | Supported | `ToolCatalog` | Simple relevance-scored catalog/search layer for registered/cataloged tools. |
-| Workspace tool backend | Supported | `runtime.tools.register_workspace(...)` | Registers local workspace operations as normal tools for the high-level agent loop. |
+| Workspace tool backend | Supported | `runtime.tools.register_workspace(...)` | Compatibility bridge for exposing provider-backed workspace operations as run-scoped local tools. |
 | Namespaced `ToolRef` IDs | Not supported yet | Planned for MCP | Current high-level API references tools by simple name. |
 
 ## Hosted Tools
@@ -159,7 +159,8 @@ Status legend:
 | Feature | Status | Public surface | Notes |
 |---|---|---|---|
 | Artifact data contracts | Supported | `Artifact`, `ArtifactRef`, `ArtifactPage` | Typed artifact models exist. |
-| Local workspace runtime | Supported | `WorkspaceRuntime` | Local workspaces support file read/write/delete, patch artifacts, command execution, snapshots, policy gates, and canonical events. |
+| Workspace runtime facade | Supported | `runtime.workspaces.open(...)` | Opens and tracks local, git, cloud, and registered sandbox/Docker providers; `runtime.agents.run(..., workspace=...)` receives a `WorkspaceRef` instead of raw tools. |
+| Local workspace runtime | Supported | `WorkspaceRuntime` / `LocalWorkspaceProvider` | Local workspaces support file read/write/delete, patch artifacts, command execution, snapshots, policy gates, and canonical events. |
 | Workspace data contracts | Supported | `workspaces.spec`, `workspaces.changes` | Workspace refs, mounts, file changes, patch artifacts, commands, and command results exist. |
 | Workspace agent package contracts | Supported | `workspace_agents` | Governed workspace-agent packages model connector auth modes, tool permissions, schedules, skills, publication metadata, registry protocols, and serialization without downstream UI/scheduler/storage assumptions. |
 | MCP server spec | Supported | `MCPServerSpec` | Server configuration model exists for `stdio`, `http`, `sse`, and `streamable_http`, including environment, timeout, and cache controls. |

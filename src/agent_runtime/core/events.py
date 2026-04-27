@@ -105,6 +105,8 @@ class EventTypes:
     WORKSPACE_COMMAND_STARTED = "workspace.command.started"
     WORKSPACE_COMMAND_OUTPUT = "workspace.command.output"
     WORKSPACE_COMMAND_COMPLETED = "workspace.command.completed"
+    WORKSPACE_TEST_STARTED = "workspace.test.started"
+    WORKSPACE_TEST_COMPLETED = "workspace.test.completed"
     WORKSPACE_PATCH_CREATED = "workspace.patch.created"
     WORKSPACE_SNAPSHOT_CREATED = "workspace.snapshot.created"
     WORKSPACE_SNAPSHOT_RESTORED = "workspace.snapshot.restored"

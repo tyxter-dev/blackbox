@@ -72,6 +72,7 @@ from agent_runtime.runtime import (
     ChatRuntimeFacade,
     ModelRuntime,
     ProviderCacheRuntime,
+    WorkspaceRuntimeFacade,
 )
 from agent_runtime.tools.session import ToolSession
 from agent_runtime.workspace_agents import (
@@ -180,6 +181,7 @@ __all__ = [
     "WorkspaceAgentRegistry",
     "WorkspaceAgentSpec",
     "WorkspaceAgentVersion",
+    "WorkspaceRuntimeFacade",
     "create_runtime_with_default_providers",
     "dataclass_from_dict",
     "dataclass_to_dict",

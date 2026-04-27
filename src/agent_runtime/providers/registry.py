@@ -51,7 +51,8 @@ class ProviderRegistry:
             self._models[key] = provider
 
     def register_agent(self, provider: AgentProvider, *aliases: str) -> None:
-        keys = (provider.provider_id, *aliases)
+        provider_aliases = getattr(provider, "provider_aliases", ())
+        keys = (provider.provider_id, *provider_aliases, *aliases)
         for key in keys:
             self._agents[key] = provider
 

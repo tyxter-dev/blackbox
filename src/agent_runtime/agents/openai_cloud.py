@@ -60,6 +60,7 @@ class OpenAICloudAgentProvider:
     """
 
     provider_id = "openai-agent"
+    provider_aliases = ("openai-agents",)
 
     def __init__(
         self,
@@ -702,6 +703,7 @@ def _coerce_event(raw: Any, *, provider: str, session_id: str) -> AgentEvent:
     if isinstance(raw, AgentEvent):
         return raw
     data = _as_dict(raw)
+    event_type = _canonical_event_type(str(data.get("type", EventTypes.CLOUD_AGENT_LOG)))
     event_data = dict(data.get("data") or {})
     for key in (
         "status",
@@ -718,7 +720,7 @@ def _coerce_event(raw: Any, *, provider: str, session_id: str) -> AgentEvent:
         if key in data and key not in event_data:
             event_data[key] = data[key]
     event_kwargs: dict[str, Any] = {
-        "type": str(data.get("type", EventTypes.CLOUD_AGENT_LOG)),
+        "type": event_type,
         "session_id": session_id,
         "provider": provider,
         "item_id": _first_str(data, "item_id", "artifact_id", "approval_id"),
@@ -728,6 +730,24 @@ def _coerce_event(raw: Any, *, provider: str, session_id: str) -> AgentEvent:
     if data.get("id") is not None:
         event_kwargs["id"] = str(data["id"])
     return AgentEvent(**event_kwargs)
+
+
+def _canonical_event_type(event_type: str) -> str:
+    aliases = {
+        "file_read": EventTypes.WORKSPACE_FILE_READ,
+        "file_changed": EventTypes.WORKSPACE_FILE_CHANGED,
+        "patch": EventTypes.WORKSPACE_PATCH_CREATED,
+        "patch_created": EventTypes.WORKSPACE_PATCH_CREATED,
+        "command_started": EventTypes.WORKSPACE_COMMAND_STARTED,
+        "command_output": EventTypes.WORKSPACE_COMMAND_OUTPUT,
+        "command_completed": EventTypes.WORKSPACE_COMMAND_COMPLETED,
+        "test_started": EventTypes.WORKSPACE_TEST_STARTED,
+        "test_completed": EventTypes.WORKSPACE_TEST_COMPLETED,
+        "snapshot_created": EventTypes.WORKSPACE_SNAPSHOT_CREATED,
+        "artifact": EventTypes.ARTIFACT_CREATED,
+        "approval_required": EventTypes.APPROVAL_REQUESTED,
+    }
+    return aliases.get(event_type, event_type)
 
 
 def _update_session_from_event(session: AgentSession, event: AgentEvent) -> None:

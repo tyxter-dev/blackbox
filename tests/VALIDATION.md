@@ -221,23 +221,25 @@ run_store.load(...)
 
 ## 6. Workspace functions (M2)
 
-For coding-agent workflows. v0.1 ships a `WorkspaceRuntime` that backs
-`"local"` workspaces; cloud/sandbox/git kinds remain ⏳.
+For coding-agent workflows. v0.1 ships a first-class `runtime.workspaces`
+facade over `WorkspaceProvider` backends. Local, git, sandbox, Docker, and
+cloud workspace refs share one contract; the workspace-tool bridge remains as
+a compatibility adapter for model-tool loops.
 
 ```python
-ws = await runtime.open(WorkspaceSpec.local(path))
-await runtime.read_file(ws, path)
-await runtime.write_file(ws, path, content)
-await runtime.delete_file(ws, path)
-await runtime.apply_patch(ws, patch)
-await runtime.run_command(ws, CommandSpec(...))
-await runtime.snapshot(ws)
+workspace = await runtime.workspaces.open(WorkspaceSpec.git(url="...", ref="main"))
+result = await runtime.agents.run(
+    provider="openai-agents",
+    agent="coding-agent",
+    task="Implement the feature and return a patch",
+    workspace=workspace,
+)
 ```
 
 | # | Status | Functionality | Test | What it proves |
 |---|---|---|---|---|
 | 6.1 | ✅ | Open local workspace | `unit/test_workspace_runtime.py::test_open_local_workspace_returns_ref` | Spec validates and returns a stable ref. |
-| 6.2 | ✅ | Reject non-local kinds | `::test_open_rejects_non_local_workspace_kind` | Cloud/sandbox/git raise `WorkspaceError` until adapters land. |
+| 6.2 | ✅ | Local provider rejects wrong kind | `::test_open_rejects_non_local_workspace_kind` | The local provider remains honest and rejects non-local specs. |
 | 6.3 | ✅ | File read events | `::test_read_file_emits_workspace_file_read` | Reads emit `WORKSPACE_FILE_READ`. |
 | 6.4 | ✅ | File write events | `::test_write_file_emits_change_and_returns_file_change` | Writes emit `WORKSPACE_FILE_CHANGED` with a `FileChange`. |
 | 6.5 | ✅ | Patch lifecycle | `::test_apply_patch_emits_per_change_events_and_creates_patch_artifact` | Per-change events + `WORKSPACE_PATCH_CREATED` + `ARTIFACT_CREATED`. |
@@ -252,6 +254,9 @@ await runtime.snapshot(ws)
 | 6.14 | ✅ | Artifact pagination | `::test_apply_patch_emits_per_change_events_and_creates_patch_artifact` (uses `list_artifacts`) | `ArtifactPage` returned by filter. |
 | 6.15 | ✅ | Command timeout | `unit/test_workspace_runtime.py::test_run_command_timeout_sets_timed_out` | Long commands fail with `timed_out=True`. |
 | 6.16 | ✅ | AgentLoop integration | `runtime/test_runtime_run.py::test_workspace_tools_run_through_agent_loop`, `::test_workspace_write_command_and_snapshot_tools_run_through_agent_loop` | Workspace read/write/command/snapshot tools can be registered and invoked through the high-level loop. |
+| 6.17 | ✅ | First-class workspace facade | `runtime/test_agent_session_run.py::test_agents_run_routes_workspace_ref_through_workspace_provider` | `runtime.workspaces.open(WorkspaceSpec.git(...))` produces a `WorkspaceRef` that routes through `TaskSpec.workspace` into `runtime.agents.run(...)`. |
+| 6.18 | ✅ | Provider-native workspace event normalization | `runtime/test_agent_session_run.py::test_provider_native_workspace_events_gain_workspace_context` | Agent providers that bring their own workspace/sandbox events still emit canonical workspace/test events with workspace metadata. |
+| 6.19 | ✅ | Docker/cloud provider contracts | `unit/test_workspace_provider_contracts.py::test_docker_workspace_provider_uses_docker_kind_contract`, `::test_cloud_workspace_provider_opens_opaque_ref` | Docker and cloud backends share the same `WorkspaceProvider` capability/ref contract. |
 
 ---
 

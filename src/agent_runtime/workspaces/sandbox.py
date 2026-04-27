@@ -29,6 +29,7 @@ from agent_runtime.workspaces.provider import (
 from agent_runtime.workspaces.sandbox_client import SandboxClient, SandboxSession
 from agent_runtime.workspaces.serialization import workspace_state_to_dict
 from agent_runtime.workspaces.spec import (
+    WorkspaceKind,
     WorkspacePort,
     WorkspaceProviderCapabilities,
     WorkspaceRef,
@@ -42,6 +43,7 @@ class SandboxWorkspaceProvider:
     client: SandboxClient
     policy: Policy | None = None
     provider_id: str = "sandbox-workspace"
+    workspace_kind: WorkspaceKind = "sandbox"
     events: list[AgentEvent] = field(default_factory=list)
     artifacts: list[Artifact] = field(default_factory=list)
     command_output_limit: int = 200_000
@@ -52,7 +54,8 @@ class SandboxWorkspaceProvider:
     def capabilities(self) -> WorkspaceProviderCapabilities:
         supports_ports = bool(getattr(self.client, "supports_ports", True))
         return WorkspaceProviderCapabilities(
-            supports_sandbox=True,
+            supports_sandbox=self.workspace_kind == "sandbox",
+            supports_docker=self.workspace_kind == "docker",
             supports_commands=True,
             supports_streaming_command_output=True,
             supports_patches=True,
@@ -65,9 +68,10 @@ class SandboxWorkspaceProvider:
         )
 
     async def open(self, spec: WorkspaceSpec) -> WorkspaceRef:
-        if spec.kind != "sandbox":
+        if spec.kind != self.workspace_kind:
             raise UnsupportedFeatureError(
-                f"SandboxWorkspaceProvider supports only 'sandbox' workspaces, got {spec.kind!r}."
+                f"{type(self).__name__} supports only {self.workspace_kind!r} workspaces, "
+                f"got {spec.kind!r}."
             )
         await self._policy_gate(
             "before_workspace_open",
@@ -95,12 +99,14 @@ class SandboxWorkspaceProvider:
         return ref
 
     async def attach(self, state: WorkspaceSessionState) -> WorkspaceRef:
-        if state.kind != "sandbox":
-            raise WorkspaceError(f"Cannot attach non-sandbox workspace state: {state.kind!r}.")
+        if state.kind != self.workspace_kind:
+            raise WorkspaceError(
+                f"Cannot attach non-{self.workspace_kind} workspace state: {state.kind!r}."
+            )
         session = await self.client.attach_session(state)
         ref = WorkspaceRef(
             id=state.workspace_id,
-            kind="sandbox",
+            kind=self.workspace_kind,
             provider=self.provider_id,
             root=state.root or session.root,
             provider_workspace_id=state.provider_workspace_id,
@@ -432,7 +438,7 @@ class SandboxWorkspaceProvider:
         return WorkspaceSessionState(
             provider=self.provider_id,
             workspace_id=ws.id,
-            kind="sandbox",
+            kind=self.workspace_kind,
             provider_workspace_id=client_state.provider_workspace_id or session.provider_workspace_id,
             provider_session_id=client_state.provider_session_id or session.provider_session_id,
             root=ws.root,
@@ -457,7 +463,7 @@ class SandboxWorkspaceProvider:
 
     def _ref_from_session(self, session: SandboxSession, *, root: str | None) -> WorkspaceRef:
         return WorkspaceRef(
-            kind="sandbox",
+            kind=self.workspace_kind,
             provider=self.provider_id,
             root=root,
             provider_workspace_id=session.provider_workspace_id,

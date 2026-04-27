@@ -39,7 +39,9 @@ Implemented provider/runtime slices:
 3. Anthropic Messages-native event mapping and continuation state.
 4. Gemini GenerateContent-native event mapping and continuation state.
 5. JSONL event store and SQLite run store adapters.
-6. Local workspace runtime and workspace tools registered through the high-level loop.
+6. First-class `runtime.workspaces` facade with local, git, sandbox, Docker,
+   and cloud workspace provider contracts plus the compatibility workspace
+   tool bridge.
 7. Local MCP connector for registered tools with namespaced refs and policy gates.
 8. Workspace agent package contracts, permissions, schedules, serialization,
    registry protocol, and thin runtime bridge.
@@ -48,7 +50,5 @@ Implemented provider/runtime slices:
 
 Remaining architectural targets:
 
-1. `WorkspaceProvider` protocol for local, sandbox, git, and cloud workspace backends.
-2. Vertex Agent Engine execution.
-3. Workspace approval-channel integration and non-local workspace kinds.
-4. Production presets for external trace, metrics, artifact, and evaluation backends.
+1. Vertex Agent Engine execution.
+2. Production presets for external trace, metrics, artifact, and evaluation backends.

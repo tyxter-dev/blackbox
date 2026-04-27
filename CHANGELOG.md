@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Slice 16 — First-class WorkspaceProvider routing
+
+Workspace execution is now a provider layer instead of only a registered-tool
+workaround for coding-agent flows.
+
+- Adds `runtime.workspaces` as a provider registry/facade with built-in local,
+  git, and opaque cloud providers plus support for registered sandbox and
+  Docker workspace providers.
+- Extends `WorkspaceSpec.git(url=..., ref=...)`, `WorkspaceSpec.docker(...)`,
+  and `WorkspaceSpec.cloud(...)` constructors.
+- Routes `runtime.agents.run(..., workspace=...)` through `WorkspaceProvider`
+  resolution so `TaskSpec.workspace` carries a `WorkspaceRef` into provider
+  sessions.
+- Normalizes provider-native workspace file, command, patch, test, snapshot,
+  approval, and artifact events with workspace metadata.
+- Keeps `runtime.tools.register_workspace(...)` as a compatibility bridge for
+  high-level model loops.
+
 ### Slice 15 — Managed-agent result collector
 
 `runtime.agents.run(...)` now starts a provider-managed session and returns an

@@ -5,8 +5,10 @@ from agent_runtime.workspaces.changes import (
     Patch,
     PatchArtifact,
 )
-from agent_runtime.workspaces.docker import DockerSandboxClient
+from agent_runtime.workspaces.cloud import CloudWorkspaceProvider
+from agent_runtime.workspaces.docker import DockerSandboxClient, DockerWorkspaceProvider
 from agent_runtime.workspaces.fake import FakeSandboxClient
+from agent_runtime.workspaces.git import GitWorkspaceProvider
 from agent_runtime.workspaces.local import LocalWorkspaceProvider
 from agent_runtime.workspaces.provider import (
     PendingWorkspaceOperation,
@@ -36,12 +38,15 @@ from agent_runtime.workspaces.spec import (
 )
 
 __all__ = [
+    "CloudWorkspaceProvider",
     "CommandExecutor",
     "CommandResult",
     "CommandSpec",
     "DockerSandboxClient",
+    "DockerWorkspaceProvider",
     "FakeSandboxClient",
     "FileChange",
+    "GitWorkspaceProvider",
     "LocalWorkspaceProvider",
     "Patch",
     "PatchArtifact",
