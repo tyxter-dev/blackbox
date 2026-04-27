@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from agent_runtime.core.errors import ProviderNotFoundError
 from agent_runtime.providers.base import AgentProvider, ModelProvider
+
+if TYPE_CHECKING:
+    from agent_runtime.realtime.provider import RealtimeProvider
 
 
 @dataclass(slots=True, frozen=True)
@@ -44,6 +48,7 @@ class ProviderRegistry:
     def __init__(self) -> None:
         self._models: dict[str, ModelProvider] = {}
         self._agents: dict[str, AgentProvider] = {}
+        self._realtime: dict[str, RealtimeProvider] = {}
 
     def register_model(self, provider: ModelProvider, *aliases: str) -> None:
         keys = (provider.provider_id, *aliases)
@@ -55,6 +60,12 @@ class ProviderRegistry:
         keys = (provider.provider_id, *provider_aliases, *aliases)
         for key in keys:
             self._agents[key] = provider
+
+    def register_realtime(self, provider: RealtimeProvider, *aliases: str) -> None:
+        provider_aliases = getattr(provider, "provider_aliases", ())
+        keys = (provider.provider_id, *provider_aliases, *aliases)
+        for key in keys:
+            self._realtime[key] = provider
 
     def get_model(self, provider: str) -> ModelProvider:
         ref = ProviderRef.parse(provider)
@@ -76,16 +87,32 @@ class ProviderRegistry:
                 f"No agent provider registered for '{ref.provider_key}'. Known: {known}."
             ) from exc
 
+    def get_realtime(self, provider: str) -> RealtimeProvider:
+        ref = ProviderRef.parse(provider)
+        try:
+            return self._realtime[ref.provider_key]
+        except KeyError as exc:
+            known = ", ".join(sorted(self._realtime)) or "none"
+            raise ProviderNotFoundError(
+                f"No realtime provider registered for '{ref.provider_key}'. Known: {known}."
+            ) from exc
+
     def list_model_providers(self) -> list[str]:
         return sorted(self._models)
 
     def list_agent_providers(self) -> list[str]:
         return sorted(self._agents)
 
+    def list_realtime(self) -> dict[str, RealtimeProvider]:
+        return dict(sorted(self._realtime.items()))
+
+    def list_realtime_providers(self) -> list[str]:
+        return sorted(self._realtime)
+
     async def close(self) -> None:
         """Close registered providers that expose an async/sync close hook."""
         seen: set[int] = set()
-        for provider in [*self._models.values(), *self._agents.values()]:
+        for provider in [*self._models.values(), *self._agents.values(), *self._realtime.values()]:
             marker = id(provider)
             if marker in seen:
                 continue

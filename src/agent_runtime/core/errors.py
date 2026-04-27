@@ -50,6 +50,30 @@ class MCPError(AgentRuntimeError):
     """Raised by MCP connector or remote MCP failures."""
 
 
+class RealtimeError(AgentRuntimeError):
+    """Base class for realtime session failures."""
+
+
+class RealtimeConnectionError(RealtimeError):
+    """Raised when a realtime session cannot be established."""
+
+
+class RealtimeSessionError(RealtimeError):
+    """Raised when a realtime provider reports a session-level failure."""
+
+
+class RealtimeTransportError(RealtimeError):
+    """Raised for realtime transport failures after a session is established."""
+
+
+class RealtimeUnsupportedFeatureError(CapabilityError):
+    """Raised when a realtime request asks for an unsupported feature."""
+
+
+class RealtimeMediaError(RealtimeError):
+    """Raised when realtime media input is invalid or too large."""
+
+
 class OutputValidationError(AgentRuntimeError):
     """Raised when a model's final output cannot be validated against the requested type.
 

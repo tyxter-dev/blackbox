@@ -1170,6 +1170,7 @@ class AgentRuntime:
         )
         self.chat = ChatRuntimeFacade(self.models)
         self.workspaces = WorkspaceRuntimeFacade()
+        self.tools = ToolRuntimeFacade()
         self.agents = AgentRuntimeFacade(
             self.registry,
             event_store=self.event_store,
@@ -1177,7 +1178,13 @@ class AgentRuntime:
             workspaces=self.workspaces,
         )
         self.caches = ProviderCacheRuntime(self.registry, self.provider_cache_store)
-        self.tools = ToolRuntimeFacade()
+        from agent_runtime.realtime.runtime import RealtimeRuntime
+
+        self.realtime = RealtimeRuntime(
+            self.registry,
+            event_store=self.event_store,
+            tool_registry=self.tools.registry,
+        )
         self._active_loops: dict[str, Any] = {}
 
     async def close(self) -> None:
@@ -1196,6 +1203,11 @@ class AgentRuntime:
                 return
             except Exception:
                 pass
+        try:
+            await self.realtime.approve(approval_id, decision)
+            return
+        except ApprovalError:
+            pass
         raise ApprovalError(f"No pending approval with id '{approval_id}'.")
 
     def model_capabilities(

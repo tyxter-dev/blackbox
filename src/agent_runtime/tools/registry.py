@@ -65,6 +65,10 @@ class ToolRegistry:
         except KeyError as exc:
             raise ToolExecutionError(f"Unknown tool: {name}") from exc
 
+    def add(self, definition: ToolDefinition) -> ToolDefinition:
+        self._tools[definition.name] = definition
+        return definition
+
     def all_tools(self) -> list[ToolDefinition]:
         return list(self._tools.values())
 

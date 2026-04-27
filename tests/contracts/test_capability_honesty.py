@@ -12,6 +12,7 @@ expectations apply across every adapter the runtime exposes.
 """
 from __future__ import annotations
 
+import importlib.util
 from typing import cast
 
 import pytest
@@ -299,6 +300,8 @@ async def test_cloud_agent_stub_create_agent_requires_credentials() -> None:
 
 
 async def test_openai_agents_create_agent_requires_optional_sdk_when_configured() -> None:
+    if importlib.util.find_spec("agents") is not None:
+        pytest.skip("openai-agents is installed, so the optional SDK path is available.")
     provider = OpenAICloudAgentProvider(api_key="x")
     with pytest.raises(UnsupportedFeatureError):
         await provider.create_agent(AgentSpec(name="x"))

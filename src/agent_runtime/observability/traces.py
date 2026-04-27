@@ -15,6 +15,10 @@ class SpanKinds:
     WORKFLOW = "workflow"
     SESSION = "session"
     MODEL = "model"
+    REALTIME_SESSION = "realtime.session"
+    REALTIME_TURN = "realtime.turn"
+    REALTIME_RESPONSE = "realtime.response"
+    REALTIME_MEDIA = "realtime.media"
     TOOL = "tool"
     AGENT_TOOL = "agent_tool"
     TOOL_SEARCH = "tool_search"
@@ -164,6 +168,28 @@ def infer_span_kind(event_type: str) -> str:
         return SpanKinds.SESSION
     if event_type.startswith("model."):
         return SpanKinds.MODEL
+    if event_type.startswith("realtime.session.") or event_type.startswith(
+        "realtime.transport."
+    ):
+        return SpanKinds.REALTIME_SESSION
+    if event_type.startswith("realtime.turn.") or event_type.startswith(
+        "realtime.interruption."
+    ):
+        return SpanKinds.REALTIME_TURN
+    if event_type.startswith("realtime.response."):
+        return SpanKinds.REALTIME_RESPONSE
+    if event_type.startswith("realtime.input.") or event_type.startswith(
+        "realtime.output."
+    ):
+        if ".audio." in event_type or ".image." in event_type or ".video_frame." in event_type:
+            return SpanKinds.REALTIME_MEDIA
+        return SpanKinds.REALTIME_RESPONSE
+    if event_type.startswith("realtime.history.") or event_type.startswith(
+        "realtime.usage."
+    ):
+        return SpanKinds.REALTIME_SESSION
+    if event_type.startswith("realtime.tool."):
+        return SpanKinds.TOOL
     if event_type.startswith("tool.call."):
         return SpanKinds.TOOL
     if event_type.startswith("agent_tool.call."):
@@ -445,6 +471,14 @@ def _attributes_from_events(events: list[AgentEvent]) -> dict[str, Any]:
 def _span_name(kind: str, event: AgentEvent) -> str:
     if kind == SpanKinds.MODEL:
         return "model.turn"
+    if kind == SpanKinds.REALTIME_SESSION:
+        return "realtime.session"
+    if kind == SpanKinds.REALTIME_TURN:
+        return "realtime.turn"
+    if kind == SpanKinds.REALTIME_RESPONSE:
+        return "realtime.response"
+    if kind == SpanKinds.REALTIME_MEDIA:
+        return "realtime.media"
     if kind == SpanKinds.TOOL:
         return "tool.call"
     if kind == SpanKinds.AGENT_TOOL:
