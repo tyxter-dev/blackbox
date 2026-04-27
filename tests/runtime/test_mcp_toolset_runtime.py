@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
+import agent_runtime.mcp.connector as connector_module
 from agent_runtime import AgentRuntime, EventTypes
+from agent_runtime.core.approvals import ApprovalDecision
+from agent_runtime.core.policy import PolicyDecision, PolicyRequest
 from agent_runtime.mcp import MCPServerSpec, MCPToolset
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn, tool_call_turn
 
@@ -117,3 +121,79 @@ async def test_runtime_toolsets_expose_local_mcp_tools_and_stop_connector(monkey
     assert result.payloads[0].payload["mcp"]["structured_content"] == {"ok": True}
     assert EventTypes.MCP_CALL_COMPLETED in [event.type for event in result.events]
     assert transport.stopped is True
+
+
+class _RequireMCPApproval:
+    def __init__(self) -> None:
+        self.seen: list[PolicyRequest] = []
+
+    async def check(self, request: PolicyRequest) -> PolicyDecision:
+        self.seen.append(request)
+        if request.checkpoint == "before_mcp_call":
+            return PolicyDecision.require_approval("review MCP call")
+        return PolicyDecision.allow()
+
+
+async def test_runtime_toolset_mcp_call_pauses_and_resumes_approval(
+    monkeypatch: Any,
+) -> None:
+    transport = _FakeTransport()
+    monkeypatch.setattr(
+        connector_module,
+        "transport_for_spec",
+        lambda spec, auth_provider=None: transport,
+    )
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    scripted.queue(
+        tool_call_turn(
+            call_id="c1",
+            name="mcp:tickets.lookup",
+            arguments={"ticket_id": "T-1"},
+        )
+    )
+    scripted.queue(text_only_turn("done"))
+    policy = _RequireMCPApproval()
+    events = []
+
+    async def collect() -> None:
+        async for event in runtime.stream(
+            provider="scripted:test",
+            input="lookup ticket",
+            policy=policy,
+            toolsets=[
+                MCPToolset(
+                    server=MCPServerSpec(
+                        name="tickets",
+                        transport="stdio",
+                        command="fake",
+                    ),
+                    mode="local",
+                )
+            ],
+        ):
+            events.append(event)
+
+    task = asyncio.create_task(collect())
+    for _ in range(100):
+        if any(event.type == EventTypes.APPROVAL_REQUESTED for event in events):
+            break
+        await asyncio.sleep(0.01)
+
+    approval_event = next(
+        event for event in events if event.type == EventTypes.APPROVAL_REQUESTED
+    )
+    assert policy.seen[0].checkpoint == "before_mcp_call"
+    assert transport.requests[-1][0] != "tools/call"
+
+    await runtime.approve(
+        str(approval_event.data["approval_id"]),
+        ApprovalDecision.approve("ok"),
+    )
+    await task
+
+    event_types = [event.type for event in events]
+    assert EventTypes.APPROVAL_APPROVED in event_types
+    assert EventTypes.MCP_CALL_COMPLETED in event_types
+    assert any(request[0] == "tools/call" for request in transport.requests)
