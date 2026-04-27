@@ -1,3 +1,6 @@
+from importlib import import_module
+from typing import Any
+
 from agent_runtime.compat.chat import ChatMessage
 from agent_runtime.compat.providers import (
     ModelRoute,
@@ -130,6 +133,7 @@ __all__ = [
     "ContainerSpec",
     "EventTypes",
     "FileSearch",
+    "GoogleBigQueryMCPAuth",
     "HostedToolHandlers",
     "HostedToolRaw",
     "HostedToolSupport",
@@ -192,6 +196,9 @@ __all__ = [
     "create_runtime_with_default_providers",
     "dataclass_from_dict",
     "dataclass_to_dict",
+    "google_application_default_bigquery_auth",
+    "google_bigquery_mcp_toolset",
+    "google_maps_mcp_toolset",
     "prepare_agent_spec",
     "provider_ref_for_model",
     "register_default_model_providers",
@@ -200,3 +207,32 @@ __all__ = [
     "workspace_agent_from_dict",
     "workspace_agent_to_dict",
 ]
+
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "GoogleBigQueryMCPAuth": (
+        "agent_runtime.integrations",
+        "GoogleBigQueryMCPAuth",
+    ),
+    "google_application_default_bigquery_auth": (
+        "agent_runtime.integrations",
+        "google_application_default_bigquery_auth",
+    ),
+    "google_bigquery_mcp_toolset": (
+        "agent_runtime.integrations",
+        "google_bigquery_mcp_toolset",
+    ),
+    "google_maps_mcp_toolset": (
+        "agent_runtime.integrations",
+        "google_maps_mcp_toolset",
+    ),
+}
+
+
+def __getattr__(name: str) -> Any:
+    try:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
+    value = getattr(import_module(module_name), attr_name)
+    globals()[name] = value
+    return value

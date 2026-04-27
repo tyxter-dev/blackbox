@@ -327,6 +327,30 @@ Runnable scripts live under `examples/`:
 - `examples/local_agent_with_tool.py` — local agent driving a tool-call loop end-to-end.
 - `examples/openai_responses_run.py` — provider-native OpenAI Responses streaming
   (requires `OPENAI_API_KEY` and `pip install -e .[openai]`).
+- `examples/launchmybakery.py` — Google Maps and BigQuery remote MCP toolsets
+  rebuilt from Google's Launch My Bakery demo (requires Google ADC,
+  `MAPS_API_KEY`, and a provider with remote MCP support).
+
+## Ready-To-Use Integrations
+
+Common MCP integrations can be created from small factories instead of
+hand-writing `MCPServerSpec` blocks in every app. The helpers stay atomic:
+applications compose separate integrations for their own workflows.
+
+```python
+from agent_runtime.integrations import google_bigquery_mcp_toolset
+
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Summarize sales in the bakery dataset.",
+    toolsets=[google_bigquery_mcp_toolset(dataset="mcp_bakery")],
+)
+```
+
+The Google helpers currently include `google_maps_mcp_toolset` and
+`google_bigquery_mcp_toolset`. They read `MAPS_API_KEY`,
+`GOOGLE_CLOUD_PROJECT`, and Google Application Default Credentials when
+values are not passed explicitly.
 
 ## OpenAI Responses-native model provider
 

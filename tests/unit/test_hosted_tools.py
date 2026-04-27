@@ -64,6 +64,7 @@ def test_remote_mcp_serializes_for_openai() -> None:
         server_url="https://mcp.example.com/sse",
         server_description="GitHub MCP server",
         authorization="token",
+        headers={"X-Trace": "trace-1"},
         allowed_tools=["list_issues"],
         require_approval="never",
     )
@@ -74,6 +75,7 @@ def test_remote_mcp_serializes_for_openai() -> None:
         "server_url": "https://mcp.example.com/sse",
         "server_description": "GitHub MCP server",
         "authorization": "token",
+        "headers": {"X-Trace": "trace-1"},
         "allowed_tools": ["list_issues"],
         "require_approval": "never",
     }
@@ -119,6 +121,18 @@ def test_remote_mcp_rejects_openai_denylist() -> None:
         to_openai_tool(spec)
 
 
+def test_remote_mcp_rejects_openai_duplicate_authorization_header() -> None:
+    spec = RemoteMCP(
+        server_label="github",
+        server_url="https://mcp.example.com/sse",
+        authorization="token",
+        headers={"Authorization": "Bearer token"},
+    )
+
+    with pytest.raises(UnsupportedFeatureError, match=r"headers\.Authorization"):
+        to_openai_tool(spec)
+
+
 def test_remote_mcp_serializes_for_anthropic() -> None:
     spec = RemoteMCP(
         server_label="github",
@@ -150,6 +164,19 @@ def test_remote_mcp_serializes_for_anthropic() -> None:
         "cache_control": {"type": "ephemeral"},
     }
     assert anthropic_beta_values([spec]) == ["mcp-client-2025-11-20"]
+
+
+def test_remote_mcp_rejects_anthropic_headers() -> None:
+    spec = RemoteMCP(
+        server_label="github",
+        server_url="https://mcp.example.com/sse",
+        headers={"X-Trace": "trace-1"},
+    )
+
+    with pytest.raises(UnsupportedFeatureError, match="custom headers"):
+        anthropic_mcp_servers([spec])
+    with pytest.raises(UnsupportedFeatureError, match="custom headers"):
+        to_anthropic_tool(spec)
 
 
 def test_gemini_web_search_and_unsupported_tools() -> None:

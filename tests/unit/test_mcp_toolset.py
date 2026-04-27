@@ -42,6 +42,7 @@ def test_remote_http_with_capability_routes_provider_native() -> None:
             name="github",
             transport="streamable_http",
             url="https://mcp.example.com/mcp",
+            headers={"X-Trace": "trace-1"},
             allowed_tools=["list_issues"],
             authorization="Bearer token",
             require_approval="never",
@@ -57,9 +58,44 @@ def test_remote_http_with_capability_routes_provider_native() -> None:
 
     assert route == "provider_native"
     assert remote.server_label == "github"
+    assert remote.headers == {"X-Trace": "trace-1"}
     assert remote.allowed_tools == ["list_issues"]
     assert remote.authorization == "Bearer token"
     assert remote.require_approval == "never"
+
+
+def test_provider_extra_headers_merge_with_server_headers() -> None:
+    toolset = MCPToolset(
+        MCPServerSpec(
+            name="github",
+            transport="streamable_http",
+            url="https://mcp.example.com/mcp",
+            headers={"X-Trace": "trace-1"},
+        ),
+        provider_extra={"headers": {"X-Provider": "provider-1"}},
+    )
+
+    remote = to_remote_mcp(toolset)
+
+    assert remote.headers == {"X-Trace": "trace-1", "X-Provider": "provider-1"}
+    assert "headers" not in remote.extra
+
+
+def test_provider_extra_authorization_overrides_server_authorization() -> None:
+    toolset = MCPToolset(
+        MCPServerSpec(
+            name="bigquery",
+            transport="streamable_http",
+            url="https://bigquery.googleapis.com/mcp",
+            authorization="Bearer runtime-token",
+        ),
+        provider_extra={"authorization": "provider-token"},
+    )
+
+    remote = to_remote_mcp(toolset)
+
+    assert remote.authorization == "provider-token"
+    assert "authorization" not in remote.extra
 
 
 def test_remote_http_without_capability_routes_local_in_auto() -> None:

@@ -162,6 +162,7 @@ class RemoteMCP:
     connector_id: str | None = None
     server_description: str | None = None
     authorization: str | None = None
+    headers: dict[str, str] = field(default_factory=dict)
     allowed_tools: list[str] | dict[str, Any] | None = None
     denied_tools: list[str] | None = None
     require_approval: MCPApprovalPolicy | None = None
@@ -338,6 +339,15 @@ def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
             payload["server_description"] = spec.server_description
         if spec.authorization is not None:
             payload["authorization"] = spec.authorization
+        if spec.headers:
+            if spec.authorization is not None and any(
+                key.lower() == "authorization" for key in spec.headers
+            ):
+                raise UnsupportedFeatureError(
+                    "OpenAI RemoteMCP mapping cannot set both authorization "
+                    "and headers.Authorization."
+                )
+            payload["headers"] = dict(spec.headers)
         if spec.allowed_tools is not None:
             payload["allowed_tools"] = (
                 list(spec.allowed_tools)
@@ -448,6 +458,10 @@ def to_anthropic_tool(spec: HostedToolSpec, *, model: str | None = None) -> dict
             "name": spec.name,
         }
     if isinstance(spec, RemoteMCP):
+        if spec.headers:
+            raise UnsupportedFeatureError(
+                "Anthropic RemoteMCP mapping does not support custom headers."
+            )
         if spec.server_url is None:
             raise UnsupportedFeatureError("Anthropic RemoteMCP mapping requires server_url.")
         mcp_payload: dict[str, Any] = {
@@ -504,6 +518,10 @@ def anthropic_mcp_servers(specs: list[HostedToolSpec]) -> list[dict[str, Any]]:
     for spec in specs:
         if not isinstance(spec, RemoteMCP):
             continue
+        if spec.headers:
+            raise UnsupportedFeatureError(
+                "Anthropic RemoteMCP mapping does not support custom headers."
+            )
         if spec.server_url is None:
             raise UnsupportedFeatureError("Anthropic RemoteMCP mapping requires server_url.")
         server: dict[str, Any] = {

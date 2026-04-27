@@ -71,6 +71,11 @@ def to_remote_mcp(toolset: MCPToolset) -> RemoteMCP:
     connector_id = _pop_optional_str(extra, "connector_id")
     tool_configs = _pop_dict(extra, "tool_configs")
     cache_control = _pop_dict(extra, "cache_control")
+    headers = {str(key): str(value) for key, value in server.headers.items()}
+    provider_headers = _pop_dict(extra, "headers")
+    if provider_headers:
+        headers.update({str(key): str(value) for key, value in provider_headers.items()})
+    authorization = _pop_optional_str(extra, "authorization") or server.authorization
     defer_loading = extra.pop("defer_loading", None)
     require_approval = cast(
         Literal["always", "never"] | None,
@@ -81,7 +86,8 @@ def to_remote_mcp(toolset: MCPToolset) -> RemoteMCP:
         server_url=server.url,
         connector_id=connector_id,
         server_description=toolset.description,
-        authorization=server.authorization,
+        authorization=authorization,
+        headers=headers,
         allowed_tools=toolset.allowed_tools
         if toolset.allowed_tools is not None
         else server.allowed_tools,
