@@ -33,6 +33,14 @@ from agent_runtime.core.errors import (
 )
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import RunItem
+from agent_runtime.core.prompts import (
+    PromptBundle,
+    PromptComposer,
+    PromptFragment,
+    PromptFragmentRegistry,
+    PromptMode,
+    PromptSpec,
+)
 from agent_runtime.core.results import (
     AgentResult,
     AgentSessionResult,
@@ -41,10 +49,18 @@ from agent_runtime.core.results import (
     OutputStrategy,
     ToolPayload,
 )
+from agent_runtime.core.run_plan import (
+    DataSourceRef,
+    DynamicToolLoadingSpec,
+    ResolvedMCPToolset,
+    ResolvedRunSpec,
+    ResolvedTool,
+    resolved_hosted_tools,
+)
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
-from agent_runtime.hosted_tools import HostedToolHandlers, HostedToolSpec
+from agent_runtime.hosted_tools import HostedToolHandlers, HostedToolSpec, hosted_tool_kind
 from agent_runtime.mcp import MCPConnector, MCPToolset, resolve_mcp_route, to_remote_mcp
 from agent_runtime.models.capability_validation import (
     resolve_output_strategy,
@@ -291,6 +307,9 @@ class ModelRuntime:
         workspace_metadata = _workspace_metadata_from_events(events)
         if workspace_metadata:
             metadata["workspaces"] = workspace_metadata
+        prompt_metadata = _prompt_metadata_from_events(events)
+        if prompt_metadata:
+            metadata["prompt"] = prompt_metadata
         trace_metadata = trace_metadata_from_events(events, metadata=metadata)
         if trace_metadata["spans"]:
             metadata["trace"] = trace_metadata
@@ -935,6 +954,19 @@ class ChatRuntimeFacade:
 
 
 @dataclass(slots=True)
+class PromptRuntimeFacade:
+    """Dry-run prompt composition facade over ``AgentRuntime.plan_run``."""
+
+    runtime: Any
+
+    async def build(self, **kwargs: Any) -> PromptBundle:
+        plan = await self.runtime.plan_run(**kwargs)
+        if plan.prompt is None:
+            raise ConfigurationError("Prompt plan did not produce a prompt bundle.")
+        return plan.prompt
+
+
+@dataclass(slots=True)
 class ToolRuntimeFacade:
     """High-level facade exposing the local tool registry on AgentRuntime.
 
@@ -959,6 +991,7 @@ class ToolRuntimeFacade:
         tags: list[str] | None = None,
         blocking: bool = False,
         metadata: dict[str, Any] | None = None,
+        prompt_fragments: list[PromptFragment] | None = None,
     ) -> ToolDefinition:
         return self.registry.register(
             function,
@@ -969,6 +1002,7 @@ class ToolRuntimeFacade:
             tags=tags,
             blocking=blocking,
             metadata=metadata,
+            prompt_fragments=prompt_fragments,
         )
 
     def get(self, name: str) -> ToolDefinition:
@@ -1168,6 +1202,9 @@ class AgentRuntime:
             model_catalog=self.model_catalog,
             provider_cache_store=self.provider_cache_store,
         )
+        self.prompt_fragments = PromptFragmentRegistry()
+        self.prompt_composer = PromptComposer(self.prompt_fragments)
+        self.prompts = PromptRuntimeFacade(self)
         self.chat = ChatRuntimeFacade(self.models)
         self.workspaces = WorkspaceRuntimeFacade()
         self.tools = ToolRuntimeFacade()
@@ -1218,6 +1255,163 @@ class AgentRuntime:
     ) -> ModelCapabilityProfile:
         return self.models.capabilities(provider, model=model)
 
+    async def plan_run(
+        self,
+        *,
+        provider: str,
+        input: str,
+        model: str | None = None,
+        tools: list[str] | None = None,
+        tool_session: ToolSession | None = None,
+        instructions: str | None = None,
+        prompt: PromptSpec | None = None,
+        prompt_mode: PromptMode | None = None,
+        channel: str | None = None,
+        output_schema: OutputSchema | None = None,
+        output_strategy: OutputStrategy | None = None,
+        output_spec: OutputSpec | None = None,
+        hosted_tools: list[HostedToolSpec] | None = None,
+        toolsets: list[MCPToolset] | None = None,
+        cache: ModelCacheControl | None = None,
+        tool_search: ToolSearchControl | None = None,
+        dynamic_loading: DynamicToolLoadingSpec | None = None,
+        data_sources: list[DataSourceRef] | None = None,
+        workspace: Any | None = None,
+        workspace_provider: Any | None = None,
+        workspace_policy: Any = None,
+        workspace_prefix: str = "workspace",
+        policy: Any = None,
+    ) -> ResolvedRunSpec:
+        """Resolve a run without executing it and return the prompt/tool plan."""
+        provider_ref = ProviderRef.parse(provider)
+        model_name = model or provider_ref.resource
+        if not model_name:
+            raise ValueError("model must be provided explicitly or as 'provider/model'.")
+        adapter = self.registry.get_model(provider_ref.provider_key)
+        capability_profile = get_model_capability_profile(adapter, model_name)
+        effective_output_schema = output_schema
+        effective_output_strategy = output_strategy
+        if output_spec is not None:
+            effective_output_schema = build_output_schema(output_spec)
+            effective_output_strategy = output_strategy or output_spec.strategy
+        if effective_output_schema is not None and effective_output_strategy is not None:
+            effective_output_strategy = resolve_output_strategy(
+                profile=capability_profile,
+                requested=effective_output_strategy,
+                fallback=output_spec.fallback if output_spec is not None else "posthoc_parse",
+            )
+            if effective_output_strategy == "posthoc_parse":
+                effective_output_schema = None
+
+        effective_tool_session = tool_session
+        effective_tools = list(tools or [])
+        effective_hosted_tools = list(hosted_tools or [])
+        resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
+        active_mcp_connectors: list[MCPConnector] = []
+        opened_workspace: tuple[Any, Any, bool] | None = None
+        try:
+            if workspace is not None:
+                effective_tool_session = (
+                    ToolSession.from_registry(tool_session.registry)
+                    if tool_session is not None
+                    else self.tools.session()
+                )
+                workspace_provider_obj, workspace_ref, should_close = await self._open_runtime_workspace(
+                    workspace,
+                    provider=workspace_provider,
+                    policy=workspace_policy or policy,
+                )
+                opened_workspace = (workspace_provider_obj, workspace_ref, should_close)
+                registered_workspace_tools = effective_tool_session.register_workspace(
+                    workspace_provider_obj,
+                    workspace_ref,
+                    prefix=workspace_prefix,
+                )
+                effective_tools.extend(tool.name for tool in registered_workspace_tools)
+
+            for mcp_toolset in toolsets or []:
+                route = resolve_mcp_route(
+                    provider_ref,
+                    mcp_toolset,
+                    capability_profile,
+                    policy=policy,
+                )
+                if route == "provider_native":
+                    effective_hosted_tools.append(to_remote_mcp(mcp_toolset))
+                    resolved_mcp_toolsets.append(
+                        _resolved_mcp_toolset(mcp_toolset, route="provider_native")
+                    )
+                    continue
+                effective_tool_session = (
+                    ToolSession.from_registry(effective_tool_session.registry)
+                    if effective_tool_session is not None
+                    else self.tools.session()
+                )
+                connector = MCPConnector(
+                    [mcp_toolset.server_for_local_dispatch()],
+                    policy=None,
+                )
+                registered_mcp_tools = await connector.register_runtime_tools(
+                    effective_tool_session.registry
+                )
+                effective_tools.extend(tool.name for tool in registered_mcp_tools)
+                resolved_mcp_toolsets.append(
+                    _resolved_mcp_toolset(
+                        mcp_toolset,
+                        route="local",
+                        allowed_tools=[tool.name for tool in registered_mcp_tools],
+                    )
+                )
+                active_mcp_connectors.append(connector)
+
+            tool_definitions = self._tool_payload(
+                effective_tools,
+                tool_session=effective_tool_session,
+            )
+            if (
+                effective_output_schema is not None
+                and effective_output_strategy == "finalizer_tool"
+            ):
+                tool_definitions.append(_finalizer_tool_payload(effective_output_schema))
+
+            prompt_spec = _resolve_prompt_spec(
+                prompt,
+                prompt_mode=prompt_mode,
+                channel=channel,
+            )
+            plan = self._resolved_run_spec(
+                provider_ref=provider_ref,
+                model_name=model_name,
+                capability_profile=capability_profile,
+                input=input,
+                instructions=instructions,
+                prompt_spec=prompt_spec,
+                tool_definitions=tool_definitions,
+                effective_hosted_tools=effective_hosted_tools,
+                mcp_toolsets=resolved_mcp_toolsets,
+                workspace=opened_workspace[1] if opened_workspace is not None else None,
+                output_spec=output_spec,
+                output_strategy=effective_output_strategy,
+                cache=cache,
+                dynamic_loading=dynamic_loading
+                or _dynamic_loading_from_controls(
+                    tool_search=tool_search,
+                    hosted_tools=effective_hosted_tools,
+                    mcp_toolsets=resolved_mcp_toolsets,
+                ),
+                data_sources=data_sources,
+                tool_session=effective_tool_session,
+            )
+            plan.prompt = self.prompt_composer.build(plan, prompt_spec)
+            return plan
+        finally:
+            if opened_workspace is not None:
+                workspace_provider_obj, workspace_ref, should_close = opened_workspace
+                if should_close:
+                    await workspace_provider_obj.close(workspace_ref)
+            for connector in active_mcp_connectors:
+                await connector.stop()
+
     async def stream(
         self,
         *,
@@ -1234,6 +1428,10 @@ class AgentRuntime:
         max_iterations: int = 8,
         mock_tools: bool = False,
         provider_state: ProviderState | None = None,
+        instructions: str | None = None,
+        prompt: PromptSpec | None = None,
+        prompt_mode: PromptMode | None = None,
+        channel: str | None = None,
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
@@ -1241,8 +1439,10 @@ class AgentRuntime:
         hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
         tool_search: ToolSearchControl | None = None,
+        dynamic_loading: DynamicToolLoadingSpec | None = None,
         compaction: CompactionControl | None = None,
         modalities: list[str] | None = None,
+        data_sources: list[DataSourceRef] | None = None,
         workspace: Any | None = None,
         workspace_provider: Any | None = None,
         workspace_policy: Any = None,
@@ -1271,6 +1471,7 @@ class AgentRuntime:
         effective_tool_session = tool_session
         effective_tools = list(tools or [])
         effective_hosted_tools = list(hosted_tools or [])
+        resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
         opened_workspace: tuple[Any, Any, bool] | None = None
         if workspace is not None:
@@ -1301,6 +1502,9 @@ class AgentRuntime:
             )
             if route == "provider_native":
                 effective_hosted_tools.append(to_remote_mcp(mcp_toolset))
+                resolved_mcp_toolsets.append(
+                    _resolved_mcp_toolset(mcp_toolset, route="provider_native")
+                )
                 continue
             effective_tool_session = (
                 ToolSession.from_registry(effective_tool_session.registry)
@@ -1315,6 +1519,13 @@ class AgentRuntime:
                 effective_tool_session.registry
             )
             effective_tools.extend(tool.name for tool in registered_mcp_tools)
+            resolved_mcp_toolsets.append(
+                _resolved_mcp_toolset(
+                    mcp_toolset,
+                    route="local",
+                    allowed_tools=[tool.name for tool in registered_mcp_tools],
+                )
+            )
             active_mcp_connectors.append(connector)
 
         tool_definitions = self._tool_payload(effective_tools, tool_session=effective_tool_session)
@@ -1326,6 +1537,42 @@ class AgentRuntime:
             max_concurrent=tool_max_concurrent,
             timeout=tool_timeout,
         )
+        prompt_spec = _resolve_prompt_spec(prompt, prompt_mode=prompt_mode, channel=channel)
+        run_plan = self._resolved_run_spec(
+            provider_ref=provider_ref,
+            model_name=model_name,
+            capability_profile=capability_profile,
+            input=input,
+            instructions=instructions,
+            prompt_spec=prompt_spec,
+            tool_definitions=tool_definitions,
+            effective_hosted_tools=effective_hosted_tools,
+            mcp_toolsets=resolved_mcp_toolsets,
+            workspace=opened_workspace[1] if opened_workspace is not None else None,
+            output_strategy=output_strategy,
+            cache=cache,
+            dynamic_loading=dynamic_loading
+            or _dynamic_loading_from_controls(
+                tool_search=tool_search,
+                hosted_tools=effective_hosted_tools,
+                mcp_toolsets=resolved_mcp_toolsets,
+            ),
+            data_sources=data_sources,
+            tool_session=effective_tool_session,
+        )
+        try:
+            prompt_bundle = self.prompt_composer.build(run_plan, prompt_spec)
+        except Exception:
+            if opened_workspace is not None and not workspace_preserve:
+                workspace_provider_obj, workspace_ref, should_close = opened_workspace
+                if should_close:
+                    await workspace_provider_obj.close(workspace_ref)
+            for connector in active_mcp_connectors:
+                await connector.stop()
+            raise
+        run_plan.prompt = prompt_bundle
+        tool_definitions = [dict(tool.definition) for tool in run_plan.tools]
+        effective_hosted_tools = [tool.spec for tool in run_plan.hosted_tools]
 
         run_id = f"run_{uuid4().hex}"
         trace_context = TraceContext.for_run(run_id)
@@ -1342,6 +1589,7 @@ class AgentRuntime:
                 hosted_tools=effective_hosted_tools,
                 output_schema=output_schema,
                 output_strategy=output_strategy,
+                instructions=prompt_bundle.instructions or None,
                 cache=cache,
                 tool_search=tool_search,
                 compaction=compaction,
@@ -1375,6 +1623,16 @@ class AgentRuntime:
         self._active_loops[run_id] = loop
         try:
             sequence = 0
+            for event in _prompt_events(run_plan, prompt_bundle):
+                stamped = trace_context.stamp(
+                    event,
+                    run_id=run_id,
+                    sequence=sequence,
+                    preserve_sequence=False,
+                )
+                sequence += 1
+                await self.event_store.append(stamped)
+                yield stamped
             if opened_workspace is not None:
                 workspace_provider_obj, _, _ = opened_workspace
                 for event in workspace_provider_obj.drain_events():
@@ -1440,13 +1698,19 @@ class AgentRuntime:
         output_type: type[T] | None = None,
         output_spec: OutputSpec | None = None,
         provider_state: ProviderState | None = None,
+        instructions: str | None = None,
+        prompt: PromptSpec | None = None,
+        prompt_mode: PromptMode | None = None,
+        channel: str | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
         toolsets: list[MCPToolset] | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
         tool_search: ToolSearchControl | None = None,
+        dynamic_loading: DynamicToolLoadingSpec | None = None,
         compaction: CompactionControl | None = None,
         modalities: list[str] | None = None,
+        data_sources: list[DataSourceRef] | None = None,
         workspace: Any | None = None,
         workspace_provider: Any | None = None,
         workspace_policy: Any = None,
@@ -1525,6 +1789,10 @@ class AgentRuntime:
                         max_iterations=max_iterations,
                         mock_tools=mock_tools,
                         provider_state=captured_state,
+                        instructions=instructions,
+                        prompt=prompt,
+                        prompt_mode=prompt_mode,
+                        channel=channel,
                         hosted_tools=hosted_tools,
                         toolsets=toolsets,
                         hosted_tool_handlers=hosted_tool_handlers,
@@ -1532,8 +1800,10 @@ class AgentRuntime:
                         output_strategy=effective_strategy if output_schema is not None else None,
                         cache=cache,
                         tool_search=tool_search,
+                        dynamic_loading=dynamic_loading,
                         compaction=compaction,
                         modalities=modalities,
+                        data_sources=data_sources,
                         workspace=workspace,
                         workspace_provider=workspace_provider,
                         workspace_policy=workspace_policy,
@@ -1654,6 +1924,9 @@ class AgentRuntime:
             workspace_metadata = _workspace_metadata_from_events(events)
             if workspace_metadata:
                 metadata["workspaces"] = workspace_metadata
+            prompt_metadata = _prompt_metadata_from_events(events)
+            if prompt_metadata:
+                metadata["prompt"] = prompt_metadata
             trace_metadata = trace_metadata_from_events(events, metadata=metadata)
             if trace_metadata["spans"]:
                 metadata["trace"] = trace_metadata
@@ -1672,6 +1945,54 @@ class AgentRuntime:
         # Should be unreachable: the loop either returns or re-raises.
         assert last_error is not None
         raise last_error
+
+    def _resolved_run_spec(
+        self,
+        *,
+        provider_ref: ProviderRef,
+        model_name: str,
+        capability_profile: ModelCapabilityProfile,
+        input: object,
+        instructions: str | None,
+        prompt_spec: PromptSpec,
+        tool_definitions: list[dict[str, Any]],
+        effective_hosted_tools: list[HostedToolSpec],
+        mcp_toolsets: list[ResolvedMCPToolset],
+        workspace: Any | None,
+        output_spec: OutputSpec | None = None,
+        output_strategy: OutputStrategy | str | None = None,
+        cache: ModelCacheControl | None = None,
+        dynamic_loading: DynamicToolLoadingSpec | None = None,
+        data_sources: list[DataSourceRef] | None = None,
+        tool_session: ToolSession | None = None,
+    ) -> ResolvedRunSpec:
+        registry = tool_session.registry if tool_session is not None else self.tools.registry
+        available_tool_ids = [tool.name for tool in registry.all_tools()]
+        for tool_name in _tool_names(tool_definitions):
+            if tool_name not in available_tool_ids:
+                available_tool_ids.append(tool_name)
+        return ResolvedRunSpec(
+            provider=provider_ref.provider_key,
+            model=model_name,
+            provider_profile=capability_profile,
+            input=input,
+            base_instructions=instructions,
+            channel=prompt_spec.channel,
+            tools=_resolved_tools(tool_definitions, registry=registry),
+            hosted_tools=resolved_hosted_tools(effective_hosted_tools),
+            mcp_toolsets=mcp_toolsets,
+            workspace=workspace,
+            output_spec=output_spec,
+            output_strategy=output_strategy,
+            dynamic_loading=dynamic_loading,
+            cache=cache,
+            data_sources=list(data_sources or []),
+            available_tool_ids=available_tool_ids,
+            metadata={
+                "prompt_mode": prompt_spec.mode,
+                "prompt_parity": prompt_spec.parity,
+            },
+        )
 
     def _tool_payload(
         self, names: list[str] | None, *, tool_session: ToolSession | None = None
@@ -1732,6 +2053,179 @@ def _resolve_output_spec(
     if output_spec is not None:
         return output_spec
     return OutputSpec(schema=output_type, strategy="posthoc_parse")
+
+
+def _resolve_prompt_spec(
+    prompt: PromptSpec | None,
+    *,
+    prompt_mode: PromptMode | None,
+    channel: str | None,
+) -> PromptSpec:
+    prompt_spec = prompt or PromptSpec()
+    if prompt_mode is not None:
+        prompt_spec = replace(prompt_spec, mode=prompt_mode)
+    if channel is not None:
+        prompt_spec = replace(prompt_spec, channel=channel)
+    return prompt_spec
+
+
+def _resolved_tools(
+    tool_definitions: list[dict[str, Any]],
+    *,
+    registry: ToolRegistry,
+) -> list[ResolvedTool]:
+    registered = {tool.name: tool for tool in registry.all_tools()}
+    resolved: list[ResolvedTool] = []
+    for payload in tool_definitions:
+        name = payload.get("name")
+        if not isinstance(name, str):
+            continue
+        definition = registered.get(name)
+        metadata = payload.get("metadata")
+        payload_metadata = metadata if isinstance(metadata, dict) else {}
+        resolved.append(
+            ResolvedTool(
+                name=name,
+                definition=payload,
+                tags=frozenset(definition.tags if definition is not None else ()),
+                category=definition.category if definition is not None else None,
+                metadata={
+                    **dict(definition.metadata if definition is not None else {}),
+                    **payload_metadata,
+                },
+                prompt_fragments=tuple(
+                    definition.prompt_fragments if definition is not None else ()
+                ),
+                hidden=payload_metadata.get("agent_runtime_hidden") is True,
+            )
+        )
+    return resolved
+
+
+def _resolved_mcp_toolset(
+    toolset: MCPToolset,
+    *,
+    route: str,
+    allowed_tools: list[str] | None = None,
+) -> ResolvedMCPToolset:
+    configured_allowed = (
+        toolset.allowed_tools
+        if toolset.allowed_tools is not None
+        else toolset.server.allowed_tools
+    )
+    tools = allowed_tools if allowed_tools is not None else configured_allowed
+    return ResolvedMCPToolset(
+        server_label=toolset.server.name,
+        route=route,
+        allowed_tools=tuple(tools or ()),
+        metadata={
+            "mode": toolset.mode,
+            "transport": toolset.server.transport,
+            "description": toolset.description,
+        },
+    )
+
+
+def _dynamic_loading_from_controls(
+    *,
+    tool_search: ToolSearchControl | None,
+    hosted_tools: list[HostedToolSpec],
+    mcp_toolsets: list[ResolvedMCPToolset],
+) -> DynamicToolLoadingSpec | None:
+    hosted_kinds = {hosted_tool_kind(tool) for tool in hosted_tools}
+    if tool_search is not None or "tool_search" in hosted_kinds:
+        return DynamicToolLoadingSpec(mode="tool_search")
+    if any(toolset.route == "provider_native" for toolset in mcp_toolsets):
+        return DynamicToolLoadingSpec(mode="provider_native_mcp")
+    return None
+
+
+def _prompt_events(plan: ResolvedRunSpec, bundle: PromptBundle) -> list[AgentEvent]:
+    events = [
+        AgentEvent(
+            type=EventTypes.PROMPT_PLAN_CREATED,
+            provider=plan.provider,
+            data={
+                "provider": plan.provider,
+                "model": plan.model,
+                "mode": bundle.metadata.get("mode"),
+                "channel": bundle.metadata.get("channel"),
+                "effective_tool_ids": list(plan.effective_tool_ids),
+                "hosted_tool_kinds": list(plan.hosted_tool_kinds),
+                "mcp_servers": list(plan.mcp_servers),
+                "output_strategy": plan.output_strategy,
+                "dynamic_loading_mode": (
+                    plan.dynamic_loading.mode if plan.dynamic_loading is not None else None
+                ),
+            },
+        )
+    ]
+    events.extend(
+        AgentEvent(
+            type=EventTypes.PROMPT_FRAGMENT_SELECTED,
+            provider=plan.provider,
+            data={
+                "fragment_id": item.fragment.id,
+                "source": item.fragment.source,
+                "priority": item.fragment.priority,
+                "cacheable": item.fragment.cacheable,
+                "placement": item.fragment.placement,
+                "matched_on": dict(item.matched_on),
+            },
+        )
+        for item in bundle.selected_fragments
+    )
+    events.extend(
+        AgentEvent(
+            type=EventTypes.PROMPT_FRAGMENT_SKIPPED,
+            provider=plan.provider,
+            data={
+                "fragment_id": item.fragment.id,
+                "source": item.fragment.source,
+                "reason": item.reason,
+                "details": dict(item.details),
+            },
+        )
+        for item in bundle.skipped_fragments
+    )
+    events.extend(
+        AgentEvent(
+            type=EventTypes.PROMPT_CACHE_SECTION_CREATED,
+            provider=plan.provider,
+            data={
+                "section_id": section.id,
+                "cacheable": section.cacheable,
+                "content_length": len(section.content),
+            },
+        )
+        for section in bundle.cache_sections
+    )
+    events.append(
+        AgentEvent(
+            type=EventTypes.PROMPT_PARITY_CHECKED,
+            provider=plan.provider,
+            data={
+                "status": bundle.metadata.get("parity"),
+                "issues": [issue.to_dict() for issue in bundle.parity_issues],
+                "parity_fingerprint": bundle.parity_fingerprint,
+            },
+        )
+    )
+    events.append(
+        AgentEvent(
+            type=EventTypes.PROMPT_BUNDLE_CREATED,
+            provider=plan.provider,
+            data={
+                "section_ids": [section.id for section in bundle.sections],
+                "fragment_ids": [item.fragment.id for item in bundle.selected_fragments],
+                "effective_tool_ids": list(bundle.effective_tool_ids),
+                "prompt_fingerprint": bundle.prompt_fingerprint,
+                "parity_fingerprint": bundle.parity_fingerprint,
+                "metadata": dict(bundle.metadata),
+            },
+        )
+    )
+    return events
 
 
 def _agent_task_spec(
@@ -2121,6 +2615,15 @@ def _workspace_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
                 if artifact.id not in snapshots:
                     snapshots.append(artifact.id)
     return workspaces
+
+
+def _prompt_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
+    for event in reversed(events):
+        if event.type != EventTypes.PROMPT_BUNDLE_CREATED:
+            continue
+        metadata = event.data.get("metadata")
+        return dict(metadata) if isinstance(metadata, dict) else {}
+    return {}
 
 
 async def _provider_cache_metadata(

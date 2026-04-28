@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agent_runtime.core.errors import ToolExecutionError
+from agent_runtime.core.prompts import PromptFragment
 from agent_runtime.tools.results import ToolResult
 
 ToolCallable = Callable[..., ToolResult | str | dict[str, Any] | Any]
@@ -21,6 +22,7 @@ class ToolDefinition:
     tags: list[str] = field(default_factory=list)
     blocking: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
+    prompt_fragments: list[PromptFragment] = field(default_factory=list)
 
 
 class ToolRegistry:
@@ -44,6 +46,7 @@ class ToolRegistry:
         tags: list[str] | None = None,
         blocking: bool = False,
         metadata: dict[str, Any] | None = None,
+        prompt_fragments: list[PromptFragment] | None = None,
     ) -> ToolDefinition:
         tool_name = name or function.__name__
         definition = ToolDefinition(
@@ -55,6 +58,7 @@ class ToolRegistry:
             tags=tags or [],
             blocking=blocking,
             metadata=metadata or {},
+            prompt_fragments=prompt_fragments or [],
         )
         self._tools[tool_name] = definition
         return definition

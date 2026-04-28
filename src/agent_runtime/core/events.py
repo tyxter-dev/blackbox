@@ -121,6 +121,13 @@ class EventTypes:
     TOOL_SEARCH_REQUESTED = "tool_search.requested"
     TOOL_SEARCH_COMPLETED = "tool_search.completed"
 
+    PROMPT_PLAN_CREATED = "prompt.plan.created"
+    PROMPT_FRAGMENT_SELECTED = "prompt.fragment.selected"
+    PROMPT_FRAGMENT_SKIPPED = "prompt.fragment.skipped"
+    PROMPT_BUNDLE_CREATED = "prompt.bundle.created"
+    PROMPT_PARITY_CHECKED = "prompt.parity.checked"
+    PROMPT_CACHE_SECTION_CREATED = "prompt.cache_section.created"
+
     HOSTED_TOOL_CALL_REQUESTED = "hosted_tool.call.requested"
     HOSTED_TOOL_CALL_STARTED = "hosted_tool.call.started"
     HOSTED_TOOL_CALL_COMPLETED = "hosted_tool.call.completed"

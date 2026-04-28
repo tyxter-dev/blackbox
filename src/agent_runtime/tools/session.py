@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from agent_runtime.core.prompts import PromptFragment
 from agent_runtime.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
 from agent_runtime.tools.runtime import ToolRuntime
 
@@ -29,6 +30,7 @@ class ToolSession:
         tags: list[str] | None = None,
         blocking: bool = False,
         metadata: dict[str, Any] | None = None,
+        prompt_fragments: list[PromptFragment] | None = None,
     ) -> ToolDefinition:
         return self.registry.register(
             function,
@@ -39,6 +41,7 @@ class ToolSession:
             tags=tags,
             blocking=blocking,
             metadata=metadata,
+            prompt_fragments=prompt_fragments,
         )
 
     def get(self, name: str) -> ToolDefinition:
