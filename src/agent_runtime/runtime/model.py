@@ -31,7 +31,7 @@ from agent_runtime.providers.model_adapters.capability_validation import (
     validate_turn_request_capabilities,
 )
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
-from agent_runtime.runtime._helpers import (
+from agent_runtime.runtime.event_metadata import (
     _attach_accounting_metadata,
     _event_usage,
     _hosted_tool_metadata_from_events,

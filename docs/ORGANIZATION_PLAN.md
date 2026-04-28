@@ -19,7 +19,8 @@ Scope: package, test, and documentation organization only
 - Phase 4 is in progress: output-specific runtime helpers have been split into
   `runtime/output.py`, and workspace event/result helpers have been split into
   `runtime/workspace_results.py`. Run-planning helpers have been split into
-  `runtime/run_planning.py`.
+  `runtime/run_planning.py`, and event/accounting metadata helpers have been
+  split into `runtime/event_metadata.py`.
 - Phases 5-6 remain follow-up work because they involve larger file/package
   moves that should land one package group at a time.
 

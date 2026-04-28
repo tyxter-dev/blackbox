@@ -29,9 +29,11 @@ from agent_runtime.runtime._helpers import (
     _agent_task_spec,
     _append_artifact_unique,
     _artifact_from_event,
+    _provider_state_from_session,
+)
+from agent_runtime.runtime.event_metadata import (
     _attach_accounting_metadata,
     _event_usage,
-    _provider_state_from_session,
     _tool_usage_from_events,
 )
 from agent_runtime.runtime.output import _resolve_output_spec, _validate_output

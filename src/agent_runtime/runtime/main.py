@@ -45,7 +45,10 @@ from agent_runtime.planning.run_plan import (
 from agent_runtime.providers.base import CompactionControl, ModelCacheControl, ToolSearchControl
 from agent_runtime.providers.model_adapters.capability_validation import resolve_output_strategy
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
-from agent_runtime.runtime._helpers import (
+from agent_runtime.runtime.agents import AgentRuntimeFacade
+from agent_runtime.runtime.caches import ProviderCacheRuntime
+from agent_runtime.runtime.chat import ChatRuntimeFacade
+from agent_runtime.runtime.event_metadata import (
     _attach_accounting_metadata,
     _event_usage,
     _hosted_tool_metadata_from_events,
@@ -55,9 +58,6 @@ from agent_runtime.runtime._helpers import (
     _tool_names,
     _tool_usage_from_events,
 )
-from agent_runtime.runtime.agents import AgentRuntimeFacade
-from agent_runtime.runtime.caches import ProviderCacheRuntime
-from agent_runtime.runtime.chat import ChatRuntimeFacade
 from agent_runtime.runtime.model import ModelRuntime
 from agent_runtime.runtime.output import (
     _FINALIZER_TOOL_NAME,

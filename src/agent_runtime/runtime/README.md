@@ -32,6 +32,8 @@ tool facade access, and provider cache lifecycle helpers.
 - `prompting.py`: prompt dry-run facade.
 - `tools.py`: local tool registry facade.
 - `caches.py`: provider cache lifecycle facade.
+- `event_metadata.py`: MCP, hosted-tool, prompt, cache, tool-usage, and
+  accounting metadata extraction from runtime events.
 - `output.py`: output spec resolution, finalizer payloads, repair prompts, and
   output validation.
 - `run_planning.py`: prompt spec normalization, resolved tool/MCP planning, and
