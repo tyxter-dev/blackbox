@@ -23,6 +23,22 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "agent_runtime.integrations.google",
         "google_maps_mcp_toolset",
     ),
+    "OpenAIVectorStoreDocument": (
+        "agent_runtime.integrations.openai",
+        "OpenAIVectorStoreDocument",
+    ),
+    "OpenAIVectorStoreHandle": (
+        "agent_runtime.integrations.openai",
+        "OpenAIVectorStoreHandle",
+    ),
+    "create_openai_vector_store": (
+        "agent_runtime.integrations.openai",
+        "create_openai_vector_store",
+    ),
+    "temporary_openai_vector_store": (
+        "agent_runtime.integrations.openai",
+        "temporary_openai_vector_store",
+    ),
 }
 
 __all__ = [
@@ -30,9 +46,13 @@ __all__ = [
     "BIGQUERY_SCOPE",
     "MAPS_MCP_URL",
     "GoogleBigQueryMCPAuth",
+    "OpenAIVectorStoreDocument",
+    "OpenAIVectorStoreHandle",
+    "create_openai_vector_store",
     "google_application_default_bigquery_auth",
     "google_bigquery_mcp_toolset",
     "google_maps_mcp_toolset",
+    "temporary_openai_vector_store",
 ]
 
 

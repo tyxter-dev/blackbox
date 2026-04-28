@@ -47,6 +47,7 @@ from agent_runtime.core.results import (
     AgentResult,
     AgentSessionResult,
     AgentSessionResultStatus,
+    OutputSpec,
     ToolPayload,
 )
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
@@ -223,7 +224,10 @@ __all__ = [
     "ModelRoute",
     "ModelRuntime",
     "ModelUsage",
+    "OpenAIVectorStoreDocument",
+    "OpenAIVectorStoreHandle",
     "OutputSchema",
+    "OutputSpec",
     "OutputValidationError",
     "PromptBundle",
     "PromptComposer",
@@ -297,6 +301,7 @@ __all__ = [
     "WorkspaceAgentVersion",
     "WorkspaceRuntimeFacade",
     "assert_prompt_tool_parity",
+    "create_openai_vector_store",
     "create_runtime_with_default_providers",
     "dataclass_from_dict",
     "dataclass_to_dict",
@@ -309,6 +314,7 @@ __all__ = [
     "register_default_realtime_providers",
     "resolve_model_route",
     "run_workspace_agent",
+    "temporary_openai_vector_store",
     "workspace_agent_from_dict",
     "workspace_agent_to_dict",
 ]
@@ -329,6 +335,22 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "google_maps_mcp_toolset": (
         "agent_runtime.integrations",
         "google_maps_mcp_toolset",
+    ),
+    "OpenAIVectorStoreDocument": (
+        "agent_runtime.integrations",
+        "OpenAIVectorStoreDocument",
+    ),
+    "OpenAIVectorStoreHandle": (
+        "agent_runtime.integrations",
+        "OpenAIVectorStoreHandle",
+    ),
+    "create_openai_vector_store": (
+        "agent_runtime.integrations",
+        "create_openai_vector_store",
+    ),
+    "temporary_openai_vector_store": (
+        "agent_runtime.integrations",
+        "temporary_openai_vector_store",
     ),
 }
 

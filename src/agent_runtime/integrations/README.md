@@ -9,6 +9,8 @@ existing runtime primitives.
 - Integration-specific auth helpers when they produce runtime specs.
 - Small adapters that return MCP specs, toolsets, or provider-neutral runtime
   configuration.
+- Example/demo helpers that create temporary provider resources and return
+  runtime-native specs or handles, such as OpenAI vector stores for `FileSearch`.
 
 ## Does Not Belong Here
 

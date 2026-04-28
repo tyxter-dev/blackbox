@@ -336,6 +336,12 @@ Runnable scripts live under `examples/`:
 - `examples/local_agent_with_tool.py` — local agent driving a tool-call loop end-to-end.
 - `examples/openai_responses_run.py` — provider-native OpenAI Responses streaming
   (requires `OPENAI_API_KEY` and `pip install -e .[openai]`).
+- `examples/model_provider_classification.py` — one-call classification with
+  provider-native structured output.
+- `examples/model_provider_form_fill.py` — one-call extraction into several
+  nested app forms.
+- `examples/model_provider_knowledge_drawer.py` — support drawer answer grounded
+  in a temporary OpenAI vector store and `FileSearch`.
 - `examples/launchmybakery.py` — Google Maps and BigQuery remote MCP toolsets
   rebuilt from Google's Launch My Bakery demo (requires Google ADC,
   `MAPS_API_KEY`, and a provider with remote MCP support).
