@@ -3,11 +3,13 @@ from typing import Any
 
 __all__ = [
     "ToolBudget",
+    "ToolCandidate",
     "ToolCatalog",
     "ToolCatalogEntry",
     "ToolDefinition",
     "ToolRegistry",
     "ToolResult",
+    "ToolRoutingSpec",
     "ToolRuntime",
     "ToolSelection",
     "ToolSession",
@@ -17,8 +19,10 @@ __all__ = [
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ToolCatalog": ("agent_runtime.tools.catalog", "ToolCatalog"),
     "ToolCatalogEntry": ("agent_runtime.tools.catalog", "ToolCatalogEntry"),
+    "ToolCandidate": ("agent_runtime.tools.routing", "ToolCandidate"),
     "ToolDefinition": ("agent_runtime.tools.registry", "ToolDefinition"),
     "ToolBudget": ("agent_runtime.tools.toolsets", "ToolBudget"),
+    "ToolRoutingSpec": ("agent_runtime.tools.routing", "ToolRoutingSpec"),
     "ToolRegistry": ("agent_runtime.tools.registry", "ToolRegistry"),
     "ToolResult": ("agent_runtime.tools.results", "ToolResult"),
     "ToolRuntime": ("agent_runtime.tools.runtime", "ToolRuntime"),

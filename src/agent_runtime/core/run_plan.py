@@ -12,6 +12,7 @@ from agent_runtime.planning.run_plan import (
     ResolvedTool,
     resolved_hosted_tools,
 )
+from agent_runtime.tools.routing import ResolvedToolPlan
 
 __all__ = [
     "DataSourceRef",
@@ -20,5 +21,6 @@ __all__ = [
     "ResolvedMCPToolset",
     "ResolvedRunSpec",
     "ResolvedTool",
+    "ResolvedToolPlan",
     "resolved_hosted_tools",
 ]

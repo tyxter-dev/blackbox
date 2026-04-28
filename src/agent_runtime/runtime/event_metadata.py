@@ -149,6 +149,42 @@ def _tool_choice_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any
     }
 
 
+def _tool_routing_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
+    plans: list[dict[str, Any]] = []
+    late_bound: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    mode: str | None = None
+    for event in events:
+        if event.type == EventTypes.TOOL_ROUTING_COMPLETED:
+            event_mode = event.data.get("mode")
+            if isinstance(event_mode, str):
+                mode = event_mode
+            plans.append(
+                {
+                    "iteration": event.data.get("iteration"),
+                    "selected_refs": list(event.data.get("selected_refs") or []),
+                    "blocked_refs": list(event.data.get("blocked_refs") or []),
+                    "selected_names": list(event.data.get("selected_names") or []),
+                    "fingerprint": event.data.get("fingerprint"),
+                    "candidate_count": event.data.get("candidate_count"),
+                    "selected_count": event.data.get("selected_count"),
+                    "budget": dict(event.data.get("budget") or {}),
+                }
+            )
+        elif event.type == EventTypes.TOOL_ROUTING_LATE_BOUND:
+            late_bound.append(dict(event.data))
+        elif event.type == EventTypes.TOOL_ROUTING_FAILED:
+            failed.append(dict(event.data))
+    if not (plans or late_bound or failed):
+        return {}
+    return {
+        "mode": mode,
+        "plans": plans,
+        "late_bound": late_bound,
+        "failed": failed,
+    }
+
+
 async def _provider_cache_metadata(
     *,
     provider: str | None,

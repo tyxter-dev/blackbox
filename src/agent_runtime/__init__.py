@@ -132,6 +132,7 @@ from agent_runtime.tools.hosted.specs import (
     WebFetch,
     WebSearch,
 )
+from agent_runtime.tools.routing import ResolvedToolPlan, ToolCandidate, ToolRoutingSpec
 from agent_runtime.tools.session import ToolSession
 from agent_runtime.tools.toolsets import ToolBudget, ToolSelection, Toolset
 from agent_runtime.workspace_agents import (
@@ -254,6 +255,7 @@ __all__ = [
     "ResolvedMCPToolset",
     "ResolvedRunSpec",
     "ResolvedTool",
+    "ResolvedToolPlan",
     "RunItem",
     "RunState",
     "SQLiteProviderCacheStore",
@@ -269,11 +271,13 @@ __all__ = [
     "TextEditor",
     "TextPart",
     "ToolBudget",
+    "ToolCandidate",
     "ToolMode",
     "ToolNamespace",
     "ToolPayload",
     "ToolPermission",
     "ToolResultPart",
+    "ToolRoutingSpec",
     "ToolSearch",
     "ToolSearchControl",
     "ToolSelection",

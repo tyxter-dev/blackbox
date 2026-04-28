@@ -114,6 +114,12 @@ class EventTypes:
     TOOL_CALL_COMPLETED = "tool.call.completed"
     TOOL_CALL_FAILED = "tool.call.failed"
 
+    TOOL_ROUTING_STARTED = "tool.routing.started"
+    TOOL_ROUTING_COMPLETED = "tool.routing.completed"
+    TOOL_ROUTING_FAILED = "tool.routing.failed"
+    TOOL_ROUTING_LATE_BOUND = "tool.routing.late_bound"
+    TOOL_SET_CHANGED = "tool.set.changed"
+
     AGENT_TOOL_CALL_STARTED = "agent_tool.call.started"
     AGENT_TOOL_CALL_COMPLETED = "agent_tool.call.completed"
     AGENT_TOOL_CALL_FAILED = "agent_tool.call.failed"

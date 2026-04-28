@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from agent_runtime.core.capabilities import ModelCapabilityProfile
 from agent_runtime.core.results import OutputSpec, OutputStrategy
 from agent_runtime.tools.hosted.specs import HostedToolSpec, hosted_tool_kind
+from agent_runtime.tools.routing import ResolvedToolPlan
 
 if TYPE_CHECKING:
     from agent_runtime.planning.prompts import PromptBundle, PromptFragment
@@ -101,6 +102,7 @@ class ResolvedRunSpec:
     output_spec: OutputSpec | None = None
     output_strategy: OutputStrategy | str | None = None
     dynamic_loading: DynamicToolLoadingSpec | None = None
+    tool_routing_plan: ResolvedToolPlan | None = None
     cache: Any | None = None
 
     # Runtime metadata for selectors, observability, and dry-run inspection.

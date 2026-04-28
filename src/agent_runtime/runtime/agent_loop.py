@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,6 +43,14 @@ from agent_runtime.tools.runtime import ToolRuntime
 from agent_runtime.workspaces.provider import PendingWorkspaceOperation, WorkspaceApprovalRequired
 
 ApprovalPolicy = Callable[[str, dict[str, Any]], bool]
+ToolPlanRefresh = Callable[
+    [int, str | list[Any], ProviderState | None],
+    Awaitable[Iterable[AgentEvent]],
+]
+ToolLateBinder = Callable[
+    [str, int],
+    Awaitable[tuple[bool, Iterable[AgentEvent]]],
+]
 
 
 @dataclass(slots=True)
@@ -82,6 +90,8 @@ class AgentLoop:
     max_iterations: int = 8
     max_tool_calls: int | None = None
     finalizer_tool_name: str | None = None
+    tool_plan_refresh: ToolPlanRefresh | None = None
+    tool_late_binder: ToolLateBinder | None = None
 
     _approvals: dict[str, asyncio.Future[ApprovalDecision]] = field(default_factory=dict)
     _cancelled: bool = False
@@ -108,6 +118,10 @@ class AgentLoop:
                     data={"iteration": iteration},
                 )
                 return
+
+            if self.tool_plan_refresh is not None:
+                for event in await self.tool_plan_refresh(iteration, turn_input, provider_state):
+                    yield event
 
             pending_calls: list[_PendingToolCall] = []
             pending_hosted_calls: list[_PendingHostedToolCall] = []
@@ -289,6 +303,43 @@ class AgentLoop:
             tool_results: list[RunItem | None] = [None] * len(pending_calls)
             allowed_calls: list[tuple[int, _PendingToolCall]] = []
             for index, call in enumerate(pending_calls):
+                if (
+                    tool_runtime.allowed_tools is not None
+                    and call.name not in tool_runtime.allowed_tools
+                ):
+                    late_bound = False
+                    if self.tool_late_binder is not None:
+                        late_bound, late_bind_events = await self.tool_late_binder(
+                            call.name,
+                            iteration,
+                        )
+                        for event in late_bind_events:
+                            yield event
+                    if not late_bound:
+                        tool_results[index] = RunItem(
+                            type=ItemTypes.FUNCTION_RESULT,
+                            provider=provider_id,
+                            status="failed",
+                            data={
+                                "call_id": call.call_id,
+                                "name": call.name,
+                                "error": "tool_not_in_selected_plan",
+                            },
+                        )
+                        yield AgentEvent(
+                            type=EventTypes.TOOL_CHOICE_REJECTED,
+                            provider=provider_id,
+                            session_id=session_id,
+                            item_id=call.call_id,
+                            data={
+                                "call_id": call.call_id,
+                                "name": call.name,
+                                "reason": "tool_not_in_selected_plan",
+                                "checkpoint": "tool_routing",
+                            },
+                        )
+                        continue
+
                 if (
                     self.max_tool_calls is not None
                     and self._tool_calls_used >= self.max_tool_calls

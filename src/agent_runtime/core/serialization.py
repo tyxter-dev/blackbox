@@ -35,6 +35,14 @@ from agent_runtime.core.items import RunItem
 from agent_runtime.core.media import MediaRef
 from agent_runtime.core.raw import RawEnvelope
 from agent_runtime.core.state import ProviderState, RunState
+from agent_runtime.tools.routing import (
+    ResolvedToolPlan,
+    SelectedTool,
+    ToolBudget,
+    ToolCandidate,
+    ToolRoutingSpec,
+    ToolSelectionResult,
+)
 
 _AGENT_EVENT = "AgentEvent"
 _RUN_ITEM = "RunItem"
@@ -50,6 +58,12 @@ _VIDEO_FRAME_PART = "VideoFramePart"
 _FILE_PART = "FilePart"
 _TOOL_RESULT_PART = "ToolResultPart"
 _PROVIDER_NATIVE_PART = "ProviderNativePart"
+_TOOL_BUDGET = "ToolBudget"
+_TOOL_ROUTING_SPEC = "ToolRoutingSpec"
+_TOOL_CANDIDATE = "ToolCandidate"
+_SELECTED_TOOL = "SelectedTool"
+_TOOL_SELECTION_RESULT = "ToolSelectionResult"
+_RESOLVED_TOOL_PLAN = "ResolvedToolPlan"
 
 
 def event_to_dict(
@@ -269,6 +283,81 @@ def _safe_value(value: Any, *, keep_media: bool = False) -> Any:
             "value": _safe_value(value.value, keep_media=keep_media),
             "metadata": _safe_value(value.metadata, keep_media=keep_media),
         }
+    if isinstance(value, ToolBudget):
+        return {
+            "_kind": _TOOL_BUDGET,
+            "max_visible_tools": value.max_visible_tools,
+            "max_schema_tokens": value.max_schema_tokens,
+            "max_mcp_tools": value.max_mcp_tools,
+            "max_agent_tools": value.max_agent_tools,
+            "max_handoffs": value.max_handoffs,
+        }
+    if isinstance(value, ToolRoutingSpec):
+        return {
+            "_kind": _TOOL_ROUTING_SPEC,
+            "mode": value.mode,
+            "budget": _safe_value(value.budget, keep_media=keep_media),
+            "always_include": list(value.always_include),
+            "never_include": list(value.never_include),
+            "include_categories": list(value.include_categories),
+            "include_tags": list(value.include_tags),
+            "exclude_tags": list(value.exclude_tags),
+            "allow_late_bind": value.allow_late_bind,
+            "allow_model_discovery_tools": value.allow_model_discovery_tools,
+            "refresh_each_turn": value.refresh_each_turn,
+            "min_score": value.min_score,
+            "metadata": _safe_value(value.metadata, keep_media=keep_media),
+        }
+    if isinstance(value, ToolCandidate):
+        return {
+            "_kind": _TOOL_CANDIDATE,
+            "ref": value.ref,
+            "name": value.name,
+            "kind": value.kind,
+            "description": value.description,
+            "parameters": _safe_value(value.parameters, keep_media=keep_media),
+            "category": value.category,
+            "tags": list(value.tags),
+            "source": value.source,
+            "provider": value.provider,
+            "risk": value.risk,
+            "estimated_schema_tokens": value.estimated_schema_tokens,
+            "requires_approval": value.requires_approval,
+            "metadata": _safe_value(value.metadata, keep_media=keep_media),
+        }
+    if isinstance(value, SelectedTool):
+        return {
+            "_kind": _SELECTED_TOOL,
+            "candidate": _safe_value(value.candidate, keep_media=keep_media),
+            "score": value.score,
+            "reason": value.reason,
+            "selected_by": value.selected_by,
+        }
+    if isinstance(value, ToolSelectionResult):
+        return {
+            "_kind": _TOOL_SELECTION_RESULT,
+            "selected": [_safe_value(item, keep_media=keep_media) for item in value.selected],
+            "discoverable": [
+                _safe_value(item, keep_media=keep_media) for item in value.discoverable
+            ],
+            "blocked": [_safe_value(item, keep_media=keep_media) for item in value.blocked],
+            "metadata": _safe_value(value.metadata, keep_media=keep_media),
+        }
+    if isinstance(value, ResolvedToolPlan):
+        return {
+            "_kind": _RESOLVED_TOOL_PLAN,
+            "selected_refs": list(value.selected_refs),
+            "local_tools": list(value.local_tools),
+            "workspace_tools": list(value.workspace_tools),
+            "mcp_tools": list(value.mcp_tools),
+            "hosted_tools": _safe_value(value.hosted_tools, keep_media=keep_media),
+            "agent_tools": list(value.agent_tools),
+            "handoffs": list(value.handoffs),
+            "provider_tools": _safe_value(value.provider_tools, keep_media=keep_media),
+            "prompt_fragments": _safe_value(value.prompt_fragments, keep_media=keep_media),
+            "fingerprint": value.fingerprint,
+            "metadata": _safe_value(value.metadata, keep_media=keep_media),
+        }
     if isinstance(value, dict):
         return {str(k): _safe_value(v, keep_media=keep_media) for k, v in value.items()}
     if isinstance(value, list | tuple | set | frozenset):
@@ -380,6 +469,102 @@ def _hydrate_value(value: Any) -> Any:
             return ProviderNativePart(
                 provider=str(value.get("provider", "")),
                 value=_hydrate_value(value.get("value")),
+                metadata=metadata if isinstance(metadata, dict) else {},
+            )
+        if kind == _TOOL_BUDGET:
+            return ToolBudget(
+                max_visible_tools=int(value.get("max_visible_tools", 12)),
+                max_schema_tokens=int(value.get("max_schema_tokens", 8000)),
+                max_mcp_tools=int(value.get("max_mcp_tools", 8)),
+                max_agent_tools=int(value.get("max_agent_tools", 4)),
+                max_handoffs=int(value.get("max_handoffs", 3)),
+            )
+        if kind == _TOOL_ROUTING_SPEC:
+            budget = _hydrate_value(value.get("budget"))
+            metadata = _hydrate_value(value.get("metadata") or {})
+            return ToolRoutingSpec(
+                mode=value.get("mode", "explicit"),
+                budget=budget if isinstance(budget, ToolBudget) else ToolBudget(),
+                always_include=tuple(value.get("always_include") or ()),
+                never_include=tuple(value.get("never_include") or ()),
+                include_categories=tuple(value.get("include_categories") or ()),
+                include_tags=tuple(value.get("include_tags") or ()),
+                exclude_tags=tuple(value.get("exclude_tags") or ()),
+                allow_late_bind=bool(value.get("allow_late_bind", False)),
+                allow_model_discovery_tools=bool(
+                    value.get("allow_model_discovery_tools", False)
+                ),
+                refresh_each_turn=bool(value.get("refresh_each_turn", True)),
+                min_score=float(value.get("min_score", 0.15)),
+                metadata=metadata if isinstance(metadata, dict) else {},
+            )
+        if kind == _TOOL_CANDIDATE:
+            parameters = _hydrate_value(value.get("parameters"))
+            metadata = _hydrate_value(value.get("metadata") or {})
+            return ToolCandidate(
+                ref=str(value.get("ref", "")),
+                name=str(value.get("name", "")),
+                kind=value.get("kind", "local"),
+                description=str(value.get("description", "")),
+                parameters=parameters if isinstance(parameters, dict) else None,
+                category=value.get("category"),
+                tags=tuple(value.get("tags") or ()),
+                source=value.get("source"),
+                provider=value.get("provider"),
+                risk=value.get("risk", "read_only"),
+                estimated_schema_tokens=int(value.get("estimated_schema_tokens", 0)),
+                requires_approval=bool(value.get("requires_approval", False)),
+                metadata=metadata if isinstance(metadata, dict) else {},
+            )
+        if kind == _SELECTED_TOOL:
+            candidate = _hydrate_value(value.get("candidate"))
+            return SelectedTool(
+                candidate=(
+                    candidate
+                    if isinstance(candidate, ToolCandidate)
+                    else ToolCandidate(ref="", name="", kind="local", description="")
+                ),
+                score=float(value.get("score", 0.0)),
+                reason=str(value.get("reason", "")),
+                selected_by=str(value.get("selected_by", "selector")),
+            )
+        if kind == _TOOL_SELECTION_RESULT:
+            selected = _hydrate_value(value.get("selected") or [])
+            discoverable = _hydrate_value(value.get("discoverable") or [])
+            blocked = _hydrate_value(value.get("blocked") or [])
+            metadata = _hydrate_value(value.get("metadata") or {})
+            return ToolSelectionResult(
+                selected=tuple(item for item in selected if isinstance(item, SelectedTool))
+                if isinstance(selected, list)
+                else (),
+                discoverable=tuple(
+                    item for item in discoverable if isinstance(item, ToolCandidate)
+                )
+                if isinstance(discoverable, list)
+                else (),
+                blocked=tuple(item for item in blocked if isinstance(item, ToolCandidate))
+                if isinstance(blocked, list)
+                else (),
+                metadata=metadata if isinstance(metadata, dict) else {},
+            )
+        if kind == _RESOLVED_TOOL_PLAN:
+            metadata = _hydrate_value(value.get("metadata") or {})
+            provider_tools = _hydrate_value(value.get("provider_tools") or [])
+            prompt_fragments = _hydrate_value(value.get("prompt_fragments") or [])
+            hosted_tools = _hydrate_value(value.get("hosted_tools") or [])
+            return ResolvedToolPlan(
+                selected_refs=tuple(value.get("selected_refs") or ()),
+                local_tools=tuple(value.get("local_tools") or ()),
+                workspace_tools=tuple(value.get("workspace_tools") or ()),
+                mcp_tools=tuple(value.get("mcp_tools") or ()),
+                hosted_tools=tuple(hosted_tools) if isinstance(hosted_tools, list) else (),
+                agent_tools=tuple(value.get("agent_tools") or ()),
+                handoffs=tuple(value.get("handoffs") or ()),
+                provider_tools=tuple(provider_tools) if isinstance(provider_tools, list) else (),
+                prompt_fragments=tuple(prompt_fragments)
+                if isinstance(prompt_fragments, list)
+                else (),
+                fingerprint=value.get("fingerprint"),
                 metadata=metadata if isinstance(metadata, dict) else {},
             )
         return {k: _hydrate_value(v) for k, v in value.items() if k != "_kind"}

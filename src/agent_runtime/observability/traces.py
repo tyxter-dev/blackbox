@@ -194,6 +194,8 @@ def infer_span_kind(event_type: str) -> str:
         return SpanKinds.TOOL
     if event_type.startswith("agent_tool.call."):
         return SpanKinds.AGENT_TOOL
+    if event_type.startswith("tool.routing."):
+        return SpanKinds.TOOL_SEARCH
     if event_type.startswith("tool_search."):
         return SpanKinds.TOOL_SEARCH
     if event_type.startswith("hosted_tool."):

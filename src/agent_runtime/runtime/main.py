@@ -59,6 +59,7 @@ from agent_runtime.runtime.event_metadata import (
     _provider_cache_metadata,
     _tool_choice_metadata_from_events,
     _tool_names,
+    _tool_routing_metadata_from_events,
     _tool_usage_from_events,
 )
 from agent_runtime.runtime.model import ModelRuntime
@@ -78,12 +79,20 @@ from agent_runtime.runtime.run_planning import (
     _resolved_mcp_toolset,
     _resolved_tools,
 )
+from agent_runtime.runtime.tool_routing import (
+    RoutingContext,
+    collect_candidates,
+    resolve_tool_routing,
+    selected_tool_names,
+    tool_routing_late_bound_event,
+)
 from agent_runtime.runtime.tools import ToolRuntimeFacade
 from agent_runtime.runtime.workspace_results import _workspace_metadata_from_events
 from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
 from agent_runtime.tools.catalog import ToolCatalog
 from agent_runtime.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
 from agent_runtime.tools.registry import ToolDefinition
+from agent_runtime.tools.routing import ResolvedToolPlan, ToolCandidate, ToolRoutingSpec
 from agent_runtime.tools.runtime import ToolRuntime
 from agent_runtime.tools.session import ToolSession
 from agent_runtime.tools.toolsets import (
@@ -187,7 +196,8 @@ class AgentRuntime:
         provider: str,
         input: str,
         model: str | None = None,
-        tools: list[str] | None = None,
+        tools: list[str] | str | None = None,
+        tool_routing: ToolRoutingSpec | None = None,
         tool_session: ToolSession | None = None,
         instructions: str | None = None,
         prompt: PromptSpec | None = None,
@@ -233,7 +243,10 @@ class AgentRuntime:
                 effective_output_schema = None
 
         effective_tool_session = tool_session
-        effective_tools = list(tools or [])
+        effective_tools, effective_tool_routing = _normalize_tools_argument(
+            tools,
+            tool_routing=tool_routing,
+        )
         effective_hosted_tools = list(hosted_tools or [])
         resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
@@ -309,7 +322,45 @@ class AgentRuntime:
                 active_mcp_connectors.append(connector)
 
             dynamic_loading_spec: DynamicToolLoadingSpec | None
-            if self._should_use_dynamic_tools(
+            if _routing_enabled(effective_tool_routing):
+                routing_spec = effective_tool_routing
+                assert routing_spec is not None
+                effective_tools.extend([*local_tool_names, *mcp_local_tool_names])
+                effective_tool_session = effective_tool_session or self.tools.session()
+                provider_tools_by_name = {
+                    str(tool["name"]): dict(tool)
+                    for tool in effective_tool_session.to_provider_tools()
+                    if isinstance(tool.get("name"), str)
+                }
+                resolution = await resolve_tool_routing(
+                    RoutingContext(
+                        task=input,
+                        current_input=input,
+                        iteration=0,
+                        provider=provider_ref.provider_key,
+                        model=model_name,
+                        registry=effective_tool_session.registry,
+                        routing=routing_spec,
+                        hosted_tools=effective_hosted_tools,
+                        mcp_toolsets=mcp_toolsets,
+                        policy=policy,
+                    ),
+                    provider_tools_by_name=provider_tools_by_name,
+                )
+                effective_tools = sorted(selected_tool_names(resolution.plan))
+                tool_definitions = self._tool_payload(
+                    effective_tools,
+                    tool_session=effective_tool_session,
+                )
+                dynamic_loading_spec = dynamic_loading or DynamicToolLoadingSpec(
+                    mode=routing_spec.mode,
+                    metadata={
+                        "routing": True,
+                        "fingerprint": resolution.plan.fingerprint,
+                    },
+                )
+                routing_plan: ResolvedToolPlan | None = resolution.plan
+            elif self._should_use_dynamic_tools(
                 selection=tool_selection,
                 tool_session=effective_tool_session,
                 budget=budget,
@@ -329,6 +380,7 @@ class AgentRuntime:
                         "max_tools_visible": budget.max_tools_visible,
                     },
                 )
+                routing_plan = None
             else:
                 effective_tools.extend([*local_tool_names, *mcp_local_tool_names])
                 effective_tools, _ = await self._filter_tools_for_exposure(
@@ -346,6 +398,7 @@ class AgentRuntime:
                     hosted_tools=effective_hosted_tools,
                     mcp_toolsets=resolved_mcp_toolsets,
                 )
+                routing_plan = None
 
             if (
                 effective_output_schema is not None
@@ -373,6 +426,7 @@ class AgentRuntime:
                 output_strategy=effective_output_strategy,
                 cache=cache,
                 dynamic_loading=dynamic_loading_spec,
+                tool_routing_plan=routing_plan,
                 data_sources=data_sources,
                 context_flags=context_flags,
                 tool_session=effective_tool_session,
@@ -393,7 +447,8 @@ class AgentRuntime:
         provider: str,
         input: str,
         model: str | None = None,
-        tools: list[str] | None = None,
+        tools: list[str] | str | None = None,
+        tool_routing: ToolRoutingSpec | None = None,
         tool_session: ToolSession | None = None,
         tool_execution_context: dict[str, Any] | None = None,
         tool_max_concurrent: int | None = None,
@@ -447,7 +502,10 @@ class AgentRuntime:
         capability_profile = get_model_capability_profile(adapter, model_name)
 
         effective_tool_session = tool_session
-        effective_tools = list(tools or [])
+        effective_tools, effective_tool_routing = _normalize_tools_argument(
+            tools,
+            tool_routing=tool_routing,
+        )
         effective_hosted_tools = list(hosted_tools or [])
         resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
@@ -524,7 +582,56 @@ class AgentRuntime:
 
         dynamic_session: DynamicToolsetSession | None = None
         dynamic_loading_spec: DynamicToolLoadingSpec | None
-        if self._should_use_dynamic_tools(
+        routing_plan: ResolvedToolPlan | None = None
+        routing_events: list[AgentEvent] = []
+        active_tool_definitions: list[dict[str, Any]] = []
+        active_tool_names: set[str] = set()
+        provider_tools_by_name: dict[str, dict[str, Any]] = {}
+        if _routing_enabled(effective_tool_routing):
+            routing_spec = effective_tool_routing
+            assert routing_spec is not None
+            effective_tools.extend([*local_tool_names, *mcp_local_tool_names])
+            effective_tool_session = effective_tool_session or self.tools.session()
+            provider_tools_by_name = {
+                str(tool["name"]): dict(tool)
+                for tool in effective_tool_session.to_provider_tools()
+                if isinstance(tool.get("name"), str)
+            }
+            resolution = await resolve_tool_routing(
+                RoutingContext(
+                    task=input,
+                    current_input=input,
+                    iteration=0,
+                    provider=provider_ref.provider_key,
+                    model=model_name,
+                    registry=effective_tool_session.registry,
+                    routing=routing_spec,
+                    hosted_tools=effective_hosted_tools,
+                    mcp_toolsets=mcp_toolsets,
+                    policy=policy,
+                    workspace_summary=_workspace_summary(
+                        opened_workspace[1] if opened_workspace is not None else None
+                    ),
+                ),
+                provider_tools_by_name=provider_tools_by_name,
+            )
+            routing_plan = resolution.plan
+            routing_events.extend(resolution.events)
+            effective_tools = sorted(selected_tool_names(routing_plan))
+            active_tool_names = set(effective_tools)
+            active_tool_definitions = self._tool_payload(
+                effective_tools,
+                tool_session=effective_tool_session,
+            )
+            tool_definitions = list(active_tool_definitions)
+            dynamic_loading_spec = dynamic_loading or DynamicToolLoadingSpec(
+                mode=routing_spec.mode,
+                metadata={
+                    "routing": True,
+                    "fingerprint": routing_plan.fingerprint,
+                },
+            )
+        elif self._should_use_dynamic_tools(
             selection=tool_selection,
             tool_session=effective_tool_session,
             budget=budget,
@@ -563,6 +670,8 @@ class AgentRuntime:
                 effective_tools,
                 tool_session=effective_tool_session,
             )
+            active_tool_names = set(effective_tools)
+            active_tool_definitions = list(tool_definitions)
             dynamic_loading_spec = dynamic_loading or _dynamic_loading_from_controls(
                 tool_search=tool_search,
                 hosted_tools=effective_hosted_tools,
@@ -579,6 +688,11 @@ class AgentRuntime:
                 if isinstance(tool.get("name"), str)
             }
         )
+        runtime_allowed_tools = (
+            set(allowed_tool_names)
+            if _routing_enabled(effective_tool_routing)
+            else (set(allowed_tool_names) if allowed_tool_names else None)
+        )
         tool_runtime = self._tool_runtime_for(
             tool_execution_context,
             tool_session=effective_tool_session,
@@ -586,8 +700,98 @@ class AgentRuntime:
             if tool_max_concurrent is not None
             else budget.max_parallel_calls,
             timeout=tool_timeout,
-            allowed_tools=allowed_tool_names if allowed_tool_names else None,
+            allowed_tools=runtime_allowed_tools,
         )
+
+        routing_history_events: list[AgentEvent] = []
+
+        async def refresh_routing_plan(
+            iteration: int,
+            turn_input: str | list[Any],
+            _provider_state: ProviderState | None,
+        ) -> list[AgentEvent]:
+            nonlocal active_tool_definitions, active_tool_names, routing_plan
+            if not _routing_enabled(effective_tool_routing):
+                return []
+            routing_spec = effective_tool_routing
+            assert routing_spec is not None
+            if iteration == 0 or not routing_spec.refresh_each_turn:
+                return []
+            if effective_tool_session is None:
+                return []
+            resolution = await resolve_tool_routing(
+                RoutingContext(
+                    task=input,
+                    current_input=_routing_input_text(turn_input),
+                    iteration=iteration,
+                    provider=provider_ref.provider_key,
+                    model=model_name,
+                    registry=effective_tool_session.registry,
+                    routing=routing_spec,
+                    hosted_tools=effective_hosted_tools,
+                    mcp_toolsets=mcp_toolsets,
+                    policy=policy,
+                    recent_events=tuple(routing_history_events),
+                    active_tool_refs=frozenset(
+                        routing_plan.selected_refs if routing_plan is not None else ()
+                    ),
+                    workspace_summary=_workspace_summary(
+                        opened_workspace[1] if opened_workspace is not None else None
+                    ),
+                ),
+                provider_tools_by_name=provider_tools_by_name,
+            )
+            routing_plan = resolution.plan
+            active_tool_names = selected_tool_names(routing_plan)
+            active_tool_definitions = self._tool_payload(
+                sorted(active_tool_names),
+                tool_session=effective_tool_session,
+            )
+            tool_runtime.allowed_tools = set(active_tool_names)
+            return list(resolution.events)
+
+        async def late_bind_tool(name: str, iteration: int) -> tuple[bool, list[AgentEvent]]:
+            nonlocal active_tool_definitions, active_tool_names, routing_plan
+            if (
+                not _routing_enabled(effective_tool_routing)
+                or effective_tool_session is None
+            ):
+                return False, []
+            routing_spec = effective_tool_routing
+            assert routing_spec is not None
+            if not routing_spec.allow_late_bind:
+                return False, []
+            candidates = await collect_candidates(
+                RoutingContext(
+                    task=input,
+                    current_input=name,
+                    iteration=iteration,
+                    provider=provider_ref.provider_key,
+                    model=model_name,
+                    registry=effective_tool_session.registry,
+                    routing=routing_spec,
+                    hosted_tools=effective_hosted_tools,
+                    mcp_toolsets=mcp_toolsets,
+                    policy=policy,
+                )
+            )
+            candidate = _find_candidate(candidates, name)
+            if candidate is None:
+                return False, []
+            active_tool_names.add(candidate.name)
+            active_tool_definitions = self._tool_payload(
+                sorted(active_tool_names),
+                tool_session=effective_tool_session,
+            )
+            tool_runtime.allowed_tools = set(active_tool_names)
+            event = tool_routing_late_bound_event(
+                provider=provider_ref.provider_key,
+                iteration=iteration,
+                candidate=candidate,
+                fingerprint=routing_plan.fingerprint if routing_plan is not None else None,
+            )
+            return True, [event]
+
         prompt_spec = _resolve_prompt_spec(prompt, prompt_mode=prompt_mode, channel=channel)
         run_plan = self._resolved_run_spec(
             provider_ref=provider_ref,
@@ -603,6 +807,7 @@ class AgentRuntime:
             output_strategy=output_strategy,
             cache=cache,
             dynamic_loading=dynamic_loading_spec,
+            tool_routing_plan=routing_plan,
             data_sources=data_sources,
             context_flags=context_flags,
             tool_session=effective_tool_session,
@@ -625,6 +830,11 @@ class AgentRuntime:
         trace_context = TraceContext.for_run(run_id)
 
         def current_tool_definitions() -> list[dict[str, Any]]:
+            if _routing_enabled(effective_tool_routing):
+                definitions = [dict(tool) for tool in active_tool_definitions]
+                if output_schema is not None and output_strategy == "finalizer_tool":
+                    definitions.append(_finalizer_tool_payload(output_schema))
+                return definitions
             if dynamic_session is not None:
                 definitions = dynamic_session.provider_tools()
                 if output_schema is not None and output_strategy == "finalizer_tool":
@@ -661,6 +871,7 @@ class AgentRuntime:
             tools=(
                 tool_runtime
                 if effective_tools
+                or _routing_enabled(effective_tool_routing)
                 or (output_schema is not None and output_strategy == "finalizer_tool")
                 else None
             ),
@@ -673,6 +884,16 @@ class AgentRuntime:
             finalizer_tool_name=(
                 _FINALIZER_TOOL_NAME
                 if output_schema is not None and output_strategy == "finalizer_tool"
+                else None
+            ),
+            tool_plan_refresh=(
+                refresh_routing_plan
+                if _routing_enabled(effective_tool_routing)
+                else None
+            ),
+            tool_late_binder=(
+                late_bind_tool
+                if _routing_enabled(effective_tool_routing)
                 else None
             ),
         )
@@ -688,6 +909,18 @@ class AgentRuntime:
                 )
                 sequence += 1
                 await self.event_store.append(stamped)
+                routing_history_events.append(stamped)
+                yield stamped
+            for event in routing_events:
+                stamped = trace_context.stamp(
+                    event,
+                    run_id=run_id,
+                    sequence=sequence,
+                    preserve_sequence=False,
+                )
+                sequence += 1
+                await self.event_store.append(stamped)
+                routing_history_events.append(stamped)
                 yield stamped
             for event in tool_choice_events:
                 stamped = trace_context.stamp(
@@ -698,6 +931,7 @@ class AgentRuntime:
                 )
                 sequence += 1
                 await self.event_store.append(stamped)
+                routing_history_events.append(stamped)
                 yield stamped
             if opened_workspace is not None:
                 workspace_provider_obj, _, _ = opened_workspace
@@ -710,6 +944,7 @@ class AgentRuntime:
                     )
                     sequence += 1
                     await self.event_store.append(stamped)
+                    routing_history_events.append(stamped)
                     yield stamped
 
             async for event in loop.run(
@@ -726,6 +961,7 @@ class AgentRuntime:
                 )
                 sequence += 1
                 await self.event_store.append(stamped)
+                routing_history_events.append(stamped)
                 yield stamped
             if opened_workspace is not None and not workspace_preserve:
                 workspace_provider_obj, workspace_ref, should_close = opened_workspace
@@ -740,6 +976,7 @@ class AgentRuntime:
                         )
                         sequence += 1
                         await self.event_store.append(stamped)
+                        routing_history_events.append(stamped)
                         yield stamped
         finally:
             self._active_loops.pop(run_id, None)
@@ -752,7 +989,8 @@ class AgentRuntime:
         provider: str,
         input: str,
         model: str | None = None,
-        tools: list[str] | None = None,
+        tools: list[str] | str | None = None,
+        tool_routing: ToolRoutingSpec | None = None,
         tool_session: ToolSession | None = None,
         tool_execution_context: dict[str, Any] | None = None,
         tool_max_concurrent: int | None = None,
@@ -849,6 +1087,7 @@ class AgentRuntime:
                         input=current_input,
                         model=model,
                         tools=tools,
+                        tool_routing=tool_routing,
                         tool_session=tool_session,
                         tool_execution_context=tool_execution_context,
                         tool_max_concurrent=tool_max_concurrent,
@@ -1002,6 +1241,9 @@ class AgentRuntime:
             tool_choice_metadata = _tool_choice_metadata_from_events(events)
             if tool_choice_metadata:
                 metadata["tool_choice"] = tool_choice_metadata
+            tool_routing_metadata = _tool_routing_metadata_from_events(events)
+            if tool_routing_metadata:
+                metadata["tool_routing"] = tool_routing_metadata
             trace_metadata = trace_metadata_from_events(events, metadata=metadata)
             if trace_metadata["spans"]:
                 metadata["trace"] = trace_metadata
@@ -1038,6 +1280,7 @@ class AgentRuntime:
         output_strategy: OutputStrategy | str | None = None,
         cache: ModelCacheControl | None = None,
         dynamic_loading: DynamicToolLoadingSpec | None = None,
+        tool_routing_plan: ResolvedToolPlan | None = None,
         data_sources: list[DataSourceRef] | None = None,
         context_flags: list[str] | None = None,
         tool_session: ToolSession | None = None,
@@ -1061,6 +1304,7 @@ class AgentRuntime:
             output_spec=output_spec,
             output_strategy=output_strategy,
             dynamic_loading=dynamic_loading,
+            tool_routing_plan=tool_routing_plan,
             cache=cache,
             data_sources=list(data_sources or []),
             context_flags=list(context_flags or []),
@@ -1307,6 +1551,57 @@ def _toolset_definitions(toolset: Any) -> list[ToolDefinition]:
     raise ConfigurationError(
         "toolsets entries must be MCPToolset instances or expose all_tools()."
     )
+
+
+def _normalize_tools_argument(
+    tools: list[str] | str | None,
+    *,
+    tool_routing: ToolRoutingSpec | None,
+) -> tuple[list[str], ToolRoutingSpec | None]:
+    if tools == "dynamic":
+        return [], tool_routing or ToolRoutingSpec.coding_defaults()
+    if isinstance(tools, str):
+        return [tools], tool_routing
+    return list(tools or []), tool_routing
+
+
+def _routing_enabled(tool_routing: ToolRoutingSpec | None) -> bool:
+    return tool_routing is not None and tool_routing.mode not in {"disabled", "explicit"}
+
+
+def _routing_input_text(value: str | list[Any]) -> str:
+    if isinstance(value, str):
+        return value
+    parts: list[str] = []
+    for item in value:
+        if isinstance(item, RunItem):
+            content = item.data.get("content") or item.data.get("error")
+            if content is not None:
+                parts.append(str(content))
+            continue
+        parts.append(str(item))
+    return "\n".join(parts)
+
+
+def _workspace_summary(workspace: Any | None) -> dict[str, Any]:
+    if workspace is None:
+        return {}
+    return {
+        "id": getattr(workspace, "id", None),
+        "kind": getattr(workspace, "kind", None),
+        "provider": getattr(workspace, "provider", None),
+        "root": getattr(workspace, "root", None),
+    }
+
+
+def _find_candidate(
+    candidates: list[ToolCandidate],
+    name_or_ref: str,
+) -> ToolCandidate | None:
+    for candidate in candidates:
+        if candidate.name == name_or_ref or candidate.ref == name_or_ref:
+            return candidate
+    return None
 
 
 async def _tool_exposure_decision(
