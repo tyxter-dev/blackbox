@@ -22,7 +22,13 @@ from agent_runtime.core.stores import EventStore, RunStore
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
-from agent_runtime.runtime._helpers import (
+from agent_runtime.runtime.event_metadata import (
+    _attach_accounting_metadata,
+    _event_usage,
+    _tool_usage_from_events,
+)
+from agent_runtime.runtime.output import _resolve_output_spec, _validate_output
+from agent_runtime.runtime.session_results import (
     _agent_event_text,
     _agent_event_text_delta,
     _agent_session_result_status,
@@ -31,12 +37,6 @@ from agent_runtime.runtime._helpers import (
     _artifact_from_event,
     _provider_state_from_session,
 )
-from agent_runtime.runtime.event_metadata import (
-    _attach_accounting_metadata,
-    _event_usage,
-    _tool_usage_from_events,
-)
-from agent_runtime.runtime.output import _resolve_output_spec, _validate_output
 from agent_runtime.runtime.workspace_results import (
     _agent_event_with_workspace,
     _drain_workspace_events,

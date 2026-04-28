@@ -30,6 +30,8 @@ tool facade access, and provider cache lifecycle helpers.
 - `workspaces.py`: workspace provider registry/lifecycle facade.
 - `chat.py`: explicit chat compatibility facade.
 - `prompting.py`: prompt dry-run facade.
+- `session_results.py`: agent task specs, event text/artifact extraction, session
+  result status, and session provider-state reconstruction.
 - `tools.py`: local tool registry facade.
 - `caches.py`: provider cache lifecycle facade.
 - `event_metadata.py`: MCP, hosted-tool, prompt, cache, tool-usage, and
@@ -40,5 +42,3 @@ tool facade access, and provider cache lifecycle helpers.
   prompt planning event construction.
 - `workspace_results.py`: workspace event enrichment and workspace metadata
   extraction from runtime events.
-- `_helpers.py`: private shared runtime helpers that have not yet been split
-  by responsibility.
