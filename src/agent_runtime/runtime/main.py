@@ -27,7 +27,6 @@ from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, 
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
 from agent_runtime.mcp import MCPConnector, MCPToolset, resolve_mcp_route, to_remote_mcp
-from agent_runtime.models.capability_validation import resolve_output_strategy
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.planning.prompts import (
@@ -44,6 +43,7 @@ from agent_runtime.planning.run_plan import (
     resolved_hosted_tools,
 )
 from agent_runtime.providers.base import CompactionControl, ModelCacheControl, ToolSearchControl
+from agent_runtime.providers.model_adapters.capability_validation import resolve_output_strategy
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.runtime._helpers import (
     _FINALIZER_TOOL_NAME,

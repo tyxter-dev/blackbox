@@ -6,10 +6,10 @@ runtime responsibilities, not around provider brands.
 ## Current Layout
 
 - `core/`: stable primitive contracts shared across the runtime.
-- `providers/`: provider protocols and provider registry.
+- `providers/`: provider protocols, provider registry, and provider adapter packages.
 - `runtime/`: high-level orchestration facades and private runtime helpers.
 - `planning/`: resolved run specs, prompt composition, and prompt/tool parity.
-- `models/`: model-provider adapters such as OpenAI Responses and Anthropic Messages.
+- `models/`: compatibility import namespace for model adapters.
 - `agents/`: agent-provider adapters such as local agents and cloud coding agents.
 - `tools/`: local Python tools, hosted-tool specs/calls, catalogs, and tool sessions.
 - `mcp/`: MCP server specs, auth, toolset routing, connector, cache, and transports.
@@ -31,5 +31,5 @@ runtime responsibilities, not around provider brands.
 
 The next structural refactors should be mechanical and compatibility-preserving:
 
-1. Rename adapter folders so provider contracts and provider implementations
-   are easier to distinguish.
+1. Move agent-provider adapters under `providers/agent_adapters/` while keeping
+   compatibility imports under `agent_runtime.agents`.

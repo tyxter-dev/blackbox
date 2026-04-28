@@ -4,10 +4,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
-from agent_runtime.models.xai_responses import XAIResponsesProvider
+from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.providers.model_adapters.gemini_generate_content import (
+    GeminiGenerateContentProvider,
+)
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 from agent_runtime.providers.registry import ProviderRegistry
 
 ProviderKey = Literal["openai", "anthropic", "google", "xai"]

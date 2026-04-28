@@ -17,7 +17,6 @@ from agent_runtime.core.capabilities import ModelCapabilityProfile, get_model_ca
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.results import OutputStrategy
 from agent_runtime.core.state import ProviderState
-from agent_runtime.models.capability_validation import validate_turn_request_capabilities
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.output.schema import OutputSchema
 from agent_runtime.providers.base import (
@@ -27,6 +26,9 @@ from agent_runtime.providers.base import (
     ToolSearchControl,
     TurnRequest,
     TurnResult,
+)
+from agent_runtime.providers.model_adapters.capability_validation import (
+    validate_turn_request_capabilities,
 )
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.runtime._helpers import (
