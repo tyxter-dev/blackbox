@@ -34,6 +34,8 @@ tool facade access, and provider cache lifecycle helpers.
 - `caches.py`: provider cache lifecycle facade.
 - `output.py`: output spec resolution, finalizer payloads, repair prompts, and
   output validation.
+- `run_planning.py`: prompt spec normalization, resolved tool/MCP planning, and
+  prompt planning event construction.
 - `workspace_results.py`: workspace event enrichment and workspace metadata
   extraction from runtime events.
 - `_helpers.py`: private shared runtime helpers that have not yet been split
