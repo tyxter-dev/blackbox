@@ -21,18 +21,18 @@ from agent_runtime.core.errors import (
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemStatus, ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import (
-    ToolSearch,
-    openai_include_values,
-    openai_namespace_tools,
-    to_openai_tool,
-)
 from agent_runtime.models._support import (
     is_retryable_status_error,
     sleep_for_retry,
     strip_private_fields,
 )
 from agent_runtime.providers.base import TurnRequest
+from agent_runtime.tools.hosted.specs import (
+    ToolSearch,
+    openai_include_values,
+    openai_namespace_tools,
+    to_openai_tool,
+)
 
 _TYPED_ITEM_EVENTS = {
     "message": EventTypes.MODEL_ITEM_CREATED,

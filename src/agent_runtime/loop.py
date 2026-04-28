@@ -28,7 +28,8 @@ from agent_runtime.core.policy import (
     PolicyRequest,
 )
 from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import (
+from agent_runtime.tools.hosted.calls import HostedToolCall, HostedToolContext
+from agent_runtime.tools.hosted.specs import (
     ApplyPatch,
     ComputerUse,
     HostedToolHandlers,
@@ -37,7 +38,6 @@ from agent_runtime.hosted_tools import (
     Shell,
     TextEditor,
 )
-from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext
 from agent_runtime.tools.hosted_runtime import HostedToolRunner
 from agent_runtime.tools.runtime import ToolRuntime
 from agent_runtime.workspaces.provider import PendingWorkspaceOperation, WorkspaceApprovalRequired

@@ -14,8 +14,8 @@ from agent_runtime.core.capabilities import (
 )
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import OutputFallback
-from agent_runtime.hosted_tools import hosted_tool_kind
 from agent_runtime.providers.base import ModelProvider, ModelRequestControls, TurnRequest
+from agent_runtime.tools.hosted.specs import hosted_tool_kind
 
 
 @dataclass(slots=True, frozen=True)

@@ -9,11 +9,11 @@ from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.realtime import ToolMode, TransportKind
 from agent_runtime.core.sessions import InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import HostedToolSpec
 from agent_runtime.realtime.capabilities import (
     RealtimeCapabilities,
     RealtimeCapabilityProfile,
 )
+from agent_runtime.tools.hosted.specs import HostedToolSpec
 from agent_runtime.tools.registry import ToolDefinition
 
 

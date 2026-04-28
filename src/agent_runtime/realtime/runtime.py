@@ -34,7 +34,6 @@ from agent_runtime.core.realtime import ToolMode, TransportKind
 from agent_runtime.core.sessions import InvocationRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore
-from agent_runtime.hosted_tools import HostedToolSpec
 from agent_runtime.observability.traces import TraceContext
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.realtime.capabilities import RealtimeCapabilityProfile
@@ -46,6 +45,7 @@ from agent_runtime.realtime.provider import (
     RealtimeSessionConfig,
     RealtimeSessionRef,
 )
+from agent_runtime.tools.hosted.specs import HostedToolSpec
 from agent_runtime.tools.registry import ToolDefinition, ToolRegistry
 from agent_runtime.tools.runtime import ToolRuntime
 

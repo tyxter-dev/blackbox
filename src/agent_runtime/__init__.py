@@ -51,25 +51,6 @@ from agent_runtime.core.results import (
 )
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
-from agent_runtime.hosted_tools import (
-    ApplyPatch,
-    CodeInterpreter,
-    ComputerUse,
-    ContainerSpec,
-    FileSearch,
-    HostedToolHandlers,
-    HostedToolRaw,
-    ImageGeneration,
-    Memory,
-    RemoteMCP,
-    Shell,
-    TextEditor,
-    ToolNamespace,
-    ToolSearch,
-    URLContext,
-    WebFetch,
-    WebSearch,
-)
 from agent_runtime.mcp import MCPServerSpec, MCPToolset
 from agent_runtime.output.schema import OutputSchema
 from agent_runtime.planning.prompts import (
@@ -131,6 +112,25 @@ from agent_runtime.runtime import (
     PromptRuntimeFacade,
     ProviderCacheRuntime,
     WorkspaceRuntimeFacade,
+)
+from agent_runtime.tools.hosted.specs import (
+    ApplyPatch,
+    CodeInterpreter,
+    ComputerUse,
+    ContainerSpec,
+    FileSearch,
+    HostedToolHandlers,
+    HostedToolRaw,
+    ImageGeneration,
+    Memory,
+    RemoteMCP,
+    Shell,
+    TextEditor,
+    ToolNamespace,
+    ToolSearch,
+    URLContext,
+    WebFetch,
+    WebSearch,
 )
 from agent_runtime.tools.session import ToolSession
 from agent_runtime.workspace_agents import (

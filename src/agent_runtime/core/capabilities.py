@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Protocol, TypeAlias, runtime_checkable
 
 from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.hosted_tools import (
+from agent_runtime.tools.hosted.specs import (
     ApplyPatch,
     CodeInterpreter,
     ComputerUse,

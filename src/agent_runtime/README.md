@@ -11,7 +11,7 @@ runtime responsibilities, not around provider brands.
 - `planning/`: resolved run specs, prompt composition, and prompt/tool parity.
 - `models/`: model-provider adapters such as OpenAI Responses and Anthropic Messages.
 - `agents/`: agent-provider adapters such as local agents and cloud coding agents.
-- `tools/`: local Python tools, tool catalogs, tool sessions, and client-executed hosted tool handling.
+- `tools/`: local Python tools, hosted-tool specs/calls, catalogs, and tool sessions.
 - `mcp/`: MCP server specs, auth, toolset routing, connector, cache, and transports.
 - `workspaces/`: workspace provider contracts and local/sandbox/docker/cloud backends.
 - `workspace_agents/`: governed workspace-agent package specs, permissions, schedules, registry, and serialization.
@@ -24,13 +24,12 @@ runtime responsibilities, not around provider brands.
 ## Top-Level Modules
 
 - `loop.py`: local model/tool loop used by high-level runs and local agent sessions.
-- `hosted_tools.py`: typed hosted-tool specs. This should move under
-  `tools/hosted/` once compatibility re-exports are in place.
+- `hosted_tools.py`: compatibility shim for hosted-tool specs now owned by
+  `tools/hosted/specs.py`.
 
 ## Planned Boundary Cleanup
 
 The next structural refactors should be mechanical and compatibility-preserving:
 
-1. Move hosted-tool specs from `hosted_tools.py` into `tools/hosted/specs.py`.
-2. Rename adapter folders so provider contracts and provider implementations
+1. Rename adapter folders so provider contracts and provider implementations
    are easier to distinguish.

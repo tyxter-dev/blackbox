@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from agent_runtime.core.capabilities import ModelCapabilityProfile
 from agent_runtime.core.results import OutputSpec, OutputStrategy
-from agent_runtime.hosted_tools import HostedToolSpec, hosted_tool_kind
+from agent_runtime.tools.hosted.specs import HostedToolSpec, hosted_tool_kind
 
 if TYPE_CHECKING:
     from agent_runtime.planning.prompts import PromptBundle, PromptFragment

@@ -11,8 +11,8 @@ from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.results import OutputStrategy
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import HostedToolSpec
 from agent_runtime.output.schema import OutputSchema
+from agent_runtime.tools.hosted.specs import HostedToolSpec
 
 CacheStrategy = Literal["auto", "ephemeral", "provider_managed", "bypass"]
 CompactionStrategy = Literal["auto", "disabled", "aggressive"]

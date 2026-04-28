@@ -9,9 +9,9 @@ from agent_runtime.core.capabilities import (
     ModelCapabilities,
     ModelCapabilityProfile,
 )
-from agent_runtime.hosted_tools import HostedToolRaw, WebSearch
 from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.providers.base import TurnRequest
+from agent_runtime.tools.hosted.specs import HostedToolRaw, WebSearch
 
 
 class XAIResponsesProvider(OpenAIResponsesProvider):
@@ -125,7 +125,7 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
 def _validate_xai_hosted_tool(hosted_tool: Any) -> None:
     if isinstance(hosted_tool, (HostedToolRaw, WebSearch)):
         return
-    from agent_runtime.hosted_tools import to_raw_hosted_tool
+    from agent_runtime.tools.hosted.specs import to_raw_hosted_tool
 
     to_raw_hosted_tool(hosted_tool, provider="xAI")
 

@@ -6,9 +6,9 @@ from urllib.parse import urlparse
 
 from agent_runtime.core.capabilities import ModelCapabilityProfile
 from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.hosted_tools import RemoteMCP
 from agent_runtime.mcp.spec import MCPServerSpec
 from agent_runtime.providers.registry import ProviderRef
+from agent_runtime.tools.hosted.specs import RemoteMCP
 
 MCPRouteMode = Literal["auto", "local", "provider_native"]
 MCPResolvedRoute = Literal["local", "provider_native"]

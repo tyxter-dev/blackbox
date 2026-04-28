@@ -1,10 +1,13 @@
-"""Compatibility re-exports for hosted-tool specs.
-
-New code should import specs from :mod:`agent_runtime.tools.hosted.specs`.
-Runtime-side hosted-tool call/result contracts live in
-:mod:`agent_runtime.tools.hosted.calls`.
-"""
-
+from agent_runtime.tools.hosted.calls import (
+    ApplyPatchHandler,
+    ComputerUseHandler,
+    HostedToolCall,
+    HostedToolContext,
+    HostedToolHandler,
+    HostedToolOutput,
+    ShellHandler,
+    TextEditorHandler,
+)
 from agent_runtime.tools.hosted.specs import (
     ApplyPatch,
     CodeInterpreter,
@@ -12,7 +15,6 @@ from agent_runtime.tools.hosted.specs import (
     ContainerSpec,
     FileSearch,
     HostedExecutionMode,
-    HostedToolHandler,
     HostedToolHandlers,
     HostedToolRaw,
     HostedToolSpec,
@@ -38,24 +40,33 @@ from agent_runtime.tools.hosted.specs import (
     to_openai_tool,
     to_raw_hosted_tool,
 )
+from agent_runtime.tools.hosted.specs import HostedToolHandler as HostedToolSpecHandler
 
 __all__ = [
     "ApplyPatch",
+    "ApplyPatchHandler",
     "CodeInterpreter",
     "ComputerUse",
+    "ComputerUseHandler",
     "ContainerSpec",
     "FileSearch",
     "HostedExecutionMode",
+    "HostedToolCall",
+    "HostedToolContext",
     "HostedToolHandler",
     "HostedToolHandlers",
+    "HostedToolOutput",
     "HostedToolRaw",
     "HostedToolSpec",
+    "HostedToolSpecHandler",
     "ImageGeneration",
     "MCPApprovalPolicy",
     "Memory",
     "RemoteMCP",
     "Shell",
+    "ShellHandler",
     "TextEditor",
+    "TextEditorHandler",
     "ToolNamespace",
     "ToolSearch",
     "URLContext",

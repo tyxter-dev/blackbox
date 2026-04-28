@@ -8,7 +8,8 @@ from agent_runtime.core.artifacts import Artifact
 from agent_runtime.core.errors import ConfigurationError, UnsupportedFeatureError
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.hosted_tools import (
+from agent_runtime.tools.hosted.calls import HostedToolCall, HostedToolContext, HostedToolOutput
+from agent_runtime.tools.hosted.specs import (
     ApplyPatch,
     ComputerUse,
     HostedToolHandlers,
@@ -17,7 +18,6 @@ from agent_runtime.hosted_tools import (
     Shell,
     TextEditor,
 )
-from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext, HostedToolOutput
 
 
 @dataclass(slots=True)

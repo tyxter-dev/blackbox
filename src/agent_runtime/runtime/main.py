@@ -26,7 +26,6 @@ from agent_runtime.core.items import RunItem
 from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, ToolPayload
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
-from agent_runtime.hosted_tools import HostedToolHandlers, HostedToolSpec
 from agent_runtime.mcp import MCPConnector, MCPToolset, resolve_mcp_route, to_remote_mcp
 from agent_runtime.models.capability_validation import resolve_output_strategy
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
@@ -75,6 +74,7 @@ from agent_runtime.runtime.model import ModelRuntime
 from agent_runtime.runtime.prompting import PromptRuntimeFacade
 from agent_runtime.runtime.tools import ToolRuntimeFacade
 from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
+from agent_runtime.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
 from agent_runtime.tools.runtime import ToolRuntime
 from agent_runtime.tools.session import ToolSession
 
