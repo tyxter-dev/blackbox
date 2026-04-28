@@ -32,4 +32,7 @@ tool facade access, and provider cache lifecycle helpers.
 - `prompting.py`: prompt dry-run facade.
 - `tools.py`: local tool registry facade.
 - `caches.py`: provider cache lifecycle facade.
-- `_helpers.py`: private shared runtime helpers.
+- `output.py`: output spec resolution, finalizer payloads, repair prompts, and
+  output validation.
+- `_helpers.py`: private shared runtime helpers that have not yet been split
+  by responsibility.

@@ -34,12 +34,11 @@ from agent_runtime.runtime._helpers import (
     _drain_workspace_events,
     _event_usage,
     _provider_state_from_session,
-    _resolve_output_spec,
     _tool_usage_from_events,
-    _validate_output,
     _workspace_metadata_from_events,
     _workspace_ref_metadata,
 )
+from agent_runtime.runtime.output import _resolve_output_spec, _validate_output
 from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
 
 T = TypeVar("T")

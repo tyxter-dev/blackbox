@@ -16,7 +16,9 @@ Scope: package, test, and documentation organization only
   GenerateContent, and xAI Responses have been converted into packages with
   stable public re-exports. Remaining adapter package splits should move one
   at a time when they become large enough to justify it.
-- Phases 4-6 remain follow-up work because they involve larger file/package
+- Phase 4 is in progress: output-specific runtime helpers have been split into
+  `runtime/output.py`.
+- Phases 5-6 remain follow-up work because they involve larger file/package
   moves that should land one package group at a time.
 
 ## Goal
