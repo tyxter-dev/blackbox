@@ -115,6 +115,40 @@ def _prompt_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
     return {}
 
 
+def _tool_choice_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
+    selected: list[str] = []
+    loaded: list[str] = []
+    called: list[str] = []
+    rejected: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    for event in events:
+        if event.type == EventTypes.TOOL_CHOICE_SELECTED:
+            name = event.data.get("name")
+            if isinstance(name, str):
+                selected.append(name)
+        elif event.type == EventTypes.TOOL_CHOICE_LOADED:
+            name = event.data.get("name")
+            if isinstance(name, str):
+                loaded.append(name)
+        elif event.type == EventTypes.TOOL_CHOICE_CALLED:
+            name = event.data.get("name")
+            if isinstance(name, str):
+                called.append(name)
+        elif event.type == EventTypes.TOOL_CHOICE_REJECTED:
+            rejected.append(dict(event.data))
+        elif event.type == EventTypes.TOOL_CHOICE_FAILED:
+            failed.append(dict(event.data))
+    if not (selected or loaded or called or rejected or failed):
+        return {}
+    return {
+        "selected": selected,
+        "loaded": loaded,
+        "called": called,
+        "rejected": rejected,
+        "failed": failed,
+    }
+
+
 async def _provider_cache_metadata(
     *,
     provider: str | None,

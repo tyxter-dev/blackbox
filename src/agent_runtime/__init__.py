@@ -133,6 +133,7 @@ from agent_runtime.tools.hosted.specs import (
     WebSearch,
 )
 from agent_runtime.tools.session import ToolSession
+from agent_runtime.tools.toolsets import ToolBudget, ToolSelection, Toolset
 from agent_runtime.workspace_agents import (
     ApprovalRequirement,
     ConnectorSpec,
@@ -267,6 +268,7 @@ __all__ = [
     "TaskSpec",
     "TextEditor",
     "TextPart",
+    "ToolBudget",
     "ToolMode",
     "ToolNamespace",
     "ToolPayload",
@@ -274,7 +276,9 @@ __all__ = [
     "ToolResultPart",
     "ToolSearch",
     "ToolSearchControl",
+    "ToolSelection",
     "ToolSession",
+    "Toolset",
     "TransportKind",
     "TurnDetectionConfig",
     "TurnRequest",

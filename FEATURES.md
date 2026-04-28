@@ -44,7 +44,7 @@ Status legend:
 | Tool lookup/listing | Supported | `runtime.tools.get(...)`, `runtime.tools.all_tools()` | Returns `ToolDefinition` records. |
 | Provider-neutral tool schema export | Supported | `runtime.tools.to_provider_tools()` | Exports registered tools as function schemas for model providers. |
 | Manual JSON schema override | Supported | `register(parameters={...})` | Caller may provide the model-visible schema explicitly. |
-| Tool metadata | Supported | `category`, `tags`, `metadata` | Stored on `ToolDefinition`; useful for catalog/search/routing layers. |
+| Tool metadata | Supported | `category`, `tags`, `risk`, `scopes`, `latency`, `cost`, `side_effects`, `examples`, `negative_examples`, `metadata` | Stored on `ToolDefinition`; useful for catalog/search/routing layers. |
 | Blocking tool offload | Supported | `register(blocking=True)` | Blocking tools are executed off the event loop. |
 | Async tool execution | Supported | Async callable tools | Async functions are awaited directly. |
 | Tool timeouts | Supported | `ToolRuntime(timeout_seconds=...)` | Long-running tools fail with typed tool errors. |
@@ -56,6 +56,7 @@ Status legend:
 | Context injection | Supported | `tool_execution_context={...}` / `ToolRuntime(context=...)` | Private runtime values are injected by parameter name. |
 | Context schema privacy | Supported | Injected context parameters are not added to provider tool schemas. |
 | Tool catalog search | Supported | `ToolCatalog` | Simple relevance-scored catalog/search layer for registered/cataloged tools. |
+| Runtime toolsets and dynamic loading | Supported | `Toolset`, `ToolBudget`, `runtime.run(toolsets=[...], tool_selection="dynamic")` | Large catalogs can expose `search_tools`/`load_tools`, defer concrete tools until loaded, enforce visible/call/parallel budgets, and emit tool-choice telemetry. |
 | Workspace tool backend | Supported | `runtime.tools.register_workspace(...)` | Compatibility bridge for exposing provider-backed workspace operations as run-scoped local tools. |
 | Namespaced `ToolRef` IDs | Not supported yet | Planned for MCP | Current high-level API references tools by simple name. |
 

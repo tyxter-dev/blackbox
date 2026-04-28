@@ -20,9 +20,11 @@ from agent_runtime.core.errors import (
     ConfigurationError,
     OutputValidationError,
     ProviderExecutionError,
+    ToolExecutionError,
 )
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import RunItem
+from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
 from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, ToolPayload
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
@@ -55,6 +57,7 @@ from agent_runtime.runtime.event_metadata import (
     _mcp_metadata_from_events,
     _prompt_metadata_from_events,
     _provider_cache_metadata,
+    _tool_choice_metadata_from_events,
     _tool_names,
     _tool_usage_from_events,
 )
@@ -78,9 +81,17 @@ from agent_runtime.runtime.run_planning import (
 from agent_runtime.runtime.tools import ToolRuntimeFacade
 from agent_runtime.runtime.workspace_results import _workspace_metadata_from_events
 from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
+from agent_runtime.tools.catalog import ToolCatalog
 from agent_runtime.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
+from agent_runtime.tools.registry import ToolDefinition
 from agent_runtime.tools.runtime import ToolRuntime
 from agent_runtime.tools.session import ToolSession
+from agent_runtime.tools.toolsets import (
+    DynamicToolsetSession,
+    ToolBudget,
+    ToolSelection,
+    Toolset,
+)
 
 T = TypeVar("T")
 
@@ -186,7 +197,9 @@ class AgentRuntime:
         output_strategy: OutputStrategy | None = None,
         output_spec: OutputSpec | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
-        toolsets: list[MCPToolset] | None = None,
+        toolsets: list[Any] | None = None,
+        tool_selection: ToolSelection = "static",
+        tool_budget: ToolBudget | None = None,
         cache: ModelCacheControl | None = None,
         tool_search: ToolSearchControl | None = None,
         dynamic_loading: DynamicToolLoadingSpec | None = None,
@@ -225,6 +238,8 @@ class AgentRuntime:
         resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
         opened_workspace: tuple[Any, Any, bool] | None = None
+        budget = tool_budget or ToolBudget()
+        mcp_toolsets, local_toolsets = self._split_toolsets(toolsets)
         try:
             if workspace is not None:
                 effective_tool_session = (
@@ -245,7 +260,20 @@ class AgentRuntime:
                 )
                 effective_tools.extend(tool.name for tool in registered_workspace_tools)
 
-            for mcp_toolset in toolsets or []:
+            local_tool_names: list[str] = []
+            if local_toolsets:
+                effective_tool_session = (
+                    ToolSession.from_registry(effective_tool_session.registry)
+                    if effective_tool_session is not None
+                    else self.tools.session()
+                )
+                local_tool_names = self._register_local_toolsets(
+                    effective_tool_session,
+                    local_toolsets,
+                )
+
+            mcp_local_tool_names: list[str] = []
+            for mcp_toolset in mcp_toolsets:
                 route = resolve_mcp_route(
                     provider_ref,
                     mcp_toolset,
@@ -270,7 +298,7 @@ class AgentRuntime:
                 registered_mcp_tools = await connector.register_runtime_tools(
                     effective_tool_session.registry
                 )
-                effective_tools.extend(tool.name for tool in registered_mcp_tools)
+                mcp_local_tool_names.extend(tool.name for tool in registered_mcp_tools)
                 resolved_mcp_toolsets.append(
                     _resolved_mcp_toolset(
                         mcp_toolset,
@@ -280,10 +308,45 @@ class AgentRuntime:
                 )
                 active_mcp_connectors.append(connector)
 
-            tool_definitions = self._tool_payload(
-                effective_tools,
+            dynamic_loading_spec: DynamicToolLoadingSpec | None
+            if self._should_use_dynamic_tools(
+                selection=tool_selection,
                 tool_session=effective_tool_session,
-            )
+                budget=budget,
+            ):
+                effective_tool_session = effective_tool_session or self.tools.session()
+                dynamic_session = await self._dynamic_tool_session(
+                    tool_session=effective_tool_session,
+                    initial_visible=effective_tools,
+                    budget=budget,
+                    policy=policy,
+                )
+                tool_definitions = dynamic_session.provider_tools()
+                dynamic_loading_spec = dynamic_loading or DynamicToolLoadingSpec(
+                    mode="runtime_toolset",
+                    metadata={
+                        "catalog_size": len(dynamic_session.catalog.entries),
+                        "max_tools_visible": budget.max_tools_visible,
+                    },
+                )
+            else:
+                effective_tools.extend([*local_tool_names, *mcp_local_tool_names])
+                effective_tools, _ = await self._filter_tools_for_exposure(
+                    effective_tools,
+                    tool_session=effective_tool_session,
+                    policy=policy,
+                    budget=budget,
+                )
+                tool_definitions = self._tool_payload(
+                    effective_tools,
+                    tool_session=effective_tool_session,
+                )
+                dynamic_loading_spec = dynamic_loading or _dynamic_loading_from_controls(
+                    tool_search=tool_search,
+                    hosted_tools=effective_hosted_tools,
+                    mcp_toolsets=resolved_mcp_toolsets,
+                )
+
             if (
                 effective_output_schema is not None
                 and effective_output_strategy == "finalizer_tool"
@@ -309,12 +372,7 @@ class AgentRuntime:
                 output_spec=output_spec,
                 output_strategy=effective_output_strategy,
                 cache=cache,
-                dynamic_loading=dynamic_loading
-                or _dynamic_loading_from_controls(
-                    tool_search=tool_search,
-                    hosted_tools=effective_hosted_tools,
-                    mcp_toolsets=resolved_mcp_toolsets,
-                ),
+                dynamic_loading=dynamic_loading_spec,
                 data_sources=data_sources,
                 context_flags=context_flags,
                 tool_session=effective_tool_session,
@@ -352,7 +410,9 @@ class AgentRuntime:
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
-        toolsets: list[MCPToolset] | None = None,
+        toolsets: list[Any] | None = None,
+        tool_selection: ToolSelection = "static",
+        tool_budget: ToolBudget | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
         tool_search: ToolSearchControl | None = None,
@@ -392,6 +452,9 @@ class AgentRuntime:
         resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
         opened_workspace: tuple[Any, Any, bool] | None = None
+        budget = tool_budget or ToolBudget()
+        mcp_toolsets, local_toolsets = self._split_toolsets(toolsets)
+        tool_choice_events: list[AgentEvent] = []
         if workspace is not None:
             effective_tool_session = (
                 ToolSession.from_registry(tool_session.registry)
@@ -411,7 +474,20 @@ class AgentRuntime:
             )
             effective_tools.extend(tool.name for tool in registered_workspace_tools)
 
-        for mcp_toolset in toolsets or []:
+        local_tool_names: list[str] = []
+        if local_toolsets:
+            effective_tool_session = (
+                ToolSession.from_registry(effective_tool_session.registry)
+                if effective_tool_session is not None
+                else self.tools.session()
+            )
+            local_tool_names = self._register_local_toolsets(
+                effective_tool_session,
+                local_toolsets,
+            )
+
+        mcp_local_tool_names: list[str] = []
+        for mcp_toolset in mcp_toolsets:
             route = resolve_mcp_route(
                 provider_ref,
                 mcp_toolset,
@@ -436,7 +512,7 @@ class AgentRuntime:
             registered_mcp_tools = await connector.register_runtime_tools(
                 effective_tool_session.registry
             )
-            effective_tools.extend(tool.name for tool in registered_mcp_tools)
+            mcp_local_tool_names.extend(tool.name for tool in registered_mcp_tools)
             resolved_mcp_toolsets.append(
                 _resolved_mcp_toolset(
                     mcp_toolset,
@@ -446,14 +522,71 @@ class AgentRuntime:
             )
             active_mcp_connectors.append(connector)
 
-        tool_definitions = self._tool_payload(effective_tools, tool_session=effective_tool_session)
+        dynamic_session: DynamicToolsetSession | None = None
+        dynamic_loading_spec: DynamicToolLoadingSpec | None
+        if self._should_use_dynamic_tools(
+            selection=tool_selection,
+            tool_session=effective_tool_session,
+            budget=budget,
+        ):
+            effective_tool_session = effective_tool_session or self.tools.session()
+            dynamic_session = await self._dynamic_tool_session(
+                tool_session=effective_tool_session,
+                initial_visible=effective_tools,
+                budget=budget,
+                policy=policy,
+            )
+            tool_choice_events.extend(dynamic_session.initial_events())
+            tool_definitions = dynamic_session.provider_tools()
+            effective_tools = [
+                tool["name"]
+                for tool in tool_definitions
+                if isinstance(tool.get("name"), str)
+            ]
+            dynamic_loading_spec = dynamic_loading or DynamicToolLoadingSpec(
+                mode="runtime_toolset",
+                metadata={
+                    "catalog_size": len(dynamic_session.catalog.entries),
+                    "max_tools_visible": budget.max_tools_visible,
+                },
+            )
+        else:
+            effective_tools.extend([*local_tool_names, *mcp_local_tool_names])
+            effective_tools, exposure_events = await self._filter_tools_for_exposure(
+                effective_tools,
+                tool_session=effective_tool_session,
+                policy=policy,
+                budget=budget,
+            )
+            tool_choice_events.extend(exposure_events)
+            tool_definitions = self._tool_payload(
+                effective_tools,
+                tool_session=effective_tool_session,
+            )
+            dynamic_loading_spec = dynamic_loading or _dynamic_loading_from_controls(
+                tool_search=tool_search,
+                hosted_tools=effective_hosted_tools,
+                mcp_toolsets=resolved_mcp_toolsets,
+            )
         if output_schema is not None and output_strategy == "finalizer_tool":
             tool_definitions.append(_finalizer_tool_payload(output_schema))
+        allowed_tool_names = (
+            dynamic_session.visible_names
+            if dynamic_session is not None
+            else {
+                tool["name"]
+                for tool in tool_definitions
+                if isinstance(tool.get("name"), str)
+            }
+        )
         tool_runtime = self._tool_runtime_for(
             tool_execution_context,
             tool_session=effective_tool_session,
-            max_concurrent=tool_max_concurrent,
+            max_concurrent=tool_max_concurrent
+            if tool_max_concurrent is not None
+            else budget.max_parallel_calls,
             timeout=tool_timeout,
+            allowed_tools=allowed_tool_names if allowed_tool_names else None,
         )
         prompt_spec = _resolve_prompt_spec(prompt, prompt_mode=prompt_mode, channel=channel)
         run_plan = self._resolved_run_spec(
@@ -469,12 +602,7 @@ class AgentRuntime:
             workspace=opened_workspace[1] if opened_workspace is not None else None,
             output_strategy=output_strategy,
             cache=cache,
-            dynamic_loading=dynamic_loading
-            or _dynamic_loading_from_controls(
-                tool_search=tool_search,
-                hosted_tools=effective_hosted_tools,
-                mcp_toolsets=resolved_mcp_toolsets,
-            ),
+            dynamic_loading=dynamic_loading_spec,
             data_sources=data_sources,
             context_flags=context_flags,
             tool_session=effective_tool_session,
@@ -490,11 +618,19 @@ class AgentRuntime:
                 await connector.stop()
             raise
         run_plan.prompt = prompt_bundle
-        tool_definitions = [dict(tool.definition) for tool in run_plan.tools]
+        static_tool_definitions = [dict(tool.definition) for tool in run_plan.tools]
         effective_hosted_tools = [tool.spec for tool in run_plan.hosted_tools]
 
         run_id = f"run_{uuid4().hex}"
         trace_context = TraceContext.for_run(run_id)
+
+        def current_tool_definitions() -> list[dict[str, Any]]:
+            if dynamic_session is not None:
+                definitions = dynamic_session.provider_tools()
+                if output_schema is not None and output_strategy == "finalizer_tool":
+                    definitions.append(_finalizer_tool_payload(output_schema))
+                return definitions
+            return [dict(tool) for tool in static_tool_definitions]
 
         async def stream_factory(
             *, input: str | list[Any], provider_state: ProviderState | None
@@ -504,7 +640,7 @@ class AgentRuntime:
                 model=model_name,
                 input=input,
                 provider_state=provider_state,
-                tools=tool_definitions,
+                tools=current_tool_definitions(),
                 hosted_tools=effective_hosted_tools,
                 output_schema=output_schema,
                 output_strategy=output_strategy,
@@ -533,6 +669,7 @@ class AgentRuntime:
             approval_policy=approval_policy,
             policy=policy,
             max_iterations=max_iterations,
+            max_tool_calls=budget.max_tool_calls,
             finalizer_tool_name=(
                 _FINALIZER_TOOL_NAME
                 if output_schema is not None and output_strategy == "finalizer_tool"
@@ -543,6 +680,16 @@ class AgentRuntime:
         try:
             sequence = 0
             for event in _prompt_events(run_plan, prompt_bundle):
+                stamped = trace_context.stamp(
+                    event,
+                    run_id=run_id,
+                    sequence=sequence,
+                    preserve_sequence=False,
+                )
+                sequence += 1
+                await self.event_store.append(stamped)
+                yield stamped
+            for event in tool_choice_events:
                 stamped = trace_context.stamp(
                     event,
                     run_id=run_id,
@@ -622,7 +769,9 @@ class AgentRuntime:
         prompt_mode: PromptMode | None = None,
         channel: str | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
-        toolsets: list[MCPToolset] | None = None,
+        toolsets: list[Any] | None = None,
+        tool_selection: ToolSelection = "static",
+        tool_budget: ToolBudget | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
         cache: ModelCacheControl | None = None,
         tool_search: ToolSearchControl | None = None,
@@ -715,6 +864,8 @@ class AgentRuntime:
                         channel=channel,
                         hosted_tools=hosted_tools,
                         toolsets=toolsets,
+                        tool_selection=tool_selection,
+                        tool_budget=tool_budget,
                         hosted_tool_handlers=hosted_tool_handlers,
                         output_schema=output_schema,
                         output_strategy=effective_strategy if output_schema is not None else None,
@@ -848,6 +999,9 @@ class AgentRuntime:
             prompt_metadata = _prompt_metadata_from_events(events)
             if prompt_metadata:
                 metadata["prompt"] = prompt_metadata
+            tool_choice_metadata = _tool_choice_metadata_from_events(events)
+            if tool_choice_metadata:
+                metadata["tool_choice"] = tool_choice_metadata
             trace_metadata = trace_metadata_from_events(events, metadata=metadata)
             if trace_metadata["spans"]:
                 metadata["trace"] = trace_metadata
@@ -940,21 +1094,183 @@ class AgentRuntime:
         tool_session: ToolSession | None = None,
         max_concurrent: int | None = None,
         timeout: float | None = None,
+        allowed_tools: set[str] | None = None,
     ) -> ToolRuntime:
         if tool_session is not None:
             return tool_session.runtime(
                 context=context,
                 max_concurrent=max_concurrent,
                 timeout=timeout,
+                allowed_tools=allowed_tools,
             )
-        if context is None and max_concurrent is None and timeout is None:
+        if (
+            context is None
+            and max_concurrent is None
+            and timeout is None
+            and allowed_tools is None
+        ):
             return self.tools.default_runtime
         return ToolRuntime(
             self.tools.registry,
             context=context or {},
             max_concurrent=max_concurrent,
             timeout=timeout,
+            allowed_tools=allowed_tools,
         )
+
+    def _split_toolsets(self, toolsets: list[Any] | None) -> tuple[list[MCPToolset], list[Any]]:
+        mcp_toolsets: list[MCPToolset] = []
+        local_toolsets: list[Any] = []
+        for toolset in toolsets or []:
+            if isinstance(toolset, MCPToolset):
+                mcp_toolsets.append(toolset)
+            else:
+                local_toolsets.append(toolset)
+        return mcp_toolsets, local_toolsets
+
+    def _register_local_toolsets(
+        self,
+        tool_session: ToolSession,
+        toolsets: list[Any],
+    ) -> list[str]:
+        names: list[str] = []
+        for toolset in toolsets:
+            tools = _toolset_definitions(toolset)
+            for definition in tools:
+                tool_session.registry.add(definition)
+                names.append(definition.name)
+        return names
+
+    def _should_use_dynamic_tools(
+        self,
+        *,
+        selection: ToolSelection,
+        tool_session: ToolSession | None,
+        budget: ToolBudget,
+    ) -> bool:
+        if selection == "dynamic":
+            return True
+        if selection == "static":
+            return False
+        registry = tool_session.registry if tool_session is not None else self.tools.registry
+        return len(registry.all_tools()) > budget.large_catalog_threshold
+
+    async def _dynamic_tool_session(
+        self,
+        *,
+        tool_session: ToolSession,
+        initial_visible: list[str],
+        budget: ToolBudget,
+        policy: Policy | None,
+    ) -> DynamicToolsetSession:
+        allowed_tools: list[ToolDefinition] = []
+        rejected: list[dict[str, Any]] = []
+        for definition in tool_session.registry.all_tools():
+            if definition.metadata.get("agent_runtime_dynamic_meta") is True:
+                continue
+            decision = await _tool_exposure_decision(definition, policy)
+            if decision.verdict == "allow":
+                allowed_tools.append(definition)
+            else:
+                rejected.append(
+                    {
+                        "name": definition.name,
+                        "reason": decision.reason or decision.verdict,
+                        "checkpoint": "before_tool_exposure",
+                    }
+                )
+        session = DynamicToolsetSession(
+            registry=tool_session.registry,
+            catalog=ToolCatalog(allowed_tools),
+            budget=budget,
+            rejected_tools=rejected,
+        )
+        session.install_meta_tools()
+        allowed_names = {tool.name for tool in allowed_tools}
+        for name in initial_visible:
+            if name not in allowed_names:
+                continue
+            if (
+                budget.max_tools_visible is not None
+                and len(session.visible_names) >= budget.max_tools_visible
+            ):
+                session.rejected_tools.append(
+                    {
+                        "name": name,
+                        "reason": "max_tools_visible_exceeded",
+                        "limit": budget.max_tools_visible,
+                    }
+                )
+                continue
+            session.visible_names.add(name)
+            session.core_names.add(name)
+        return session
+
+    async def _filter_tools_for_exposure(
+        self,
+        names: list[str],
+        *,
+        tool_session: ToolSession | None,
+        policy: Policy | None,
+        budget: ToolBudget | None = None,
+    ) -> tuple[list[str], list[AgentEvent]]:
+        if not names:
+            return [], []
+        registry = tool_session.registry if tool_session is not None else self.tools.registry
+        allowed: list[str] = []
+        events: list[AgentEvent] = []
+        seen: set[str] = set()
+        for name in names:
+            if name in seen:
+                continue
+            seen.add(name)
+            try:
+                definition = registry.get(name)
+            except ToolExecutionError:
+                events.append(
+                    AgentEvent(
+                        type=EventTypes.TOOL_CHOICE_REJECTED,
+                        data={"name": name, "reason": "unknown_tool"},
+                    )
+                )
+                continue
+            decision = await _tool_exposure_decision(definition, policy)
+            if decision.verdict == "allow":
+                if (
+                    budget is not None
+                    and budget.max_tools_visible is not None
+                    and len(allowed) >= budget.max_tools_visible
+                ):
+                    events.append(
+                        AgentEvent(
+                            type=EventTypes.TOOL_CHOICE_REJECTED,
+                            data={
+                                "name": name,
+                                "reason": "max_tools_visible_exceeded",
+                                "limit": budget.max_tools_visible,
+                            },
+                        )
+                    )
+                    continue
+                allowed.append(name)
+                events.append(
+                    AgentEvent(
+                        type=EventTypes.TOOL_CHOICE_SELECTED,
+                        data={"name": name, "reason": "initially_visible", "dynamic": False},
+                    )
+                )
+                continue
+            events.append(
+                AgentEvent(
+                    type=EventTypes.TOOL_CHOICE_REJECTED,
+                    data={
+                        "name": name,
+                        "reason": decision.reason or decision.verdict,
+                        "checkpoint": "before_tool_exposure",
+                    },
+                )
+            )
+        return allowed, events
 
     async def _open_runtime_workspace(
         self,
@@ -971,3 +1287,47 @@ class AgentRuntime:
         if workspace_ref is None or workspace_provider is None:
             raise ConfigurationError("workspace could not be resolved.")
         return workspace_provider, workspace_ref, opened
+
+
+def _toolset_definitions(toolset: Any) -> list[ToolDefinition]:
+    if isinstance(toolset, Toolset):
+        return toolset.all_tools()
+    all_tools = getattr(toolset, "all_tools", None)
+    if callable(all_tools):
+        result = all_tools()
+        if isinstance(result, list):
+            return [tool for tool in result if isinstance(tool, ToolDefinition)]
+    tools = getattr(toolset, "tools", None)
+    if callable(tools):
+        result = tools()
+        if isinstance(result, list):
+            return [tool for tool in result if isinstance(tool, ToolDefinition)]
+    if isinstance(tools, list):
+        return [tool for tool in tools if isinstance(tool, ToolDefinition)]
+    raise ConfigurationError(
+        "toolsets entries must be MCPToolset instances or expose all_tools()."
+    )
+
+
+async def _tool_exposure_decision(
+    definition: ToolDefinition,
+    policy: Policy | None,
+) -> PolicyDecision:
+    if policy is None:
+        return PolicyDecision.allow()
+    return await policy.check(
+        PolicyRequest(
+            checkpoint="before_tool_exposure",
+            action=definition.name,
+            metadata={
+                "category": definition.category,
+                "tags": list(definition.tags),
+                "risk": definition.risk,
+                "scopes": list(definition.scopes),
+                "latency": definition.latency,
+                "cost": definition.cost,
+                "side_effects": list(definition.side_effects),
+                "tool_metadata": dict(definition.metadata),
+            },
+        )
+    )

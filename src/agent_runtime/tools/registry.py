@@ -20,6 +20,13 @@ class ToolDefinition:
     parameters: dict[str, Any] = field(default_factory=lambda: {"type": "object", "properties": {}})
     category: str | None = None
     tags: list[str] = field(default_factory=list)
+    risk: str | None = None
+    scopes: list[str] = field(default_factory=list)
+    latency: str | None = None
+    cost: str | None = None
+    side_effects: list[str] = field(default_factory=list)
+    examples: list[str] = field(default_factory=list)
+    negative_examples: list[str] = field(default_factory=list)
     blocking: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
     prompt_fragments: list[PromptFragment] = field(default_factory=list)
@@ -44,6 +51,13 @@ class ToolRegistry:
         parameters: dict[str, Any] | None = None,
         category: str | None = None,
         tags: list[str] | None = None,
+        risk: str | None = None,
+        scopes: list[str] | None = None,
+        latency: str | None = None,
+        cost: str | None = None,
+        side_effects: list[str] | None = None,
+        examples: list[str] | None = None,
+        negative_examples: list[str] | None = None,
         blocking: bool = False,
         metadata: dict[str, Any] | None = None,
         prompt_fragments: list[PromptFragment] | None = None,
@@ -56,6 +70,13 @@ class ToolRegistry:
             parameters=parameters or {"type": "object", "properties": {}},
             category=category,
             tags=tags or [],
+            risk=risk,
+            scopes=scopes or [],
+            latency=latency,
+            cost=cost,
+            side_effects=side_effects or [],
+            examples=examples or [],
+            negative_examples=negative_examples or [],
             blocking=blocking,
             metadata=metadata or {},
             prompt_fragments=[
@@ -95,7 +116,7 @@ class ToolRegistry:
                 "name": tool.name,
                 "description": tool.description,
                 "parameters": tool.parameters,
-                "metadata": tool.metadata,
+                "metadata": _tool_metadata(tool),
             }
             for tool in self.all_tools()
         ]
@@ -130,3 +151,22 @@ def _scope_prompt_fragment(tool_name: str, fragment: PromptFragment) -> PromptFr
         conflict_group=fragment.conflict_group,
         metadata=fragment.metadata,
     )
+
+
+def _tool_metadata(tool: ToolDefinition) -> dict[str, Any]:
+    metadata = dict(tool.metadata)
+    if tool.risk is not None:
+        metadata["risk"] = tool.risk
+    if tool.scopes:
+        metadata["scopes"] = list(tool.scopes)
+    if tool.latency is not None:
+        metadata["latency"] = tool.latency
+    if tool.cost is not None:
+        metadata["cost"] = tool.cost
+    if tool.side_effects:
+        metadata["side_effects"] = list(tool.side_effects)
+    if tool.examples:
+        metadata["examples"] = list(tool.examples)
+    if tool.negative_examples:
+        metadata["negative_examples"] = list(tool.negative_examples)
+    return metadata

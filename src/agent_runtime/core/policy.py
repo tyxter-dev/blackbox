@@ -12,6 +12,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 PolicyCheckpoint = Literal[
     "before_model_request",
+    "before_tool_exposure",
     "before_tool_call",
     "before_hosted_tool_config",
     "before_hosted_tool_call",

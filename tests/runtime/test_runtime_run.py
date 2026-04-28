@@ -555,7 +555,10 @@ async def test_policy_allow_dispatches_tool() -> None:
     )
 
     assert state["called"] is True
-    assert policy.seen[0].checkpoint == "before_tool_call"
+    assert [request.checkpoint for request in policy.seen] == [
+        "before_tool_exposure",
+        "before_tool_call",
+    ]
     assert result.text == "done"
 
 

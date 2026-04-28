@@ -184,7 +184,10 @@ async def test_runtime_toolset_mcp_call_pauses_and_resumes_approval(
     approval_event = next(
         event for event in events if event.type == EventTypes.APPROVAL_REQUESTED
     )
-    assert policy.seen[0].checkpoint == "before_mcp_call"
+    assert [request.checkpoint for request in policy.seen[:2]] == [
+        "before_tool_exposure",
+        "before_mcp_call",
+    ]
     assert transport.requests[-1][0] != "tools/call"
 
     await runtime.approve(

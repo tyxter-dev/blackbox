@@ -80,10 +80,12 @@ class AgentLoop:
     approval_policy: ApprovalPolicy | None = None
     policy: Policy | None = None
     max_iterations: int = 8
+    max_tool_calls: int | None = None
     finalizer_tool_name: str | None = None
 
     _approvals: dict[str, asyncio.Future[ApprovalDecision]] = field(default_factory=dict)
     _cancelled: bool = False
+    _tool_calls_used: int = 0
 
     async def run(
         self,
@@ -287,6 +289,34 @@ class AgentLoop:
             tool_results: list[RunItem | None] = [None] * len(pending_calls)
             allowed_calls: list[tuple[int, _PendingToolCall]] = []
             for index, call in enumerate(pending_calls):
+                if (
+                    self.max_tool_calls is not None
+                    and self._tool_calls_used >= self.max_tool_calls
+                ):
+                    tool_results[index] = RunItem(
+                        type=ItemTypes.FUNCTION_RESULT,
+                        provider=provider_id,
+                        status="failed",
+                        data={
+                            "call_id": call.call_id,
+                            "name": call.name,
+                            "error": "tool_call_budget_exceeded",
+                            "limit": self.max_tool_calls,
+                        },
+                    )
+                    yield AgentEvent(
+                        type=EventTypes.TOOL_CHOICE_REJECTED,
+                        provider=provider_id,
+                        session_id=session_id,
+                        item_id=call.call_id,
+                        data={
+                            "call_id": call.call_id,
+                            "name": call.name,
+                            "reason": "max_tool_calls_exceeded",
+                            "limit": self.max_tool_calls,
+                        },
+                    )
+                    continue
                 if effective_policy is not None:
                     decision = await effective_policy.check(_policy_request_for_call(call))
                 else:
@@ -302,6 +332,18 @@ class AgentLoop:
                             "name": call.name,
                             "error": "denied_by_policy",
                             "reason": decision.reason,
+                        },
+                    )
+                    yield AgentEvent(
+                        type=EventTypes.TOOL_CHOICE_REJECTED,
+                        provider=provider_id,
+                        session_id=session_id,
+                        item_id=call.call_id,
+                        data={
+                            "call_id": call.call_id,
+                            "name": call.name,
+                            "reason": decision.reason or "denied_by_policy",
+                            "checkpoint": "before_tool_call",
                         },
                     )
                     continue
@@ -323,13 +365,34 @@ class AgentLoop:
                                 "reason": self._last_decision.reason,
                             },
                         )
+                        yield AgentEvent(
+                            type=EventTypes.TOOL_CHOICE_REJECTED,
+                            provider=provider_id,
+                            session_id=session_id,
+                            item_id=call.call_id,
+                            data={
+                                "call_id": call.call_id,
+                                "name": call.name,
+                                "reason": self._last_decision.reason
+                                or "denied_by_approval",
+                                "checkpoint": "approval",
+                            },
+                        )
                         continue
 
                 allowed_calls.append((index, call))
+                self._tool_calls_used += 1
 
             for _, call in allowed_calls:
                 yield AgentEvent(
                     type=EventTypes.TOOL_CALL_STARTED,
+                    provider=provider_id,
+                    session_id=session_id,
+                    item_id=call.call_id,
+                    data={"call_id": call.call_id, "name": call.name},
+                )
+                yield AgentEvent(
+                    type=EventTypes.TOOL_CHOICE_CALLED,
                     provider=provider_id,
                     session_id=session_id,
                     item_id=call.call_id,
@@ -376,6 +439,17 @@ class AgentLoop:
                         session_id=session_id,
                         item_id=call.call_id,
                         data={"call_id": call.call_id, "name": call.name, "error": str(result)},
+                    )
+                    yield AgentEvent(
+                        type=EventTypes.TOOL_CHOICE_FAILED,
+                        provider=provider_id,
+                        session_id=session_id,
+                        item_id=call.call_id,
+                        data={
+                            "call_id": call.call_id,
+                            "name": call.name,
+                            "error": str(result),
+                        },
                     )
                     tool_results[index] = RunItem(
                         type=ItemTypes.FUNCTION_RESULT,

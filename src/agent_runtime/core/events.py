@@ -120,6 +120,11 @@ class EventTypes:
 
     TOOL_SEARCH_REQUESTED = "tool_search.requested"
     TOOL_SEARCH_COMPLETED = "tool_search.completed"
+    TOOL_CHOICE_SELECTED = "tool.choice.selected"
+    TOOL_CHOICE_REJECTED = "tool.choice.rejected"
+    TOOL_CHOICE_LOADED = "tool.choice.loaded"
+    TOOL_CHOICE_CALLED = "tool.choice.called"
+    TOOL_CHOICE_FAILED = "tool.choice.failed"
 
     PROMPT_PLAN_CREATED = "prompt.plan.created"
     PROMPT_FRAGMENT_SELECTED = "prompt.fragment.selected"

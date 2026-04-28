@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from agent_runtime.core.errors import ToolExecutionError
 from agent_runtime.tools.registry import ToolDefinition, ToolRegistry
 from agent_runtime.tools.results import ToolResult
 
@@ -16,6 +17,7 @@ class ToolRuntime:
     context: Mapping[str, Any] = field(default_factory=dict)
     max_concurrent: int | None = None
     timeout: float | None = None
+    allowed_tools: set[str] | None = None
 
     async def call(
         self,
@@ -24,6 +26,8 @@ class ToolRuntime:
         *,
         mock: bool = False,
     ) -> ToolResult:
+        if self.allowed_tools is not None and name not in self.allowed_tools:
+            raise ToolExecutionError(f"Tool is not visible in this session: {name}")
         definition = self.registry.get(name)
         if mock:
             return ToolResult(
