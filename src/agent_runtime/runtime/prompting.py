@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from agent_runtime.core.errors import ConfigurationError
-from agent_runtime.core.prompts import PromptBundle
+from agent_runtime.planning.prompts import PromptBundle
 
 
 @dataclass(slots=True)

@@ -17,6 +17,6 @@
 
 ## Boundary Note
 
-The strategy selection contract lives in `core.results.OutputSpec` today. If
-planning moves into its own package, output-strategy-specific prompt fragments
-should move with planning rather than into this package.
+The strategy selection contract lives in `core.results.OutputSpec` today.
+Output-strategy-specific prompt fragments belong with `agent_runtime.planning`,
+not in this package.

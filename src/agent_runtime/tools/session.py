@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent_runtime.core.prompts import PromptFragment
+from agent_runtime.planning.prompts import PromptFragment
 from agent_runtime.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
 from agent_runtime.tools.runtime import ToolRuntime
 

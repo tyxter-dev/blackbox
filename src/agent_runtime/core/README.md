@@ -20,8 +20,7 @@ import without causing adapter or runtime orchestration side effects.
 
 ## Transitional Modules
 
-- `prompts.py` and `run_plan.py` currently live here because prompt-aware run
-  planning was introduced before a dedicated planning package existed. They
-  should move to `agent_runtime.planning` in the next structure pass.
+- `prompts.py` and `run_plan.py` are compatibility re-export shims. New code
+  should import from `agent_runtime.planning`.
 - `cache.py` and `stores.py` are shared infrastructure. They may remain here or
   move to an infrastructure package if they continue to grow.

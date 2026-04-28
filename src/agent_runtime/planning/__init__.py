@@ -1,8 +1,3 @@
-"""Compatibility re-exports for prompt planning contracts.
-
-New code should import from :mod:`agent_runtime.planning.prompts`.
-"""
-
 from agent_runtime.planning.prompts import (
     CacheSection,
     FragmentRequirements,
@@ -22,9 +17,20 @@ from agent_runtime.planning.prompts import (
     assert_prompt_tool_parity,
     validate_prompt_tool_parity,
 )
+from agent_runtime.planning.run_plan import (
+    DataSourceRef,
+    DynamicToolLoadingSpec,
+    ResolvedHostedTool,
+    ResolvedMCPToolset,
+    ResolvedRunSpec,
+    ResolvedTool,
+    resolved_hosted_tools,
+)
 
 __all__ = [
     "CacheSection",
+    "DataSourceRef",
+    "DynamicToolLoadingSpec",
     "FragmentRequirements",
     "FragmentSelector",
     "PromptBundle",
@@ -37,8 +43,13 @@ __all__ = [
     "PromptPlacement",
     "PromptSection",
     "PromptSpec",
+    "ResolvedHostedTool",
+    "ResolvedMCPToolset",
+    "ResolvedRunSpec",
+    "ResolvedTool",
     "SelectedPromptFragment",
     "SkippedPromptFragment",
     "assert_prompt_tool_parity",
+    "resolved_hosted_tools",
     "validate_prompt_tool_parity",
 ]

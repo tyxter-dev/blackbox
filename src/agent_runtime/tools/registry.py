@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agent_runtime.core.errors import ToolExecutionError
-from agent_runtime.core.prompts import FragmentSelector, PromptFragment
+from agent_runtime.planning.prompts import FragmentSelector, PromptFragment
 from agent_runtime.tools.results import ToolResult
 
 ToolCallable = Callable[..., ToolResult | str | dict[str, Any] | Any]
