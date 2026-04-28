@@ -17,7 +17,8 @@ Scope: package, test, and documentation organization only
   stable public re-exports. Remaining adapter package splits should move one
   at a time when they become large enough to justify it.
 - Phase 4 is in progress: output-specific runtime helpers have been split into
-  `runtime/output.py`.
+  `runtime/output.py`, and workspace event/result helpers have been split into
+  `runtime/workspace_results.py`.
 - Phases 5-6 remain follow-up work because they involve larger file/package
   moves that should land one package group at a time.
 

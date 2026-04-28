@@ -59,7 +59,6 @@ from agent_runtime.runtime._helpers import (
     _resolved_tools,
     _tool_names,
     _tool_usage_from_events,
-    _workspace_metadata_from_events,
 )
 from agent_runtime.runtime.agents import AgentRuntimeFacade
 from agent_runtime.runtime.caches import ProviderCacheRuntime
@@ -75,6 +74,7 @@ from agent_runtime.runtime.output import (
 )
 from agent_runtime.runtime.prompting import PromptRuntimeFacade
 from agent_runtime.runtime.tools import ToolRuntimeFacade
+from agent_runtime.runtime.workspace_results import _workspace_metadata_from_events
 from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
 from agent_runtime.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
 from agent_runtime.tools.runtime import ToolRuntime

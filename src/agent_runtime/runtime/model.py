@@ -39,8 +39,8 @@ from agent_runtime.runtime._helpers import (
     _prompt_metadata_from_events,
     _provider_cache_metadata,
     _tool_usage_from_events,
-    _workspace_metadata_from_events,
 )
+from agent_runtime.runtime.workspace_results import _workspace_metadata_from_events
 from agent_runtime.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
 
 

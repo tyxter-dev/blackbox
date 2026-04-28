@@ -25,20 +25,22 @@ from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.runtime._helpers import (
     _agent_event_text,
     _agent_event_text_delta,
-    _agent_event_with_workspace,
     _agent_session_result_status,
     _agent_task_spec,
     _append_artifact_unique,
     _artifact_from_event,
     _attach_accounting_metadata,
-    _drain_workspace_events,
     _event_usage,
     _provider_state_from_session,
     _tool_usage_from_events,
+)
+from agent_runtime.runtime.output import _resolve_output_spec, _validate_output
+from agent_runtime.runtime.workspace_results import (
+    _agent_event_with_workspace,
+    _drain_workspace_events,
     _workspace_metadata_from_events,
     _workspace_ref_metadata,
 )
-from agent_runtime.runtime.output import _resolve_output_spec, _validate_output
 from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
 
 T = TypeVar("T")
