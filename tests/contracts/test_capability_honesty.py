@@ -293,7 +293,10 @@ async def test_local_agent_artifacts_default_empty_page() -> None:
     assert page.next_cursor is None
 
 
-async def test_cloud_agent_stub_create_agent_requires_credentials() -> None:
+async def test_cloud_agent_stub_create_agent_requires_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     provider = OpenAICloudAgentProvider()
     with pytest.raises(ProviderNotConfiguredError):
         await provider.create_agent(AgentSpec(name="x"))
@@ -307,7 +310,11 @@ async def test_openai_agents_create_agent_requires_optional_sdk_when_configured(
         await provider.create_agent(AgentSpec(name="x"))
 
 
-async def test_gemini_requires_credentials_or_client() -> None:
+async def test_gemini_requires_credentials_or_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     provider = GeminiGenerateContentProvider()
     with pytest.raises(ProviderNotConfiguredError):
         async for _ in provider.stream_turn(TurnRequest(model="gemini-test", input="hi")):

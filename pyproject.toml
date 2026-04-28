@@ -60,6 +60,7 @@ packages = ["src/agent_runtime"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
   "integration_openai: requires OPENAI_API_KEY and network access",
