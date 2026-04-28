@@ -43,6 +43,7 @@ The PRD is updated when product direction shifts; ask before making sweeping PRD
 ```bash
 pip install -e .[dev]                  # editable install with pytest, ruff, mypy
 pytest -q                              # offline suite (default)
+pytest -q tests/unit tests/runtime tests/contracts tests/golden
 pytest -m integration_openai           # network-gated; needs OPENAI_API_KEY
 ruff check src tests examples
 mypy src                               # strict mode is configured in pyproject
@@ -52,7 +53,7 @@ python examples/local_agent_with_tool.py
 python examples/run_with_typed_output.py
 ```
 
-All three quality gates (pytest / ruff / mypy --strict) must pass before committing. The current baseline is 71 passing + 1 skipped network-gated.
+All three quality gates (pytest / ruff / mypy --strict) must pass before committing. The focused structural gate is `pytest -q tests/unit tests/runtime tests/contracts tests/golden`; the current baseline is 398 passing + 1 skipped. Broader integration suites are network-gated and require provider credentials.
 
 ## Architecture in five points
 
@@ -113,13 +114,25 @@ All exceptions descend from `AgentRuntimeError` (`core/errors.py`). Use the clos
 Layout (under `tests/`):
 
 ```
-unit/         # pure data models, tool layer, registry, errors, stores
-runtime/      # runtime.run/.stream, AgentLoop, LocalAgentProvider
-contracts/    # provider contracts (capability honesty, etc.)
-golden/<vendor>/   # adapter event-mapping tests with offline fixtures
-integration/<vendor>/  # network-gated smoke tests
-e2e/          # reserved for full coding-agent workflows
-fixtures/     # ScriptedModelProvider, FakeOpenAIClient (shared)
+unit/                    # source-mirrored unit tests
+  core/                  # data models, errors, stores, state, accounting
+  providers/             # registry and provider unit tests
+    model_adapters/      # model adapter controls/capabilities/hardening
+  tools/                 # local and hosted tool units
+  mcp/                   # MCP specs, connector, client, toolset
+  workspaces/            # workspace provider/runtime units
+  workspace_agents/      # governed workspace-agent package units
+  output/                # structured-output schema units
+  observability/         # sinks, traces, replay/eval workflow units
+  realtime/              # realtime contracts and registry units
+  compat/                # compatibility facade/import units
+  integrations/          # optional integration builder units
+runtime/                 # runtime.run/.stream, AgentLoop, LocalAgentProvider
+contracts/               # provider contracts (capability honesty, etc.)
+golden/<vendor>/         # adapter event-mapping tests with offline fixtures
+integration/<vendor>/    # network-gated smoke tests
+e2e/                     # reserved for full coding-agent workflows
+fixtures/                # ScriptedModelProvider, FakeOpenAIClient (shared)
 ```
 
 **Writing new tests:**
@@ -128,7 +141,9 @@ fixtures/     # ScriptedModelProvider, FakeOpenAIClient (shared)
 - Local provider session lifecycle → `runtime/test_local_agent_provider.py`.
 - New adapter event mapping → `golden/<vendor>/` with replayable fixtures (no network); add a corresponding network-gated smoke test under `integration/<vendor>/`.
 - Capability flags → `contracts/test_capability_honesty.py` (positive *and* negative assertions).
-- Pure data classes → `unit/`.
+- Pure data classes → `unit/core/`.
+- Provider registry or adapter unit behavior → `unit/providers/` or
+  `unit/providers/model_adapters/`.
 
 Use `ScriptedModelProvider` (`tests/fixtures/scripted_model.py`) to drive the loop without network. Update `tests/VALIDATION.md` when adding tests for behaviors listed there.
 

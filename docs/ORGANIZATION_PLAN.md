@@ -1,6 +1,6 @@
 # Project Organization Plan
 
-Status: active implementation  
+Status: implemented
 Scope: package, test, and documentation organization only
 
 ## Implementation Progress
@@ -25,7 +25,8 @@ Scope: package, test, and documentation organization only
 - Phase 5 is implemented: `tests/unit` now mirrors source ownership for the
   package areas with unit coverage, and validation references point at the new
   paths.
-- Phase 6 remains follow-up documentation alignment.
+- Phase 6 is implemented: README, package map, PRD layout, Claude guidance,
+  and validation docs describe the same structure.
 
 ## Goal
 

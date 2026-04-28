@@ -283,6 +283,11 @@ src/agent_runtime/
     model.py
     agents.py
     workspaces.py
+    output.py
+    run_planning.py
+    event_metadata.py
+    workspace_results.py
+    session_results.py
   providers/             # provider protocols, registry, and concrete adapters
     base.py
     registry.py

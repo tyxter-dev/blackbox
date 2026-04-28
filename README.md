@@ -48,6 +48,7 @@ src/agent_runtime/
   output/           # structured-output schema conversion and validation helpers
   observability/    # traces, replay, evals, and event sinks
   realtime/         # realtime session contracts and provider adapters
+  integrations/     # optional third-party integration builders
   compat/           # migration and compatibility helpers
   models/           # compatibility namespace for old model adapter imports
   agents/           # compatibility namespace for old agent adapter imports

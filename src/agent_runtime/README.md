@@ -27,11 +27,12 @@ runtime responsibilities, not around provider brands.
 - `hosted_tools.py`: compatibility shim for hosted-tool specs now owned by
   `tools/hosted/specs.py`.
 
-## Planned Boundary Cleanup
+## Boundary Status
 
-The next structural refactors should be mechanical and compatibility-preserving:
+The current tree reflects the organization plan:
 
-1. Split large provider adapters into packages with stable public re-exports.
-2. Slim `runtime/main.py` and replace broad helper modules with responsibility
-   named modules.
-3. Mirror source package ownership under `tests/unit/`.
+1. Large provider adapters are packages with stable public re-exports.
+2. Runtime helper modules have responsibility names, including
+   `output.py`, `run_planning.py`, `event_metadata.py`,
+   `workspace_results.py`, and `session_results.py`.
+3. Unit tests mirror source package ownership under `tests/unit/`.
