@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent_runtime import AgentRuntime, AgentSessionResult, EventTypes
-from agent_runtime.agents.claude_code import ClaudeCodeAgentProvider
+from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
 from agent_runtime.workspaces import WorkspaceRef, WorkspaceSpec
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient
 

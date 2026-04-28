@@ -7,6 +7,7 @@ tool facade access, and provider cache lifecycle helpers.
 ## Belongs Here
 
 - `AgentRuntime`, the main public entrypoint.
+- `AgentLoop`, the shared autonomous model/tool execution loop.
 - Facades that coordinate existing domain packages.
 - Runtime-only helper functions for metadata collection, output validation,
   prompt planning events, and workspace/session result assembly.
@@ -22,6 +23,8 @@ tool facade access, and provider cache lifecycle helpers.
 ## File Map
 
 - `main.py`: `AgentRuntime` and high-level run/stream/plan orchestration.
+- `agent_loop.py`: shared autonomous model/tool loop used by high-level runs
+  and local agent sessions.
 - `model.py`: direct model-turn facade.
 - `agents.py`: provider-managed/local agent-session facade.
 - `workspaces.py`: workspace provider registry/lifecycle facade.

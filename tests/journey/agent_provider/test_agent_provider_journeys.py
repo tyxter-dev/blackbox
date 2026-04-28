@@ -27,17 +27,19 @@ from agent_runtime import (
     ModelPricing,
     TaskSpec,
 )
-from agent_runtime.agents.claude_code import ClaudeCodeAgentProvider
-from agent_runtime.agents.local import LocalAgentProvider
-from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
 from agent_runtime.core.artifacts import ArtifactPage
 from agent_runtime.core.errors import ProviderNotConfiguredError, UnsupportedFeatureError
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.sessions import InvocationRef
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
-from agent_runtime.models.xai_responses import XAIResponsesProvider
+from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
+from agent_runtime.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
+from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.providers.model_adapters.gemini_generate_content import (
+    GeminiGenerateContentProvider,
+)
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 from agent_runtime.tools import ToolResult
 
 pytestmark = pytest.mark.journey_agent_provider

@@ -4,8 +4,8 @@ from agent_runtime import AgentRuntime, EventTypes
 from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.providers.base import TurnRequest
+from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
 from tests.fixtures.fake_anthropic_client import (
     FakeAnthropicClient,
     block_delta,

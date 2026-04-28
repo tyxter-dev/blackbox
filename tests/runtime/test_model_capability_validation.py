@@ -5,10 +5,12 @@ import pytest
 from agent_runtime import AgentRuntime, FileSearch, HostedToolRaw, WebSearch
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import AgentResult, OutputSpec
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.models.echo import EchoModelProvider
-from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
 from agent_runtime.output.schema import build_output_schema
+from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from agent_runtime.providers.model_adapters.gemini_generate_content import (
+    GeminiGenerateContentProvider,
+)
 from tests.fixtures.fake_anthropic_client import FakeAnthropicClient, final_message
 from tests.fixtures.fake_gemini_client import FakeGeminiClient, chunk, text_part
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn

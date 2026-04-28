@@ -373,7 +373,7 @@ class AgentRuntime:
         Pass ``provider_state`` to resume from saved state (e.g. one loaded
         from :class:`SQLiteRunStore`).
         """
-        from agent_runtime.loop import AgentLoop
+        from agent_runtime.runtime.agent_loop import AgentLoop
 
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource

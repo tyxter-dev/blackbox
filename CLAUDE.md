@@ -64,7 +64,7 @@ All three quality gates (pytest / ruff / mypy --strict) must pass before committ
    - `runtime.models` — direct model turns.
    - `runtime.agents` — session lifecycle (cloud or local).
 
-3. **`AgentLoop` (in `src/agent_runtime/loop.py`) is the shared execution layer.** Both `LocalAgentProvider` and the high-level `AgentRuntime.run` delegate to it. New tool/approval/policy semantics belong here, not duplicated across the providers.
+3. **`AgentLoop` (in `src/agent_runtime/runtime/agent_loop.py`) is the shared execution layer.** Both `LocalAgentProvider` and the high-level `AgentRuntime.run` delegate to it. New tool/approval/policy semantics belong here, not duplicated across the providers. `src/agent_runtime/loop.py` is only a compatibility shim.
 
 4. **Events are the runtime stream.** `AgentEvent` carries `run_id` (UUID per `runtime.run/.stream` invocation) and a monotonic `sequence`. Every event flows through `runtime.event_store` (an `EventStore` Protocol; in-memory by default). Text is one projection; structured `output` is another; the events log is the truth.
 

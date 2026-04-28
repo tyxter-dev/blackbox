@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from agent_runtime.agents.claude_code import ClaudeCodeAgentProvider
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.events import EventTypes
+from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.workspaces.spec import WorkspaceSpec
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient

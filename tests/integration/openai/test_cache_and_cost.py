@@ -6,7 +6,7 @@ import os
 import pytest
 
 from agent_runtime import AgentRuntime, ModelCacheControl, ModelPricing
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 pytestmark = pytest.mark.integration_openai
 

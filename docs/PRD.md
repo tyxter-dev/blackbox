@@ -276,59 +276,30 @@ AgentLoop / TaskRunner            ModelRuntimeFacade              AgentRuntimeFa
 
 ```text
 src/agent_runtime/
-  core/
-    events.py
-    items.py
-    state.py
-    sessions.py
-    capabilities.py
-    artifacts.py
-    approvals.py
-    errors.py
-
-  providers/
+  core/                  # provider-neutral events, state, results, errors, policy
+  runtime/               # AgentRuntime, AgentLoop, facades, orchestration helpers
+    agent_loop.py
+    main.py
+    model.py
+    agents.py
+    workspaces.py
+  providers/             # provider protocols, registry, and concrete adapters
     base.py
     registry.py
-
-  runtime.py
-
-  models/
-    openai_responses.py
-    anthropic_messages.py
-    gemini_generate_content.py
-    echo.py
-
-  agents/
-    local.py
-    openai_cloud.py
-    anthropic_managed.py
-    google_platform.py
-
-  tools/
-    registry.py
-    runtime.py
-    results.py
-    catalog.py
-
-  workspaces/
-    spec.py
-    changes.py
-
-  workspace_agents/
-    spec.py
-    permissions.py
-    schedules.py
-    registry.py
-    serialization.py
-    runtime.py
-
-  mcp/
-    spec.py
-    connector.py
-
-  observability/
-    traces.py
-    sinks.py
+    model_adapters/      # OpenAI, Anthropic, Gemini, xAI, Echo model providers
+    agent_adapters/      # Local, OpenAI cloud, Claude Code, Vertex agent providers
+  tools/                 # local tools, hosted-tool specs, catalogs, sessions
+  mcp/                   # MCP specs, connector, client, cache, transports
+  workspaces/            # workspace provider contracts and backends
+  workspace_agents/      # governed workspace-agent package contracts
+  planning/              # resolved run specs and prompt composition
+  output/                # structured-output schema and validation helpers
+  realtime/              # realtime runtime and realtime providers
+  observability/         # traces, replay, evals, event sinks
+  integrations/          # optional third-party integration builders
+  compat/                # explicit migration and compatibility helpers
+  models/                # compatibility namespace for old model adapter imports
+  agents/                # compatibility namespace for old agent adapter imports
 ```
 
 ### 8.3 Core runtime split
@@ -1173,7 +1144,7 @@ checking, ruff, changelog, release candidate.
 from pydantic import BaseModel
 
 from agent_runtime import AgentRuntime
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 
 class TicketDecision(BaseModel):
@@ -1215,7 +1186,7 @@ async for event in runtime.stream(
 
 ```python
 from agent_runtime import AgentRuntime
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(OpenAIResponsesProvider(api_key="..."))

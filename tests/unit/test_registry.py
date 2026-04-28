@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from agent_runtime.core.errors import ProviderNotFoundError
-from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 
 

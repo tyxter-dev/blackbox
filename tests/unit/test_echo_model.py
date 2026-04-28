@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 
 
 async def test_echo_model_runtime_run() -> None:

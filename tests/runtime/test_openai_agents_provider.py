@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from agent_runtime import AgentRuntime
-from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.events import EventTypes
+from agent_runtime.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 
 

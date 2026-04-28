@@ -38,9 +38,8 @@ src/agent_runtime/
   providers/        # provider protocols, registry, request contracts, and adapters
     model_adapters/ # OpenAI, Anthropic, Gemini, xAI, and Echo model adapters
     agent_adapters/ # Local, OpenAI Agents SDK, Claude Code, and Vertex agent adapters
-  models/           # compatibility namespace for old model adapter imports
-  agents/           # compatibility namespace for old agent adapter imports
   runtime/          # high-level facades and run orchestration helpers
+    agent_loop.py   # shared autonomous model/tool loop
   planning/         # resolved run specs, prompt composition, and parity checks
   tools/            # local tools, hosted-tool specs, catalogs, and sessions
   mcp/              # MCP server specs, connector, cache, and transports
@@ -50,6 +49,8 @@ src/agent_runtime/
   observability/    # traces, replay, evals, and event sinks
   realtime/         # realtime session contracts and provider adapters
   compat/           # migration and compatibility helpers
+  models/           # compatibility namespace for old model adapter imports
+  agents/           # compatibility namespace for old agent adapter imports
 ```
 
 ## High-level blackbox API

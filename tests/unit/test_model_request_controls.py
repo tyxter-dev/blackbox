@@ -5,10 +5,6 @@ import pytest
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import OutputSpec
 from agent_runtime.hosted_tools import FileSearch, HostedToolRaw, RemoteMCP, ToolSearch, WebSearch
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider, _compose_messages
-from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
-from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.output.schema import build_output_schema
 from agent_runtime.providers.base import (
     CompactionControl,
@@ -17,6 +13,15 @@ from agent_runtime.providers.base import (
     ToolSearchControl,
     TurnRequest,
 )
+from agent_runtime.providers.model_adapters.anthropic_messages import (
+    AnthropicMessagesProvider,
+    _compose_messages,
+)
+from agent_runtime.providers.model_adapters.gemini_generate_content import (
+    GeminiGenerateContentProvider,
+)
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 
 
 def test_openai_responses_maps_common_controls_to_native_kwargs() -> None:

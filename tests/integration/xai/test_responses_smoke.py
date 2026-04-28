@@ -13,7 +13,7 @@ import os
 import pytest
 
 from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.models.xai_responses import XAIResponsesProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 
 pytestmark = pytest.mark.integration_xai
 

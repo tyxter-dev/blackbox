@@ -12,11 +12,11 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from agent_runtime import AgentRuntime, AgentSpec, EventTypes
-from agent_runtime.agents.local import LocalAgentProvider
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.sessions import AgentSession
-from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,

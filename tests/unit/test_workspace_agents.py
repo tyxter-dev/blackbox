@@ -6,7 +6,7 @@ from agent_runtime import AgentRuntime
 from agent_runtime.core.policy import PolicyRequest
 from agent_runtime.core.results import AgentResult
 from agent_runtime.mcp import MCPServerSpec, MCPToolset
-from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 from agent_runtime.workspace_agents import (
     ApprovalRequirement,
     ConnectorSpec,

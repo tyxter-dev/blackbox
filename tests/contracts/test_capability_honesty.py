@@ -18,10 +18,6 @@ from typing import cast
 import pytest
 
 from agent_runtime import AgentRuntime, AgentSpec
-from agent_runtime.agents.claude_code import ClaudeCodeAgentProvider
-from agent_runtime.agents.local import LocalAgentProvider
-from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
-from agent_runtime.agents.vertex_agent_engine import VertexAIAgentEngineProvider
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.capabilities import (
     AgentCapabilities,
@@ -39,13 +35,19 @@ from agent_runtime.core.errors import (
 from agent_runtime.core.results import OutputSpec
 from agent_runtime.core.sessions import SessionRef
 from agent_runtime.hosted_tools import WebSearch
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.models.echo import EchoModelProvider
-from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
-from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.output.schema import build_output_schema
+from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
+from agent_runtime.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
+from agent_runtime.providers.agent_adapters.vertex_agent_engine import VertexAIAgentEngineProvider
 from agent_runtime.providers.base import AgentProvider, ModelProvider, TaskSpec, TurnRequest
+from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from agent_runtime.providers.model_adapters.gemini_generate_content import (
+    GeminiGenerateContentProvider,
+)
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
 from tests.fixtures.fake_anthropic_client import FakeAnthropicClient

@@ -7,7 +7,7 @@ runtime responsibilities, not around provider brands.
 
 - `core/`: stable primitive contracts shared across the runtime.
 - `providers/`: provider protocols, provider registry, and provider adapter packages.
-- `runtime/`: high-level orchestration facades and private runtime helpers.
+- `runtime/`: high-level orchestration facades, `AgentLoop`, and private runtime helpers.
 - `planning/`: resolved run specs, prompt composition, and prompt/tool parity.
 - `models/`: compatibility import namespace for model adapters.
 - `agents/`: compatibility import namespace for agent adapters.
@@ -23,7 +23,7 @@ runtime responsibilities, not around provider brands.
 
 ## Top-Level Modules
 
-- `loop.py`: local model/tool loop used by high-level runs and local agent sessions.
+- `loop.py`: compatibility shim for `runtime/agent_loop.py`.
 - `hosted_tools.py`: compatibility shim for hosted-tool specs now owned by
   `tools/hosted/specs.py`.
 
@@ -31,5 +31,7 @@ runtime responsibilities, not around provider brands.
 
 The next structural refactors should be mechanical and compatibility-preserving:
 
-1. Normalize journey test directory names and README markers so examples,
-   journey tests, and provider packages use the same vocabulary.
+1. Split large provider adapters into packages with stable public re-exports.
+2. Slim `runtime/main.py` and replace broad helper modules with responsibility
+   named modules.
+3. Mirror source package ownership under `tests/unit/`.

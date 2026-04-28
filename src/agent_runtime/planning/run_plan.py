@@ -156,15 +156,15 @@ class ResolvedRunSpec:
             names.add("function_tools")
         if self.provider_profile.summary.supports_hosted_tools:
             names.add("hosted_tools")
-        for name, detail in self.provider_profile.controls.items():
+        for control_name, detail in self.provider_profile.controls.items():
             if detail.status != "unsupported":
-                names.add(f"control:{name}")
-        for name, detail in self.provider_profile.hosted_tools.items():
+                names.add(f"control:{control_name}")
+        for hosted_tool_name, detail in self.provider_profile.hosted_tools.items():
             if detail.status != "unsupported":
-                names.add(f"hosted_tool:{name}")
-        for name, detail in self.provider_profile.output_strategies.items():
+                names.add(f"hosted_tool:{hosted_tool_name}")
+        for output_strategy, detail in self.provider_profile.output_strategies.items():
             if detail.status != "unsupported":
-                names.add(f"output_strategy:{name}")
+                names.add(f"output_strategy:{output_strategy}")
         return sorted(names)
 
     @property

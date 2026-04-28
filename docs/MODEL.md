@@ -81,14 +81,14 @@ owns workspace operations. `AgentProvider` owns session lifecycle.
 | Area | Current evidence | State |
 |---|---|---|
 | Core protocol | `src/agent_runtime/providers/base.py` | Implemented. `ModelProvider` exposes provider id, capabilities, and `stream_turn(...)`. |
-| Model runtime facade | `src/agent_runtime/runtime.py` | Implemented. `runtime.models.run/stream` build `TurnRequest`, validate capabilities, stamp events, collect text, provider state, artifacts, usage, cost, cache, MCP, hosted-tool, workspace, and trace metadata. |
-| Local loop integration | `src/agent_runtime/loop.py` | Implemented. `AgentLoop` drives repeated model turns and dispatches tool results through provider-native continuation. |
-| OpenAI Responses | `src/agent_runtime/models/openai_responses.py` | Implemented. Maps Responses streaming events, hosted tools, remote MCP, provider state, structured output, controls, usage, and retries. |
-| Anthropic Messages | `src/agent_runtime/models/anthropic_messages.py` | Implemented. Preserves native Messages content/history, thinking, tools, MCP blocks, cache controls, and usage. |
-| Gemini GenerateContent | `src/agent_runtime/models/gemini_generate_content.py` | Implemented. Preserves content/part history, function calls, thought signatures, provider-native JSON schema, cache references, provider cache create/delete, and usage. |
-| xAI Responses | `src/agent_runtime/models/xai_responses.py` | Implemented as an OpenAI-compatible Responses adapter with conservative capabilities. |
-| Echo/test providers | `src/agent_runtime/models/echo.py`, `tests/fixtures/scripted_model.py` | Implemented. Used for deterministic local loop and contract coverage. |
-| Capability profiles | `src/agent_runtime/core/capabilities.py`, `src/agent_runtime/models/capability_validation.py` | Implemented. Profiles cover hosted tools, output strategies, controls, state modes, constraints, and pre-dispatch validation. |
+| Model runtime facade | `src/agent_runtime/runtime/model.py` | Implemented. `runtime.models.run/stream` build `TurnRequest`, validate capabilities, stamp events, collect text, provider state, artifacts, usage, cost, cache, MCP, hosted-tool, workspace, and trace metadata. |
+| Local loop integration | `src/agent_runtime/runtime/agent_loop.py` | Implemented. `AgentLoop` drives repeated model turns and dispatches tool results through provider-native continuation. |
+| OpenAI Responses | `src/agent_runtime/providers/model_adapters/openai_responses.py` | Implemented. Maps Responses streaming events, hosted tools, remote MCP, provider state, structured output, controls, usage, and retries. |
+| Anthropic Messages | `src/agent_runtime/providers/model_adapters/anthropic_messages.py` | Implemented. Preserves native Messages content/history, thinking, tools, MCP blocks, cache controls, and usage. |
+| Gemini GenerateContent | `src/agent_runtime/providers/model_adapters/gemini_generate_content.py` | Implemented. Preserves content/part history, function calls, thought signatures, provider-native JSON schema, cache references, provider cache create/delete, and usage. |
+| xAI Responses | `src/agent_runtime/providers/model_adapters/xai_responses.py` | Implemented as an OpenAI-compatible Responses adapter with conservative capabilities. |
+| Echo/test providers | `src/agent_runtime/providers/model_adapters/echo.py`, `tests/fixtures/scripted_model.py` | Implemented. Used for deterministic local loop and contract coverage. |
+| Capability profiles | `src/agent_runtime/core/capabilities.py`, `src/agent_runtime/providers/model_adapters/capability_validation.py` | Implemented. Profiles cover hosted tools, output strategies, controls, state modes, constraints, and pre-dispatch validation. |
 | Output strategies | `src/agent_runtime/core/results.py`, `src/agent_runtime/output/schema.py` | Implemented. Supports `provider_native`, `finalizer_tool`, `posthoc_parse`, and `posthoc_parse_with_retry`. |
 | Tests | `tests/golden/`, `tests/runtime/`, `tests/unit/test_model_request_controls.py`, `tests/contracts/test_capability_honesty.py` | Current behavior is covered by golden provider mappings, runtime loop tests, capability validation, request controls, accounting, and integration gates. |
 

@@ -15,15 +15,6 @@ from agent_runtime.core.capabilities import (
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import OutputSpec
 from agent_runtime.hosted_tools import WebSearch, hosted_tool_kind
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.models.capability_validation import (
-    requested_controls,
-    resolve_output_strategy,
-)
-from agent_runtime.models.echo import EchoModelProvider
-from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
-from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.output.schema import build_output_schema
 from agent_runtime.providers.base import (
     CompactionControl,
@@ -31,6 +22,17 @@ from agent_runtime.providers.base import (
     ModelRequestControls,
     ToolSearchControl,
 )
+from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.providers.model_adapters.capability_validation import (
+    requested_controls,
+    resolve_output_strategy,
+)
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from agent_runtime.providers.model_adapters.gemini_generate_content import (
+    GeminiGenerateContentProvider,
+)
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
 

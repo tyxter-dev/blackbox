@@ -16,9 +16,9 @@ from agent_runtime.core.sessions import (
     SessionRef,
     SessionStatus,
 )
-from agent_runtime.loop import AgentLoop, ApprovalPolicy
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.runtime import ModelRuntime
+from agent_runtime.runtime.agent_loop import AgentLoop, ApprovalPolicy
 from agent_runtime.tools.runtime import ToolRuntime
 
 

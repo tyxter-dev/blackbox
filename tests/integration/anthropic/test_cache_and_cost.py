@@ -6,7 +6,7 @@ import os
 import pytest
 
 from agent_runtime import AgentRuntime, ModelCacheControl, ModelPricing
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
 
 pytestmark = pytest.mark.integration_anthropic
 

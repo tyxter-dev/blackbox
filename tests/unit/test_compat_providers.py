@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import pytest
 
+from agent_runtime.agents.local import LocalAgentProvider as CompatLocalAgentProvider
 from agent_runtime.compat.providers import (
     create_runtime_with_default_providers,
     provider_ref_for_model,
     register_default_model_providers,
     resolve_model_route,
 )
-from agent_runtime.models.xai_responses import XAIResponsesProvider
+from agent_runtime.loop import AgentLoop as CompatAgentLoop
+from agent_runtime.models.xai_responses import XAIResponsesProvider as CompatXAIResponsesProvider
+from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import AgentRuntime
+from agent_runtime.runtime.agent_loop import AgentLoop
 
 
 @pytest.mark.parametrize(
@@ -94,3 +99,15 @@ def test_xai_provider_defaults_to_xai_api_key(monkeypatch: pytest.MonkeyPatch) -
     provider = XAIResponsesProvider()
 
     assert provider.api_key == "xai-key"
+
+
+def test_legacy_model_adapter_import_path_reexports_canonical_provider() -> None:
+    assert CompatXAIResponsesProvider is XAIResponsesProvider
+
+
+def test_legacy_agent_adapter_import_path_reexports_canonical_provider() -> None:
+    assert CompatLocalAgentProvider is LocalAgentProvider
+
+
+def test_legacy_agent_loop_import_path_reexports_canonical_loop() -> None:
+    assert CompatAgentLoop is AgentLoop

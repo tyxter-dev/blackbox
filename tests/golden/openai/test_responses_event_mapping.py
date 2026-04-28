@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from agent_runtime import AgentRuntime, EventTypes
 from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.state import ProviderState
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
-from agent_runtime.models.xai_responses import XAIResponsesProvider
 from agent_runtime.providers.base import TurnRequest
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 from tests.fixtures.fake_openai_client import (
     FakeOpenAIClient,
     evt,
@@ -340,7 +342,10 @@ async def test_function_result_run_items_become_function_call_outputs() -> None:
     }
 
 
-async def test_missing_credentials_and_client_raises_configuration_error() -> None:
+async def test_missing_credentials_and_client_raises_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     provider = OpenAIResponsesProvider()
     try:
         async for _ in provider.stream_turn(_dummy_request("hi")):

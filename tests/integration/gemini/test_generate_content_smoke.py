@@ -13,7 +13,9 @@ import os
 import pytest
 
 from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
+from agent_runtime.providers.model_adapters.gemini_generate_content import (
+    GeminiGenerateContentProvider,
+)
 
 pytestmark = pytest.mark.integration_gemini
 

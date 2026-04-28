@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from typing import Any
 
 from agent_runtime import AgentRuntime, ProviderCacheRecord, SQLiteProviderCacheStore
-from agent_runtime.models.gemini_generate_content import GeminiGenerateContentProvider
+from agent_runtime.providers.model_adapters.gemini_generate_content import (
+    GeminiGenerateContentProvider,
+)
 
 
 class FakeGeminiCaches:

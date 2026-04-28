@@ -399,7 +399,7 @@ class PromptComposer:
         )
         mentioned_tool_ids = _mentioned_tool_ids(instructions, plan.available_tool_ids)
         disabled_tool_mentions = sorted(set(mentioned_tool_ids) - set(plan.effective_tool_ids))
-        metadata = {
+        metadata: dict[str, Any] = {
             "mode": prompt_spec.mode,
             "channel": prompt_spec.channel or plan.channel,
             "fragment_ids": [item.fragment.id for item in selected],
@@ -544,30 +544,36 @@ def validate_prompt_tool_parity(
     available = set(plan.available_tool_ids)
     disabled = available - effective
 
-    for item in selected:
-        required = set(item.fragment.requires.required_tools)
+    for selected_item in selected:
+        required = set(selected_item.fragment.requires.required_tools)
         missing = sorted(required - effective)
         for tool_id in missing:
             issues.append(
                 PromptParityIssue(
                     code="fragment_required_tool_missing",
-                    message=f"Fragment {item.fragment.id!r} requires disabled tool {tool_id!r}.",
+                    message=(
+                        f"Fragment {selected_item.fragment.id!r} "
+                        f"requires disabled tool {tool_id!r}."
+                    ),
                     severity=severity,
-                    fragment_id=item.fragment.id,
+                    fragment_id=selected_item.fragment.id,
                     tool_id=tool_id,
                 )
             )
 
-    for item in skipped:
-        if item.reason == "required_tools_missing":
-            missing_tools = item.details.get("missing", [])
+    for skipped_item in skipped:
+        if skipped_item.reason == "required_tools_missing":
+            missing_tools = skipped_item.details.get("missing", [])
             for tool_id in missing_tools if isinstance(missing_tools, list) else []:
                 issues.append(
                     PromptParityIssue(
                         code="fragment_skipped_required_tool_missing",
-                        message=f"Fragment {item.fragment.id!r} was skipped because {tool_id!r} is unavailable.",
+                        message=(
+                            f"Fragment {skipped_item.fragment.id!r} was skipped "
+                            f"because {tool_id!r} is unavailable."
+                        ),
                         severity=severity,
-                        fragment_id=item.fragment.id,
+                        fragment_id=skipped_item.fragment.id,
                         tool_id=str(tool_id),
                     )
                 )

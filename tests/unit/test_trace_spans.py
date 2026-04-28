@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from agent_runtime import AgentResult, AgentRuntime, ModelPricing
 from agent_runtime.core.capabilities import ModelCapabilities
 from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
 from agent_runtime.providers.base import TurnRequest
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 from tests.fixtures.fake_openai_client import FakeOpenAIClient, evt, final_response, item
 
 
