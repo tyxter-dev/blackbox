@@ -68,7 +68,9 @@ class ResolvedRunSpec:
     dynamic_loading: DynamicToolLoadingSpec | None = None
     cache: Any | None = None
     data_sources: list[DataSourceRef] = field(default_factory=list)
+    context_flags: list[str] = field(default_factory=list)
     available_tool_ids: list[str] = field(default_factory=list)
+    available_prompt_fragments: list[PromptFragment] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     prompt: PromptBundle | None = None
 

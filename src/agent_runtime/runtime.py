@@ -1276,6 +1276,7 @@ class AgentRuntime:
         tool_search: ToolSearchControl | None = None,
         dynamic_loading: DynamicToolLoadingSpec | None = None,
         data_sources: list[DataSourceRef] | None = None,
+        context_flags: list[str] | None = None,
         workspace: Any | None = None,
         workspace_provider: Any | None = None,
         workspace_policy: Any = None,
@@ -1400,6 +1401,7 @@ class AgentRuntime:
                     mcp_toolsets=resolved_mcp_toolsets,
                 ),
                 data_sources=data_sources,
+                context_flags=context_flags,
                 tool_session=effective_tool_session,
             )
             plan.prompt = self.prompt_composer.build(plan, prompt_spec)
@@ -1443,6 +1445,7 @@ class AgentRuntime:
         compaction: CompactionControl | None = None,
         modalities: list[str] | None = None,
         data_sources: list[DataSourceRef] | None = None,
+        context_flags: list[str] | None = None,
         workspace: Any | None = None,
         workspace_provider: Any | None = None,
         workspace_policy: Any = None,
@@ -1558,6 +1561,7 @@ class AgentRuntime:
                 mcp_toolsets=resolved_mcp_toolsets,
             ),
             data_sources=data_sources,
+            context_flags=context_flags,
             tool_session=effective_tool_session,
         )
         try:
@@ -1711,6 +1715,7 @@ class AgentRuntime:
         compaction: CompactionControl | None = None,
         modalities: list[str] | None = None,
         data_sources: list[DataSourceRef] | None = None,
+        context_flags: list[str] | None = None,
         workspace: Any | None = None,
         workspace_provider: Any | None = None,
         workspace_policy: Any = None,
@@ -1804,6 +1809,7 @@ class AgentRuntime:
                         compaction=compaction,
                         modalities=modalities,
                         data_sources=data_sources,
+                        context_flags=context_flags,
                         workspace=workspace,
                         workspace_provider=workspace_provider,
                         workspace_policy=workspace_policy,
@@ -1964,6 +1970,7 @@ class AgentRuntime:
         cache: ModelCacheControl | None = None,
         dynamic_loading: DynamicToolLoadingSpec | None = None,
         data_sources: list[DataSourceRef] | None = None,
+        context_flags: list[str] | None = None,
         tool_session: ToolSession | None = None,
     ) -> ResolvedRunSpec:
         registry = tool_session.registry if tool_session is not None else self.tools.registry
@@ -1987,7 +1994,13 @@ class AgentRuntime:
             dynamic_loading=dynamic_loading,
             cache=cache,
             data_sources=list(data_sources or []),
+            context_flags=list(context_flags or []),
             available_tool_ids=available_tool_ids,
+            available_prompt_fragments=[
+                fragment
+                for tool in registry.all_tools()
+                for fragment in tool.prompt_fragments
+            ],
             metadata={
                 "prompt_mode": prompt_spec.mode,
                 "prompt_parity": prompt_spec.parity,
@@ -2153,6 +2166,7 @@ def _prompt_events(plan: ResolvedRunSpec, bundle: PromptBundle) -> list[AgentEve
                 "effective_tool_ids": list(plan.effective_tool_ids),
                 "hosted_tool_kinds": list(plan.hosted_tool_kinds),
                 "mcp_servers": list(plan.mcp_servers),
+                "context_flags": list(plan.context_flags),
                 "output_strategy": plan.output_strategy,
                 "dynamic_loading_mode": (
                     plan.dynamic_loading.mode if plan.dynamic_loading is not None else None

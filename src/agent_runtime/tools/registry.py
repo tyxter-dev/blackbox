@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agent_runtime.core.errors import ToolExecutionError
-from agent_runtime.core.prompts import PromptFragment
+from agent_runtime.core.prompts import FragmentSelector, PromptFragment
 from agent_runtime.tools.results import ToolResult
 
 ToolCallable = Callable[..., ToolResult | str | dict[str, Any] | Any]
@@ -58,7 +58,10 @@ class ToolRegistry:
             tags=tags or [],
             blocking=blocking,
             metadata=metadata or {},
-            prompt_fragments=prompt_fragments or [],
+            prompt_fragments=[
+                _scope_prompt_fragment(tool_name, fragment)
+                for fragment in prompt_fragments or []
+            ],
         )
         self._tools[tool_name] = definition
         return definition
@@ -96,3 +99,34 @@ class ToolRegistry:
             }
             for tool in self.all_tools()
         ]
+
+
+def _scope_prompt_fragment(tool_name: str, fragment: PromptFragment) -> PromptFragment:
+    selector = fragment.applies_to
+    if tool_name in selector.tools:
+        return fragment
+    return PromptFragment(
+        id=fragment.id,
+        text=fragment.text,
+        source=fragment.source,
+        priority=fragment.priority,
+        cacheable=fragment.cacheable,
+        applies_to=FragmentSelector(
+            tools=frozenset({*selector.tools, tool_name}),
+            tool_tags=selector.tool_tags,
+            hosted_tool_kinds=selector.hosted_tool_kinds,
+            mcp_servers=selector.mcp_servers,
+            mcp_tools=selector.mcp_tools,
+            workspace_kinds=selector.workspace_kinds,
+            providers=selector.providers,
+            models=selector.models,
+            channels=selector.channels,
+            output_strategies=selector.output_strategies,
+            dynamic_loading_modes=selector.dynamic_loading_modes,
+            context_flags=selector.context_flags,
+        ),
+        requires=fragment.requires,
+        placement=fragment.placement,
+        conflict_group=fragment.conflict_group,
+        metadata=fragment.metadata,
+    )

@@ -44,6 +44,7 @@ class FragmentSelector:
     channels: frozenset[str] = field(default_factory=frozenset)
     output_strategies: frozenset[str] = field(default_factory=frozenset)
     dynamic_loading_modes: frozenset[str] = field(default_factory=frozenset)
+    context_flags: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
         for name in self.__dataclass_fields__:
@@ -224,7 +225,13 @@ class PromptComposer:
         skipped: list[SkippedPromptFragment] = []
 
         if prompt_spec.mode == "tool_aware":
-            candidates = [*self.registry.all(), *plan.default_prompt_fragments]
+            candidates = _unique_fragments(
+                [
+                    *self.registry.all(),
+                    *plan.available_prompt_fragments,
+                    *plan.default_prompt_fragments,
+                ]
+            )
             selected, skipped = self._select_fragments(candidates, plan)
             selected, conflict_skips = self._apply_conflicts(selected)
             skipped.extend(conflict_skips)
@@ -308,12 +315,17 @@ class PromptComposer:
             if issues
             else "pass"
         )
+        mentioned_tool_ids = _mentioned_tool_ids(instructions, plan.available_tool_ids)
+        disabled_tool_mentions = sorted(set(mentioned_tool_ids) - set(plan.effective_tool_ids))
         metadata = {
             "mode": prompt_spec.mode,
             "channel": prompt_spec.channel or plan.channel,
             "fragment_ids": [item.fragment.id for item in selected],
             "skipped_fragment_ids": [item.fragment.id for item in skipped],
             "effective_tool_ids": list(plan.effective_tool_ids),
+            "available_tool_ids": list(plan.available_tool_ids),
+            "mentioned_tool_ids": mentioned_tool_ids,
+            "disabled_tool_mentions": disabled_tool_mentions,
             "parity": parity_status,
             "prompt_fingerprint": prompt_fingerprint,
             "parity_fingerprint": parity_fingerprint,
@@ -368,7 +380,11 @@ class PromptComposer:
             matched = _selector_matches(fragment.applies_to, plan)
             if matched is None:
                 skipped.append(
-                    SkippedPromptFragment(fragment=fragment, reason="selector_not_matched")
+                    SkippedPromptFragment(
+                        fragment=fragment,
+                        reason="selector_not_matched",
+                        details=_selector_mismatch_details(fragment.applies_to, plan),
+                    )
                 )
                 continue
             requirements_issue = _requirements_issue(fragment.requires, plan)
@@ -500,6 +516,7 @@ def _selector_with_tool(selector: FragmentSelector, tool: str) -> FragmentSelect
         channels=selector.channels,
         output_strategies=selector.output_strategies,
         dynamic_loading_modes=selector.dynamic_loading_modes,
+        context_flags=selector.context_flags,
     )
 
 
@@ -536,6 +553,7 @@ def _selector_matches(
             selector.dynamic_loading_modes,
             frozenset({plan.dynamic_loading.mode} if plan.dynamic_loading else set()),
         ),
+        ("context_flags", selector.context_flags, frozenset(plan.context_flags)),
     ]
     matched: dict[str, list[str]] = {}
     for name, wanted, actual in checks:
@@ -568,8 +586,53 @@ def _requirements_issue(
     return None
 
 
+def _selector_mismatch_details(
+    selector: FragmentSelector, plan: ResolvedRunSpec
+) -> Mapping[str, Any]:
+    if selector.is_empty():
+        return {}
+    checks: list[tuple[str, frozenset[str], frozenset[str]]] = [
+        ("tools", selector.tools, frozenset(plan.effective_tool_ids)),
+        ("tool_tags", selector.tool_tags, frozenset(plan.tool_tags)),
+        ("hosted_tool_kinds", selector.hosted_tool_kinds, frozenset(plan.hosted_tool_kinds)),
+        ("mcp_servers", selector.mcp_servers, frozenset(plan.mcp_servers)),
+        ("mcp_tools", selector.mcp_tools, frozenset(plan.mcp_tools)),
+        ("workspace_kinds", selector.workspace_kinds, frozenset(plan.workspace_kinds)),
+        ("providers", selector.providers, frozenset({plan.provider})),
+        ("models", selector.models, frozenset({plan.model} if plan.model else set())),
+        ("channels", selector.channels, frozenset({plan.channel} if plan.channel else set())),
+        (
+            "output_strategies",
+            selector.output_strategies,
+            frozenset({plan.output_strategy} if plan.output_strategy else set()),
+        ),
+        (
+            "dynamic_loading_modes",
+            selector.dynamic_loading_modes,
+            frozenset({plan.dynamic_loading.mode} if plan.dynamic_loading else set()),
+        ),
+        ("context_flags", selector.context_flags, frozenset(plan.context_flags)),
+    ]
+    details: dict[str, dict[str, list[str]]] = {}
+    for name, wanted, actual in checks:
+        if wanted and not wanted.intersection(actual):
+            details[name] = {"wanted": sorted(wanted), "actual": sorted(actual)}
+    return details
+
+
 def _mentions_tool(text: str, tool_id: str) -> bool:
     return re.search(rf"(?<![A-Za-z0-9_]){re.escape(tool_id)}(?![A-Za-z0-9_])", text) is not None
+
+
+def _mentioned_tool_ids(text: str, tool_ids: list[str]) -> list[str]:
+    return [tool_id for tool_id in tool_ids if _mentions_tool(text, tool_id)]
+
+
+def _unique_fragments(fragments: list[PromptFragment]) -> list[PromptFragment]:
+    unique: dict[str, PromptFragment] = {}
+    for fragment in fragments:
+        unique[fragment.id] = fragment
+    return list(unique.values())
 
 
 def _fingerprint(value: Mapping[str, Any]) -> str:
