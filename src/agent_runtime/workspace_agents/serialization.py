@@ -44,20 +44,28 @@ _TYPE_REGISTRY: dict[type[Any], dict[str, type[Any]]] = {
 
 
 def workspace_agent_to_dict(spec: WorkspaceAgentSpec) -> dict[str, Any]:
+    """Serialize a workspace agent spec to plain Python containers."""
+
     return asdict(spec)
 
 
 def workspace_agent_from_dict(data: dict[str, Any]) -> WorkspaceAgentSpec:
+    """Hydrate a workspace agent spec from plain Python containers."""
+
     return _from_dict(WorkspaceAgentSpec, data)
 
 
 def dataclass_to_dict(value: Any) -> dict[str, Any]:
+    """Serialize a dataclass instance to plain Python containers."""
+
     if not is_dataclass(value) or isinstance(value, type):
         raise TypeError(f"Expected dataclass instance, got {type(value)!r}.")
     return asdict(cast(Any, value))
 
 
 def dataclass_from_dict(cls: type[T], data: dict[str, Any]) -> T:
+    """Hydrate a dataclass instance using registered nested dataclass mappings."""
+
     return _from_dict(cls, data)
 
 

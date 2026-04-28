@@ -174,6 +174,8 @@ class FakePermissionResultDeny:
 
 
 class FakeClaudeSDKClient:
+    """Fake Claude Agent SDK client that emits deterministic stream and permission events."""
+
     def __init__(self, options: FakeClaudeAgentOptions, sdk: FakeClaudeAgentSDK) -> None:
         self.options = options
         self.sdk = sdk

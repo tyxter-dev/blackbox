@@ -478,6 +478,7 @@ class LocalWorkspaceProvider:
         action: str,
         arguments: dict[str, Any],
     ) -> None:
+        """Evaluate policy and one-shot approval overrides for a local workspace operation."""
         approval_id = _approval_id(self.provider_id, workspace_id, checkpoint, action, arguments)
         if approval_id in self._approved_operations:
             self._approved_operations.remove(approval_id)

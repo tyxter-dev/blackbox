@@ -13,6 +13,8 @@ from agent_runtime.tools.results import ToolResult
 
 @dataclass(slots=True)
 class ToolRuntime:
+    """Executes registered tools with optional context injection, limits, and timeouts."""
+
     registry: ToolRegistry
     context: Mapping[str, Any] = field(default_factory=dict)
     max_concurrent: int | None = None

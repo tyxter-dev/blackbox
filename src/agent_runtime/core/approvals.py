@@ -9,6 +9,8 @@ ApprovalStatus = Literal["pending", "approved", "denied"]
 
 @dataclass(slots=True, frozen=True)
 class ApprovalRequest:
+    """Request for a caller or policy layer to approve a runtime action."""
+
     action: str
     reason: str | None = None
     data: dict[str, Any] = field(default_factory=dict)
@@ -17,6 +19,8 @@ class ApprovalRequest:
 
 @dataclass(slots=True, frozen=True)
 class ApprovalDecision:
+    """Decision returned for an approval request."""
+
     approved: bool
     reason: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

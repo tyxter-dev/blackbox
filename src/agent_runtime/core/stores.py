@@ -37,7 +37,9 @@ class EventStore(Protocol):
         *,
         after_sequence: int | None = None,
         limit: int | None = None,
-    ) -> list[AgentEvent]: ...
+    ) -> list[AgentEvent]:
+        """Return events for a run after an optional sequence cursor."""
+        ...
 
 
 @runtime_checkable

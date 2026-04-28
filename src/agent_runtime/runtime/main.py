@@ -710,6 +710,8 @@ class AgentRuntime:
             turn_input: str | list[Any],
             _provider_state: ProviderState | None,
         ) -> list[AgentEvent]:
+            """Recompute active tool routing for follow-up turns."""
+
             nonlocal active_tool_definitions, active_tool_names, routing_plan
             if not _routing_enabled(effective_tool_routing):
                 return []
@@ -751,6 +753,8 @@ class AgentRuntime:
             return list(resolution.events)
 
         async def late_bind_tool(name: str, iteration: int) -> tuple[bool, list[AgentEvent]]:
+            """Expose an exact-match tool during execution when late binding is enabled."""
+
             nonlocal active_tool_definitions, active_tool_names, routing_plan
             if (
                 not _routing_enabled(effective_tool_routing)
@@ -1285,6 +1289,8 @@ class AgentRuntime:
         context_flags: list[str] | None = None,
         tool_session: ToolSession | None = None,
     ) -> ResolvedRunSpec:
+        """Assemble the resolved run plan used for prompt composition."""
+
         registry = tool_session.registry if tool_session is not None else self.tools.registry
         available_tool_ids = [tool.name for tool in registry.all_tools()]
         for tool_name in _tool_names(tool_definitions):
@@ -1458,6 +1464,8 @@ class AgentRuntime:
         policy: Policy | None,
         budget: ToolBudget | None = None,
     ) -> tuple[list[str], list[AgentEvent]]:
+        """Apply exposure policy, de-duplication, and budget limits to requested tools."""
+
         if not names:
             return [], []
         registry = tool_session.registry if tool_session is not None else self.tools.registry

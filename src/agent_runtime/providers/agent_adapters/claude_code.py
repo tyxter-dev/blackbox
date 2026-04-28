@@ -38,18 +38,26 @@ class ClaudeCodeClient(Protocol):
 
     async def create_agent(self, spec: AgentSpec) -> Any: ...
 
-    async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> Any: ...
+    async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> Any:
+        """Start a Claude Code session and return the native session payload."""
+        ...
 
     def stream_events(
         self,
         provider_session_id: str,
         *,
         after_event_id: str | None = None,
-    ) -> AsyncIterator[Any]: ...
+    ) -> AsyncIterator[Any]:
+        """Stream native Claude Code events for a provider session."""
+        ...
 
-    async def send_message(self, provider_session_id: str, message: str) -> Any: ...
+    async def send_message(self, provider_session_id: str, message: str) -> Any:
+        """Send a follow-up message to a provider session."""
+        ...
 
-    async def approve(self, approval_id: str, decision: ApprovalDecision) -> Any: ...
+    async def approve(self, approval_id: str, decision: ApprovalDecision) -> Any:
+        """Resolve a pending Claude Code approval request."""
+        ...
 
     async def cancel(self, provider_session_id: str) -> Any: ...
 
@@ -60,7 +68,9 @@ class ClaudeCodeClient(Protocol):
         type: str | None = None,
         after: str | None = None,
         limit: int = 100,
-    ) -> Any: ...
+    ) -> Any:
+        """Return native artifact data for a provider session."""
+        ...
 
 
 class ClaudeCodeAgentProvider:
@@ -628,6 +638,7 @@ class ClaudeAgentSDKClient:
         task: TaskSpec,
         session: _SDKSession,
     ) -> Any:
+        """Build Claude Agent SDK options from runtime agent, task, and permission state."""
         options_cls = getattr(sdk, "ClaudeAgentOptions", None)
         if options_cls is None:
             raise UnsupportedFeatureError("claude-agent-sdk does not expose ClaudeAgentOptions.")

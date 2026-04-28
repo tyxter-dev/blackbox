@@ -29,6 +29,7 @@ class GitWorkspaceProvider(LocalWorkspaceProvider):
         return replace(base, supports_git_sources=True)
 
     async def open(self, spec: WorkspaceSpec) -> WorkspaceRef:
+        """Clone the requested git source, open it as a local workspace, and record session state."""
         if spec.kind != "git":
             raise WorkspaceError(
                 f"GitWorkspaceProvider supports only 'git' workspaces, got {spec.kind!r}."

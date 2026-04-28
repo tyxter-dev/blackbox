@@ -76,7 +76,10 @@ class FileSearch:
 
     Vector stores and corpus IDs identify provider-managed indexes. ``filters``
     and ``include_results`` are mapped only when a provider exposes comparable
-    retrieval controls.
+    retrieval controls. For small OpenAI demos, use
+    ``agent_runtime.temporary_openai_vector_store(...)`` to create a temporary
+    vector store from inline text, then pass its ``id`` through
+    ``vector_store_ids``.
     """
 
     vector_store_ids: list[str] = field(default_factory=list)
@@ -242,7 +245,9 @@ class HostedToolHandler(Protocol):
     @property
     def hosted_tool_type(self) -> str: ...
 
-    async def handle(self, call: Any, context: Any) -> Any: ...
+    async def handle(self, call: Any, context: Any) -> Any:
+        """Execute a hosted tool call with provider-specific call and context objects."""
+        ...
 
 
 @dataclass(slots=True)
@@ -276,6 +281,8 @@ HostedToolSpec: TypeAlias = (
 
 
 def hosted_tool_kind(spec: HostedToolSpec) -> str:
+    """Return the provider-neutral routing kind for a hosted tool spec."""
+
     if isinstance(spec, WebSearch):
         return "web_search"
     if isinstance(spec, WebFetch):
@@ -308,6 +315,8 @@ def hosted_tool_kind(spec: HostedToolSpec) -> str:
 
 
 def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
+    """Convert a hosted tool spec to the OpenAI tool payload shape."""
+
     if isinstance(spec, WebSearch):
         payload: dict[str, Any] = {"type": "web_search"}
         if spec.search_context_size is not None:
@@ -318,7 +327,9 @@ def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
     if isinstance(spec, WebFetch):
         raise UnsupportedFeatureError("OpenAI hosted tool mapping is not implemented for WebFetch.")
     if isinstance(spec, URLContext):
-        raise UnsupportedFeatureError("OpenAI hosted tool mapping is not implemented for URLContext.")
+        raise UnsupportedFeatureError(
+            "OpenAI hosted tool mapping is not implemented for URLContext."
+        )
     if isinstance(spec, FileSearch):
         payload = {"type": "file_search", "vector_store_ids": list(spec.vector_store_ids)}
         if spec.max_num_results is not None:
@@ -361,7 +372,9 @@ def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
             payload["display_height"] = spec.display_height
         return payload
     if isinstance(spec, TextEditor):
-        raise UnsupportedFeatureError("OpenAI hosted tool mapping is not implemented for TextEditor.")
+        raise UnsupportedFeatureError(
+            "OpenAI hosted tool mapping is not implemented for TextEditor."
+        )
     if isinstance(spec, Memory):
         raise UnsupportedFeatureError("OpenAI hosted tool mapping is not implemented for Memory.")
     if isinstance(spec, ImageGeneration):
@@ -424,6 +437,8 @@ def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
 
 
 def to_gemini_tool(spec: HostedToolSpec) -> dict[str, Any]:
+    """Convert a hosted tool spec to the Gemini tool payload shape."""
+
     if isinstance(spec, WebSearch):
         return {"google_search": {}}
     if isinstance(spec, CodeInterpreter):
@@ -448,7 +463,9 @@ def to_gemini_tool(spec: HostedToolSpec) -> dict[str, Any]:
             computer_payload["environment"] = spec.environment
         return {"computer_use": computer_payload}
     if isinstance(spec, TextEditor):
-        raise UnsupportedFeatureError("Gemini hosted tool mapping is not implemented for TextEditor.")
+        raise UnsupportedFeatureError(
+            "Gemini hosted tool mapping is not implemented for TextEditor."
+        )
     if isinstance(spec, Memory):
         raise UnsupportedFeatureError("Gemini hosted tool mapping is not implemented for Memory.")
     if isinstance(spec, HostedToolRaw):
@@ -459,6 +476,8 @@ def to_gemini_tool(spec: HostedToolSpec) -> dict[str, Any]:
 
 
 def to_anthropic_tool(spec: HostedToolSpec, *, model: str | None = None) -> dict[str, Any]:
+    """Convert a hosted tool spec to the Anthropic tool payload shape."""
+
     if isinstance(spec, WebSearch):
         payload: dict[str, Any] = {
             "type": spec.version or _anthropic_web_search_version(model),

@@ -30,6 +30,8 @@ from agent_runtime.workspaces.spec import WorkspacePort, WorkspaceSessionState, 
 
 @dataclass(slots=True)
 class DockerSandboxClient:
+    """SandboxClient implementation that runs workspace commands in Docker containers."""
+
     image: str
     docker_bin: str = "docker"
     workdir: str = "/workspace"

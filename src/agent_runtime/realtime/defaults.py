@@ -13,6 +13,8 @@ def register_default_realtime_providers(
     *,
     include: Iterable[str] | None = None,
 ) -> ProviderRegistry:
+    """Register the built-in realtime providers on a registry-like target."""
+
     registry = target.registry if hasattr(target, "registry") else target
     if not isinstance(registry, ProviderRegistry):
         raise TypeError("target must be a ProviderRegistry or object with a registry attribute.")

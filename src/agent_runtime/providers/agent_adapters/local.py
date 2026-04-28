@@ -76,6 +76,7 @@ class LocalAgentProvider:
         *,
         after_event_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
+        """Run the local agent loop and stream normalized session, model, and tool events."""
         session_obj = self._session(session)
         session_obj.status = "running"
         yield AgentEvent(

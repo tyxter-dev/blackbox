@@ -110,6 +110,7 @@ class AnthropicMessagesProvider:
         )
 
     def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        """Return Anthropic Messages capability details for validation and planning."""
         summary = self.capabilities(model)
         structured_output = _anthropic_supports_structured_outputs(model)
         compaction = _anthropic_supports_compaction(model)
@@ -231,6 +232,7 @@ class AnthropicMessagesProvider:
         )
 
     def _get_client(self) -> Any:
+        """Return the configured Anthropic client, creating one from credentials if needed."""
         if self._client is not None:
             return self._client
         api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
@@ -263,6 +265,7 @@ class AnthropicMessagesProvider:
         self._client = None
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
+        """Stream one Anthropic Messages turn as normalized events and final provider state."""
         client = self._get_client()
         messages = _compose_messages(request)
         kwargs = self._build_request_kwargs(request, messages)
@@ -338,6 +341,7 @@ class AnthropicMessagesProvider:
     def _build_request_kwargs(
         request: TurnRequest, messages: list[dict[str, Any]]
     ) -> dict[str, Any]:
+        """Translate a runtime turn request into Anthropic Messages stream parameters."""
         extra = dict(request.extra)
         tools_from_extra = extra.pop("tools", None)
         beta_values = [
@@ -704,6 +708,7 @@ def _map_block_start(
     partial_blocks: dict[int, dict[str, Any]],
     json_buffers: dict[int, list[str]],
 ) -> AgentEvent | None:
+    """Map an Anthropic content block start into an item event and tracking state."""
     if block is None or not isinstance(index, int):
         return None
     block_type = _attr(block, "type")
@@ -833,6 +838,7 @@ def _map_block_stop(
     partial_blocks: dict[int, dict[str, Any]],
     json_buffers: dict[int, list[str]],
 ) -> AgentEvent | None:
+    """Finalize a tracked Anthropic content block and emit any terminal item event."""
     if not isinstance(index, int):
         return None
     state = partial_blocks.pop(index, None)
@@ -931,6 +937,7 @@ def _anthropic_reasoning_state(content: Any) -> dict[str, Any]:
 
 
 def _anthropic_tool_state(content: Any) -> dict[str, Any]:
+    """Extract replayable tool, hosted-tool, MCP, and source-reference state."""
     if not isinstance(content, list):
         return {}
     tool_uses: list[dict[str, Any]] = []

@@ -16,6 +16,8 @@ MCPApprovalMode = Literal["always", "never", "auto"]
 
 @dataclass(slots=True, frozen=True)
 class GoogleBigQueryMCPAuth:
+    """OAuth access token and project id for Google BigQuery MCP requests."""
+
     access_token: str
     project_id: str
 

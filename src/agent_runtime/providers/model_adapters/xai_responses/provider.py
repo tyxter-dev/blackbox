@@ -57,6 +57,7 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
         )
 
     def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        """Return xAI Responses capability details for validation and planning."""
         summary = self.capabilities(model)
         return ModelCapabilityProfile(
             provider=self.provider_id,

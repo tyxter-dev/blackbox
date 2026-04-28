@@ -28,6 +28,8 @@ class SandboxCommandEvent:
 
 @runtime_checkable
 class SandboxClient(Protocol):
+    """Protocol for sandbox backends used by SandboxWorkspaceProvider."""
+
     @property
     def client_id(self) -> str:
         ...
@@ -39,15 +41,19 @@ class SandboxClient(Protocol):
         ...
 
     async def close_session(self, session: SandboxSession, *, delete: bool = False) -> None:
+        """Close a sandbox session and optionally delete provider-owned state."""
         ...
 
     async def read_file(self, session: SandboxSession, path: str) -> str:
+        """Return text content from a sandbox-relative file path."""
         ...
 
     async def write_file(self, session: SandboxSession, path: str, content: str) -> None:
+        """Write text content to a sandbox-relative file path."""
         ...
 
     async def delete_file(self, session: SandboxSession, path: str) -> None:
+        """Delete a sandbox-relative file path."""
         ...
 
     async def list_files(
@@ -58,6 +64,7 @@ class SandboxClient(Protocol):
         recursive: bool = False,
         limit: int = 1000,
     ) -> list[str]:
+        """List sandbox-relative file paths under a directory."""
         ...
 
     async def run_command(
@@ -65,6 +72,7 @@ class SandboxClient(Protocol):
         session: SandboxSession,
         spec: CommandSpec,
     ) -> CommandResult:
+        """Run a command inside the sandbox session and return its completed result."""
         ...
 
     def stream_command(
@@ -72,9 +80,11 @@ class SandboxClient(Protocol):
         session: SandboxSession,
         spec: CommandSpec,
     ) -> AsyncIterator[SandboxCommandEvent]:
+        """Run a command inside the sandbox session and stream output events."""
         ...
 
     async def snapshot(self, session: SandboxSession, *, name: str | None = None) -> Artifact:
+        """Create an artifact that captures the sandbox session state."""
         ...
 
     async def restore(
@@ -82,6 +92,7 @@ class SandboxClient(Protocol):
         snapshot: ArtifactRef,
         spec: WorkspaceSpec | None = None,
     ) -> SandboxSession:
+        """Restore a sandbox session from a snapshot artifact."""
         ...
 
     async def expose_port(
@@ -92,6 +103,7 @@ class SandboxClient(Protocol):
         protocol: str = "http",
         name: str | None = None,
     ) -> WorkspacePort:
+        """Expose a sandbox network port and return the provider-published endpoint."""
         ...
 
     def session_state(self, session: SandboxSession) -> WorkspaceSessionState:

@@ -36,6 +36,8 @@ ToolRoutingMode = Literal[
 
 @dataclass(slots=True, frozen=True)
 class ToolCandidate:
+    """A routeable tool option with provider, risk, and schema metadata."""
+
     ref: str
     name: str
     kind: ToolKind
@@ -53,6 +55,8 @@ class ToolCandidate:
 
 @dataclass(slots=True, frozen=True)
 class ToolBudget:
+    """Limits used when selecting which tools to expose to a model turn."""
+
     max_visible_tools: int = 12
     max_schema_tokens: int = 8_000
     max_mcp_tools: int = 8
@@ -62,6 +66,8 @@ class ToolBudget:
 
 @dataclass(slots=True, frozen=True)
 class ToolRoutingSpec:
+    """Configuration for static, automatic, or discovery-based tool routing."""
+
     mode: ToolRoutingMode = "explicit"
     budget: ToolBudget = field(default_factory=ToolBudget)
     always_include: tuple[str, ...] = ()
@@ -135,6 +141,8 @@ class ToolSelectionResult:
 
 @dataclass(slots=True, frozen=True)
 class ResolvedToolPlan:
+    """Concrete tool exposure plan passed to provider and runtime execution layers."""
+
     selected_refs: tuple[str, ...]
     local_tools: tuple[str, ...] = ()
     workspace_tools: tuple[str, ...] = ()
@@ -149,6 +157,8 @@ class ResolvedToolPlan:
 
 
 class ToolSelector(Protocol):
+    """Selects the tool candidates that should be visible for a model turn."""
+
     async def select(self, request: ToolSelectionRequest) -> ToolSelectionResult:
         ...
 

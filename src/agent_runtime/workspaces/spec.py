@@ -150,6 +150,7 @@ class WorkspaceSpec:
         root: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> WorkspaceSpec:
+        """Build a spec that clones a git repository and optionally checks out a ref."""
         source = repo or url
         if source is None:
             raise ValueError("WorkspaceSpec.git requires repo or url.")
@@ -181,6 +182,7 @@ class WorkspaceSpec:
         network: WorkspaceNetwork = "disabled",
         resources: dict[str, Any] | None = None,
     ) -> WorkspaceSpec:
+        """Build a provider-neutral sandbox spec with optional inputs, mounts, and resume state."""
         return cls(
             kind="sandbox",
             root=root,
@@ -214,6 +216,7 @@ class WorkspaceSpec:
         network: WorkspaceNetwork = "disabled",
         resources: dict[str, Any] | None = None,
     ) -> WorkspaceSpec:
+        """Build a Docker sandbox spec for a required image and optional runtime settings."""
         return cls(
             kind="docker",
             root=root,

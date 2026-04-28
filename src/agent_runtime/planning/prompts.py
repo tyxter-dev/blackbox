@@ -302,6 +302,11 @@ class PromptComposer:
         self.registry = registry or PromptFragmentRegistry()
 
     def build(self, plan: ResolvedRunSpec, spec: PromptSpec | None = None) -> PromptBundle:
+        """Compose provider-visible instructions and prompt metadata.
+
+        Tool-aware mode selects fragments, applies conflicts, validates parity,
+        and records fingerprints for the resolved run plan.
+        """
         prompt_spec = spec or PromptSpec()
         selected: list[SelectedPromptFragment] = []
         skipped: list[SkippedPromptFragment] = []
@@ -536,6 +541,7 @@ def validate_prompt_tool_parity(
     skipped: list[SkippedPromptFragment],
     parity: PromptParityMode,
 ) -> list[PromptParityIssue]:
+    """Return issues when prompt guidance references unavailable tools."""
     if parity == "off":
         return []
     severity: Literal["warning", "error"] = "error" if parity == "error" else "warning"
@@ -609,6 +615,7 @@ def _selector_with_tool(selector: FragmentSelector, tool: str) -> FragmentSelect
 
 
 def assert_prompt_tool_parity(bundle: PromptBundle) -> None:
+    """Raise ConfigurationError when a prompt bundle has parity errors."""
     errors = [issue for issue in bundle.parity_issues if issue.severity == "error"]
     if not errors:
         return

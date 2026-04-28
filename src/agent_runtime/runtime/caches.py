@@ -29,6 +29,8 @@ class ProviderCacheRuntime:
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ProviderCacheRecord:
+        """Create a provider-side cache record and persist it locally."""
+
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource
         if not model_name:
@@ -107,6 +109,8 @@ class ProviderCacheRuntime:
         record_id: str | None = None,
         delete_provider_cache: bool = False,
     ) -> builtins.list[ProviderCacheRecord]:
+        """Delete local cache records and optionally remove matching provider caches."""
+
         provider_key = ProviderRef.parse(provider).provider_key if provider else None
         deleted = await self.store.delete(
             provider=provider_key,

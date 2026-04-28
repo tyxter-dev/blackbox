@@ -25,6 +25,8 @@ class RunItem:
 
 
 class ItemTypes:
+    """Canonical runtime item type constants used in durable run items."""
+
     MESSAGE = "message"
     REASONING = "reasoning"
     FUNCTION_CALL = "function_call"

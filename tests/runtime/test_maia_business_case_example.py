@@ -52,6 +52,7 @@ async def test_maia_bella_cucina_example_executes_scripted_tool_trace() -> None:
     customer = next(iter(crm.customers.values()))
 
     def private_room_turn(request: Any) -> Any:
+        """Emit the scripted calendar and task tool calls for the private room scenario."""
         assert [tool["name"] for tool in request.tools] == CASE_TOOLS
         assert request.controls.instructions is not None
         assert "create_customer" not in request.controls.instructions

@@ -62,6 +62,8 @@ class ToolRegistry:
         metadata: dict[str, Any] | None = None,
         prompt_fragments: list[PromptFragment] | None = None,
     ) -> ToolDefinition:
+        """Register a callable and its model-visible schema as a tool definition."""
+
         tool_name = name or function.__name__
         definition = ToolDefinition(
             name=tool_name,

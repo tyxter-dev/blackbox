@@ -20,12 +20,18 @@ class MCPSessionInfo:
 
 @dataclass(slots=True)
 class MCPClient:
+    """MCP JSON-RPC client that initializes a transport and exposes tool calls."""
+
     spec: MCPServerSpec
     transport: MCPTransportClient
     initialized: bool = False
     session_info: MCPSessionInfo | None = None
 
     async def start(self) -> MCPSessionInfo:
+        """Start the transport, negotiate protocol, and cache session metadata.
+
+        Initialization failures stop the transport before raising.
+        """
         await self.transport.start()
         if self.initialized and self.session_info is not None:
             return self.session_info

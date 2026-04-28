@@ -72,6 +72,8 @@ def event_to_dict(
     keep_raw: bool = False,
     keep_media: bool = False,
 ) -> dict[str, Any]:
+    """Serialize an event into a JSON-safe dictionary for persistent stores."""
+
     return {
         "_kind": _AGENT_EVENT,
         "id": event.id,
@@ -134,6 +136,8 @@ def run_state_to_dict(state: RunState) -> dict[str, Any]:
 
 
 def run_state_from_dict(payload: dict[str, Any]) -> RunState:
+    """Rehydrate a run state dictionary, ignoring malformed item entries."""
+
     items_raw = payload.get("items") or []
     items: list[RunItem] = []
     for entry in items_raw:
@@ -163,6 +167,12 @@ def run_state_from_dict(payload: dict[str, Any]) -> RunState:
 
 
 def _safe_value(value: Any, *, keep_media: bool = False) -> Any:
+    """Convert supported runtime dataclasses and containers into JSON-safe values.
+
+    Unknown objects are represented with ``repr`` so persistence remains
+    loss-tolerant instead of failing on provider SDK instances.
+    """
+
     if value is None or isinstance(value, str | int | float | bool):
         return value
     if isinstance(value, datetime):
@@ -366,6 +376,8 @@ def _safe_value(value: Any, *, keep_media: bool = False) -> Any:
 
 
 def _hydrate_value(value: Any) -> Any:
+    """Rebuild known runtime dataclasses from serialized ``_kind`` sentinels."""
+
     if isinstance(value, dict):
         kind = value.get("_kind")
         if kind == _RUN_ITEM:

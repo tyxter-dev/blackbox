@@ -131,6 +131,8 @@ class RealtimeProvider(Protocol):
         *,
         after_event_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
+        """Yield canonical events from an open realtime session."""
+
         ...
 
     async def send(
@@ -138,6 +140,8 @@ class RealtimeProvider(Protocol):
         session: RealtimeSessionRef,
         command: RealtimeClientCommand,
     ) -> InvocationRef:
+        """Send a client command into an open realtime session."""
+
         ...
 
     async def update_session(
@@ -145,6 +149,8 @@ class RealtimeProvider(Protocol):
         session: RealtimeSessionRef,
         config: RealtimeSessionConfig,
     ) -> None:
+        """Apply mutable configuration to an open realtime session."""
+
         ...
 
     async def close(self, session: RealtimeSessionRef) -> None:

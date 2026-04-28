@@ -256,6 +256,8 @@ def derive_profile_from_summary(
     model: str | None,
     summary: ModelCapabilities,
 ) -> ModelCapabilityProfile:
+    """Expand legacy capability flags into a granular model capability profile."""
+
     hosted_tools: dict[HostedToolKind, CapabilityDetail] = {
         "raw": CapabilityDetail(
             status="passthrough" if summary.supports_hosted_tools else "unsupported",
@@ -330,6 +332,8 @@ def capability_profile_to_dict(profile: ModelCapabilityProfile) -> dict[str, Any
 
 
 def capability_profile_from_dict(data: dict[str, Any]) -> ModelCapabilityProfile:
+    """Rehydrate a model capability profile produced by ``capability_profile_to_dict``."""
+
     summary_data = data.get("summary") or {}
     hosted_support = {
         key: HostedToolSupport(**value)
@@ -396,6 +400,8 @@ def _capability_detail_from_dict(data: Any) -> CapabilityDetail:
 
 
 def hosted_tool_type(spec: HostedToolSpec) -> str:
+    """Return the canonical runtime tool type string for a hosted tool spec."""
+
     if isinstance(spec, WebSearch):
         return "web_search"
     if isinstance(spec, WebFetch):

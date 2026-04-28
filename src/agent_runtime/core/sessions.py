@@ -9,6 +9,8 @@ SessionStatus = Literal["created", "running", "waiting", "completed", "failed", 
 
 @dataclass(slots=True, frozen=True)
 class AgentRef:
+    """Stable reference to an agent managed by a provider."""
+
     provider: str
     id: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -16,6 +18,8 @@ class AgentRef:
 
 @dataclass(slots=True, frozen=True)
 class SessionRef:
+    """Stable reference to a provider-backed agent session."""
+
     provider: str
     id: str
     agent_id: str | None = None
@@ -40,6 +44,8 @@ class InvocationRef:
 
 @dataclass(slots=True)
 class AgentSession:
+    """Mutable session record for a task being handled by an agent provider."""
+
     provider: str
     task: str
     agent_id: str | None = None

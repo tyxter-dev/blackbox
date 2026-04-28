@@ -24,6 +24,8 @@ def default_redaction_policy(envelope: RawEnvelope) -> bool:
 
 
 class EventSink(Protocol):
+    """Protocol for asynchronous consumers of runtime events."""
+
     async def emit(self, event: AgentEvent) -> None: ...
 
 

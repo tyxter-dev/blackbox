@@ -17,6 +17,8 @@ def estimate_token_count(definition: dict[str, Any]) -> int:
 
 @dataclass(slots=True)
 class ToolCatalogEntry:
+    """Searchable metadata and token cost for one runtime tool."""
+
     name: str
     description: str
     parameters: dict[str, Any] | None = None
@@ -59,6 +61,8 @@ class ToolCatalogEntry:
         return matched >= required
 
     def relevance_score(self, query: str) -> float:
+        """Return a normalized relevance score for ranking this entry against a query."""
+
         if not query.strip():
             return 0.0
         query_lower = query.lower().strip()
@@ -121,6 +125,8 @@ class ToolCatalogEntry:
 
 
 class ToolCatalog:
+    """Searchable catalog built from registered tool definitions."""
+
     def __init__(self, tools: list[ToolDefinition]) -> None:
         self.entries = [
             ToolCatalogEntry(
@@ -156,6 +162,8 @@ class ToolCatalog:
         offset: int = 0,
         min_score: float = 0.0,
     ) -> list[ToolCatalogEntry]:
+        """Filter and rank catalog entries by query text and tool metadata."""
+
         query_value = query or ""
         tag_set = {tag.lower() for tag in tags or []}
         scope_set = {scope.lower() for scope in scopes or []}

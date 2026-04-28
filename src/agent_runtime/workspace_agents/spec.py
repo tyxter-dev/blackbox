@@ -15,6 +15,8 @@ MemoryMode = Literal["none", "session", "agent", "user"]
 
 @dataclass(slots=True, frozen=True)
 class WorkspaceAgentVersion:
+    """Version metadata for a workspace agent package."""
+
     version: str = "0.1.0"
     changelog: str | None = None
     previous_version: str | None = None
@@ -23,6 +25,8 @@ class WorkspaceAgentVersion:
 
 @dataclass(slots=True, frozen=True)
 class WorkspaceAgentMetadata:
+    """Ownership, description, and label metadata for a workspace agent."""
+
     owner: str | None = None
     description: str | None = None
     labels: list[str] = field(default_factory=list)
@@ -32,6 +36,8 @@ class WorkspaceAgentMetadata:
 
 @dataclass(slots=True, frozen=True)
 class SkillBundleRef:
+    """Reference to a skill bundle attached to a workspace agent."""
+
     name: str
     source: str | None = None
     version: str | None = None
@@ -40,6 +46,8 @@ class SkillBundleRef:
 
 @dataclass(slots=True, frozen=True)
 class MemorySpec:
+    """Memory mode and retention settings for a workspace agent."""
+
     mode: MemoryMode = "none"
     retention_days: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -47,6 +55,8 @@ class MemorySpec:
 
 @dataclass(slots=True, frozen=True)
 class PublicationSpec:
+    """Publication visibility and directory settings for a workspace agent."""
+
     visibility: WorkspaceAgentVisibility = "private"
     directory_enabled: bool = False
     approved: bool = False

@@ -22,6 +22,8 @@ from agent_runtime.realtime.provider import (
 
 
 class GeminiLiveProvider:
+    """Provider adapter shell for Gemini Live capabilities and event mapping."""
+
     provider_aliases = ("gemini",)
 
     @property
@@ -95,6 +97,8 @@ def map_gemini_live_message(
     provider: str = "gemini-live",
     session_id: str | None = None,
 ) -> list[AgentEvent]:
+    """Map a Gemini Live server message into canonical runtime events."""
+
     message_type = _message_type(raw_message)
     raw_schema = f"gemini.live.{message_type}" if message_type else None
     data_base = {"provider_event_type": message_type}
@@ -217,6 +221,8 @@ def map_gemini_live_message(
 
 
 def _map_server_content(event_builder: Any, content: Mapping[str, Any]) -> list[AgentEvent]:
+    """Translate Gemini serverContent payloads into output and turn events."""
+
     events: list[AgentEvent] = []
     if content.get("interrupted") is True:
         events.append(

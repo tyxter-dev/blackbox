@@ -61,6 +61,8 @@ class MediaRef:
         sensitivity: MediaSensitivity = "sensitive",
         metadata: dict[str, Any] | None = None,
     ) -> MediaRef:
+        """Create an inline media reference from existing base64-encoded data."""
+
         return cls(
             source="inline_base64",
             mime_type=mime_type,

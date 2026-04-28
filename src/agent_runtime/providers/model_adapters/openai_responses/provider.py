@@ -167,6 +167,7 @@ class OpenAIResponsesProvider:
         )
 
     def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        """Return OpenAI Responses capability details for validation and planning."""
         summary = self.capabilities(model)
         return ModelCapabilityProfile(
             provider=self.provider_id,
@@ -279,6 +280,7 @@ class OpenAIResponsesProvider:
         )
 
     def _get_client(self) -> Any:
+        """Return the configured OpenAI client, creating one from credentials if needed."""
         if self._client is not None:
             return self._client
         api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
@@ -313,6 +315,7 @@ class OpenAIResponsesProvider:
         self._client = None
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
+        """Stream one Responses API turn as normalized events and final provider state."""
         client = self._get_client()
         kwargs = self._build_request_kwargs(request)
 
@@ -403,6 +406,7 @@ class OpenAIResponsesProvider:
 
     @staticmethod
     def _build_request_kwargs(request: TurnRequest) -> dict[str, Any]:
+        """Translate a runtime turn request into Responses API stream parameters."""
         kwargs: dict[str, Any] = {
             "model": request.model,
             "input": _coerce_input(request.input),
@@ -658,6 +662,7 @@ def _map_item_added(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
 
 
 def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
+    """Map a completed Responses output item into the corresponding runtime event."""
     if item is None:
         return None
     item_type = getattr(item, "type", None) or (item.get("type") if isinstance(item, dict) else None)
@@ -795,6 +800,7 @@ def _build_provider_state(final_response: Any, *, provider: str) -> ProviderStat
 
 
 def _provider_tool_state(output: list[Any]) -> dict[str, Any]:
+    """Extract replayable tool, hosted-tool, MCP, file, and source-reference state."""
     output_item_ids: list[str] = []
     function_calls: list[dict[str, Any]] = []
     hosted_tool_calls: list[dict[str, Any]] = []
@@ -1029,6 +1035,7 @@ def _collect_source_references(value: Any) -> list[dict[str, Any]]:
     references: list[dict[str, Any]] = []
 
     def visit(node: Any) -> None:
+        """Recursively collect public citation-like entries from SDK payloads."""
         if isinstance(node, dict):
             for key in ("annotations", "citations", "sources", "results"):
                 item = node.get(key)

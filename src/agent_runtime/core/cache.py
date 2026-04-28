@@ -122,15 +122,21 @@ class ProviderCacheUsage:
 
 @runtime_checkable
 class ProviderCacheStore(Protocol):
+    """Storage contract for provider-managed prompt/context cache records."""
+
     async def save(self, record: ProviderCacheRecord) -> None: ...
 
     async def load(
         self, *, provider: str, key: str, model: str | None = None
-    ) -> ProviderCacheRecord | None: ...
+    ) -> ProviderCacheRecord | None:
+        """Return the latest cache record matching provider, key, and optional model."""
+        ...
 
     async def load_by_provider_cache_id(
         self, *, provider: str, provider_cache_id: str
-    ) -> ProviderCacheRecord | None: ...
+    ) -> ProviderCacheRecord | None:
+        """Return the latest cache record matching a provider-issued cache id."""
+        ...
 
     async def list_records(
         self,
@@ -138,7 +144,9 @@ class ProviderCacheStore(Protocol):
         provider: str | None = None,
         model: str | None = None,
         include_expired: bool = True,
-    ) -> list[ProviderCacheRecord]: ...
+    ) -> list[ProviderCacheRecord]:
+        """List cache records, optionally filtering by provider, model, and expiry."""
+        ...
 
     async def delete(
         self,
@@ -148,7 +156,9 @@ class ProviderCacheStore(Protocol):
         key: str | None = None,
         provider_cache_id: str | None = None,
         record_id: str | None = None,
-    ) -> list[ProviderCacheRecord]: ...
+    ) -> list[ProviderCacheRecord]:
+        """Delete and return records matching at least one supplied selector."""
+        ...
 
     async def evict_expired(
         self, *, now: datetime | None = None
@@ -157,6 +167,8 @@ class ProviderCacheStore(Protocol):
 
 @dataclass
 class InMemoryProviderCacheStore:
+    """Process-local provider cache registry for tests and simple deployments."""
+
     _records: dict[str, ProviderCacheRecord] = field(default_factory=dict)
 
     async def save(self, record: ProviderCacheRecord) -> None:
@@ -402,6 +414,12 @@ async def record_provider_cache_usage(
     usage: ModelUsage | dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> ProviderCacheRecord | None:
+    """Update a cache record with usage-derived hit/miss and token counters.
+
+    The record is located by key first and then provider cache id, creating one
+    when either identifier is supplied.
+    """
+
     if key is None and provider_cache_id is None:
         return None
     normalized = usage if isinstance(usage, ModelUsage) else usage_from_mapping(usage)
@@ -454,6 +472,8 @@ def cache_usage_from_usage(
     strategy: str | None = None,
     ttl: str | None = None,
 ) -> ProviderCacheUsage | None:
+    """Build per-result cache usage metrics when caching was requested or observed."""
+
     normalized = usage if isinstance(usage, ModelUsage) else usage_from_mapping(usage)
     if (
         not requested

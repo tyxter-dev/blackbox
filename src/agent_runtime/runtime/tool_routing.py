@@ -74,6 +74,8 @@ class RoutingResolution:
 
 class DefaultToolSelector:
     async def select(self, request: ToolSelectionRequest) -> ToolSelectionResult:
+        """Select, block, or defer tool candidates using routing rules and budgets."""
+
         routing = request.routing
         if routing.mode == "disabled":
             return ToolSelectionResult(selected=(), discoverable=tuple(request.candidates))
@@ -142,6 +144,8 @@ async def resolve_tool_routing(
     *,
     provider_tools_by_name: Mapping[str, dict[str, Any]] | None = None,
 ) -> RoutingResolution:
+    """Collect candidates, apply policy, and return a resolved routing plan."""
+
     started = AgentEvent(
         type=EventTypes.TOOL_ROUTING_STARTED,
         provider=context.provider,
@@ -220,6 +224,8 @@ def build_resolved_tool_plan(
     provider_tools_by_name: Mapping[str, dict[str, Any]],
     metadata: dict[str, Any] | None = None,
 ) -> ResolvedToolPlan:
+    """Convert a tool selection result into a provider-facing resolved plan."""
+
     selected_refs = tuple(tool.candidate.ref for tool in selection.selected)
     local_tools = _names_for_kind(selection.selected, "local")
     workspace_tools = _names_for_kind(selection.selected, "workspace")
@@ -296,6 +302,8 @@ def _score_candidate(
     candidate: ToolCandidate,
     request: ToolSelectionRequest,
 ) -> SelectedTool:
+    """Heuristically score a candidate against task context, recency, and risk."""
+
     task_text = (request.current_input or request.task).lower()
     score = 0.0
     reasons: list[str] = []

@@ -39,6 +39,8 @@ class ToolSession:
         metadata: dict[str, Any] | None = None,
         prompt_fragments: list[PromptFragment] | None = None,
     ) -> ToolDefinition:
+        """Register a tool on this session's isolated registry overlay."""
+
         return self.registry.register(
             function,
             name=name,

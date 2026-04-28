@@ -12,6 +12,8 @@ from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn,
 
 
 class _FakeTransport:
+    """In-memory MCP transport fake with a single lookup tool."""
+
     def __init__(self) -> None:
         self.started = False
         self.stopped = False

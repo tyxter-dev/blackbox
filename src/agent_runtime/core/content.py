@@ -13,12 +13,16 @@ ContentModality = Literal["text", "audio", "image", "video", "file", "tool_resul
 
 @dataclass(slots=True, frozen=True)
 class TextPart:
+    """Text content part within a runtime message."""
+
     type: Literal["text"] = "text"
     text: str = ""
 
 
 @dataclass(slots=True, frozen=True)
 class AudioPart:
+    """Audio content part with optional media, transcript, and timing metadata."""
+
     type: Literal["audio"] = "audio"
     media: MediaRef | None = None
     transcript: str | None = None
@@ -39,6 +43,8 @@ class AudioPart:
         duration_ms: int | None = None,
         storage_allowed: bool = False,
     ) -> AudioPart:
+        """Create an audio part by embedding bytes as an inline media reference."""
+
         return cls(
             media=MediaRef.from_bytes(
                 data,
@@ -54,6 +60,8 @@ class AudioPart:
 
 @dataclass(slots=True, frozen=True)
 class ImagePart:
+    """Image content part with provider detail preference."""
+
     type: Literal["image"] = "image"
     media: MediaRef | None = None
     detail: Literal["auto", "low", "high"] = "auto"
@@ -89,6 +97,8 @@ class ImagePart:
 
 @dataclass(slots=True, frozen=True)
 class VideoFramePart:
+    """Single video frame content part with an optional timestamp."""
+
     type: Literal["video_frame"] = "video_frame"
     media: MediaRef | None = None
     timestamp_ms: int | None = None
@@ -96,6 +106,8 @@ class VideoFramePart:
 
 @dataclass(slots=True, frozen=True)
 class FilePart:
+    """File content part that references attached or external media."""
+
     type: Literal["file"] = "file"
     media: MediaRef | None = None
     filename: str | None = None
@@ -103,6 +115,8 @@ class FilePart:
 
 @dataclass(slots=True, frozen=True)
 class ToolResultPart:
+    """Tool result content part correlated to a tool call id."""
+
     call_id: str
     content: str
     type: Literal["tool_result"] = "tool_result"
@@ -111,6 +125,8 @@ class ToolResultPart:
 
 @dataclass(slots=True, frozen=True)
 class ProviderNativePart:
+    """Provider-specific content part preserved for adapter-native payloads."""
+
     provider: str
     value: Any
     type: Literal["raw"] = "raw"
@@ -130,6 +146,8 @@ ContentPart = (
 
 @dataclass(slots=True, frozen=True)
 class ContentItem:
+    """Role-tagged message item made from one or more content parts."""
+
     role: Role
     parts: list[ContentPart]
     item_id: str | None = None

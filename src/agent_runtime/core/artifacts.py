@@ -7,6 +7,8 @@ from uuid import uuid4
 
 @dataclass(slots=True, frozen=True)
 class ArtifactRef:
+    """Lightweight pointer to an artifact known by the runtime or a provider."""
+
     id: str
     provider: str | None = None
     uri: str | None = None
@@ -14,6 +16,8 @@ class ArtifactRef:
 
 @dataclass(slots=True, frozen=True)
 class Artifact:
+    """Artifact payload or URI emitted by an agent or workspace operation."""
+
     type: str
     name: str
     data: Any | None = None

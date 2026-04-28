@@ -29,6 +29,7 @@ from agent_runtime.workspaces import (
 
 
 async def main() -> None:
+    """Run the local workspace provider demo for file, patch, command, and artifact flows."""
     workspace_root = Path(__file__).parent / "workspaces" / "local-demo"
     workspace_root.mkdir(parents=True, exist_ok=True)
 

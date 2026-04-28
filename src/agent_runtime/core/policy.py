@@ -64,6 +64,8 @@ class PolicyDecision:
 
 @runtime_checkable
 class Policy(Protocol):
+    """Asynchronous policy gate consulted before sensitive runtime actions."""
+
     async def check(self, request: PolicyRequest) -> PolicyDecision: ...
 
 

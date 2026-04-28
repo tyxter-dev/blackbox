@@ -16,6 +16,8 @@ MCPResolvedRoute = Literal["local", "provider_native"]
 
 @dataclass(slots=True, frozen=True)
 class MCPToolset:
+    """Runtime MCP server configuration plus routing overrides for one toolset."""
+
     server: MCPServerSpec
     mode: MCPRouteMode = "auto"
     description: str | None = None
@@ -42,6 +44,7 @@ def resolve_mcp_route(
     *,
     policy: object | None = None,
 ) -> MCPResolvedRoute:
+    """Choose local or provider-native execution for an MCP toolset."""
     if toolset.mode == "local":
         return "local"
 
@@ -66,6 +69,7 @@ def resolve_mcp_route(
 
 
 def to_remote_mcp(toolset: MCPToolset) -> RemoteMCP:
+    """Convert a toolset into the provider-facing RemoteMCP descriptor."""
     server = toolset.server
     extra = dict(toolset.provider_extra or {})
     connector_id = _pop_optional_str(extra, "connector_id")

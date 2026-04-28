@@ -60,6 +60,8 @@ class Toolset:
         metadata: dict[str, Any] | None = None,
         prompt_fragments: list[PromptFragment] | None = None,
     ) -> ToolDefinition:
+        """Register a callable as part of this toolset's local registry."""
+
         return self.registry.register(
             function,
             name=name,
@@ -160,6 +162,8 @@ class DynamicToolsetSession:
         limit: int | None = None,
         offset: int = 0,
     ) -> ToolResult:
+        """Search the catalog and return loadable tools outside the core meta-tools."""
+
         result_limit = min(limit or self.budget.search_result_limit, self.budget.search_result_limit)
         entries = self.catalog.search(
             query=query,
@@ -212,6 +216,8 @@ class DynamicToolsetSession:
         )
 
     def load_tools(self, tool_names: list[str]) -> ToolResult:
+        """Make requested catalog tools visible on the next model turn within budget."""
+
         loaded: list[str] = []
         already_loaded: list[str] = []
         invalid: list[str] = []

@@ -31,6 +31,11 @@ def mcp_tool_cache_key(
     session_id: str | None = None,
     protocol_version: str | None = None,
 ) -> str:
+    """Return a stable discovery-cache key for a server/session/protocol identity.
+
+    Secret values are omitted while auth presence, tool filters, and endpoints
+    still contribute to cache identity.
+    """
     identity: dict[str, Any] = {
         "server": spec.name,
         "transport": spec.transport,

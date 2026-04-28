@@ -362,6 +362,7 @@ class CloudWorkspaceProvider:
         action: str,
         arguments: dict[str, Any],
     ) -> None:
+        """Evaluate the configured policy and raise an approval or denial for gated operations."""
         if self.policy is None:
             return
         decision = await self.policy.check(

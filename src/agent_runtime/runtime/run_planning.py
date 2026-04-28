@@ -103,6 +103,8 @@ def _dynamic_loading_from_controls(
 
 
 def _prompt_events(plan: ResolvedRunSpec, bundle: PromptBundle) -> list[AgentEvent]:
+    """Build observability events for prompt planning and bundle output."""
+
     events = [
         AgentEvent(
             type=EventTypes.PROMPT_PLAN_CREATED,

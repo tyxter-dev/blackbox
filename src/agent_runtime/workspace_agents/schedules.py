@@ -10,6 +10,8 @@ ScheduledRunStatus = Literal["queued", "running", "completed", "failed", "cancel
 
 @dataclass(slots=True, frozen=True)
 class ScheduleTrigger:
+    """Trigger expression and metadata for a workspace agent schedule."""
+
     kind: ScheduleTriggerKind = "manual"
     expression: str | None = None
     timezone: str | None = None
@@ -29,6 +31,8 @@ class ScheduleSpec:
 
 @dataclass(slots=True, frozen=True)
 class ScheduledRunRef:
+    """Reference to one scheduled execution of a workspace agent."""
+
     agent_id: str
     schedule_name: str
     status: ScheduledRunStatus = "queued"

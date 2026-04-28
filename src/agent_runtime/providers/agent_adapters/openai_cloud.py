@@ -23,18 +23,26 @@ class OpenAIAgentsClient(Protocol):
 
     async def create_agent(self, spec: AgentSpec) -> Any: ...
 
-    async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> Any: ...
+    async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> Any:
+        """Start an OpenAI Agents session and return the native session payload."""
+        ...
 
     def stream_events(
         self,
         provider_session_id: str,
         *,
         after_event_id: str | None = None,
-    ) -> AsyncIterator[Any]: ...
+    ) -> AsyncIterator[Any]:
+        """Stream native OpenAI Agents events for a provider session."""
+        ...
 
-    async def send_message(self, provider_session_id: str, message: str) -> Any: ...
+    async def send_message(self, provider_session_id: str, message: str) -> Any:
+        """Send a follow-up message to a provider session."""
+        ...
 
-    async def approve(self, approval_id: str, decision: ApprovalDecision) -> Any: ...
+    async def approve(self, approval_id: str, decision: ApprovalDecision) -> Any:
+        """Resolve a pending OpenAI Agents approval request."""
+        ...
 
     async def cancel(self, provider_session_id: str) -> Any: ...
 
@@ -45,7 +53,9 @@ class OpenAIAgentsClient(Protocol):
         type: str | None = None,
         after: str | None = None,
         limit: int = 100,
-    ) -> Any: ...
+    ) -> Any:
+        """Return native artifact data for a provider session."""
+        ...
 
 
 class OpenAICloudAgentProvider:
@@ -300,6 +310,7 @@ class OpenAIAgentsSDKClient:
         *,
         after_event_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
+        """Drain an SDK streamed run into replayable provider events and approval pauses."""
         session = self._resolve(provider_session_id)
 
         for event in _events_after(session.events, after_event_id):
@@ -833,6 +844,7 @@ def _provider_session_id(session: AgentSession) -> str:
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
+    """Convert SDK payload objects into a best-effort public dictionary."""
     if isinstance(value, dict):
         return dict(value)
     if is_dataclass(value) and not isinstance(value, type):

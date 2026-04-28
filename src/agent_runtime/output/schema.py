@@ -11,6 +11,8 @@ from agent_runtime.core.results import OutputSpec
 
 @dataclass(slots=True, frozen=True)
 class OutputSchema:
+    """Provider-ready schema metadata for structured model responses."""
+
     name: str
     schema: dict[str, Any]
     description: str | None = None

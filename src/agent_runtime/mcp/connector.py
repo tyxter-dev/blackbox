@@ -101,6 +101,7 @@ class MCPConnector:
         parameters: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> MCPToolDefinition:
+        """Register an in-process MCP tool for an existing server spec."""
         if server not in {spec.name for spec in self.servers}:
             raise MCPError(f"Unknown MCP server: {server}")
         definition = MCPToolDefinition(
@@ -183,6 +184,10 @@ class MCPConnector:
         tool: str,
         arguments: dict[str, Any] | None = None,
     ) -> MCPCallResult:
+        """Invoke an MCP tool after discovery, policy checks, and normalization.
+
+        Managed servers are rediscovered once if the requested tool is unknown.
+        """
         await self._ensure_discovered(server)
         try:
             definition = self._resolve(server, tool)
@@ -258,6 +263,7 @@ class MCPConnector:
         *,
         server: str | None = None,
     ) -> list[ToolDefinition]:
+        """Expose discovered MCP tools through the runtime tool registry."""
         definitions: list[ToolDefinition] = []
         for descriptor in await self.list_tools(server):
             ref = str(descriptor["ref"])
@@ -326,6 +332,7 @@ class MCPConnector:
     async def _policy_gate(
         self, definition: MCPToolDefinition, arguments: dict[str, Any]
     ) -> None:
+        """Enforce server approval settings and policy before a tool call."""
         spec = self._server_spec(definition.server)
         if spec.require_approval == "always":
             self._emit_approval_required(definition, "MCP server requires approval.")

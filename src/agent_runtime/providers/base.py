@@ -178,6 +178,7 @@ class AgentProvider(Protocol):
         ...
 
     async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> AgentSession:
+        """Start a provider-backed session for an agent and task."""
         ...
 
     def stream_events(
@@ -186,14 +187,17 @@ class AgentProvider(Protocol):
         *,
         after_event_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
+        """Stream normalized events for a session, optionally resuming after an event."""
         ...
 
     async def send_message(
         self, session: SessionRef | AgentSession, message: str
     ) -> InvocationRef:
+        """Send a follow-up user message into an existing session."""
         ...
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
+        """Resolve a pending provider approval request."""
         ...
 
     async def cancel(self, session: SessionRef | AgentSession) -> None:
@@ -207,4 +211,5 @@ class AgentProvider(Protocol):
         after: str | None = None,
         limit: int = 100,
     ) -> ArtifactPage:
+        """List artifacts produced by a session with optional type and cursor filters."""
         ...

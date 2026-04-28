@@ -84,6 +84,7 @@ class GeminiGenerateContentProvider:
         )
 
     def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        """Return Gemini GenerateContent capability details for validation and planning."""
         summary = self.capabilities(model)
         structured_with_tools = _gemini_supports_structured_output_with_tools(model)
         return ModelCapabilityProfile(
@@ -209,6 +210,7 @@ class GeminiGenerateContentProvider:
         )
 
     def _get_client(self) -> Any:
+        """Return the configured Gemini client, creating one from credentials if needed."""
         if self._client is not None:
             return self._client
         api_key = (
@@ -260,6 +262,7 @@ class GeminiGenerateContentProvider:
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ProviderCacheRecord:
+        """Create Gemini cached content and return the runtime cache record."""
         client = self._get_client()
         caches = getattr(client, "caches", None)
         create = getattr(caches, "create", None)
@@ -311,6 +314,7 @@ class GeminiGenerateContentProvider:
             await result
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
+        """Stream one Gemini GenerateContent turn as normalized events and provider state."""
         client = self._get_client()
         kwargs = self._build_request_kwargs(request)
 
@@ -398,6 +402,7 @@ class GeminiGenerateContentProvider:
 
     @staticmethod
     def _build_request_kwargs(request: TurnRequest) -> dict[str, Any]:
+        """Translate a runtime turn request into Gemini generate_content_stream kwargs."""
         kwargs: dict[str, Any] = {
             "model": request.model,
             "contents": _compose_contents(request),
@@ -655,6 +660,7 @@ def _map_chunk(
     source_references: list[dict[str, Any]],
     file_handles: list[dict[str, Any]],
 ) -> list[AgentEvent]:
+    """Map a Gemini stream chunk into runtime events while collecting replay state."""
     events: list[AgentEvent] = []
     for candidate in _attr(chunk, "candidates") or []:
         source_references.extend(_candidate_source_references(candidate))
@@ -859,6 +865,7 @@ def _build_provider_state(
     source_references: list[dict[str, Any]],
     file_handles: list[dict[str, Any]],
 ) -> ProviderState:
+    """Build Gemini replay state from emitted assistant parts and provider identifiers."""
     history = _compose_contents(request)
     if not isinstance(history, list):
         history = [history]

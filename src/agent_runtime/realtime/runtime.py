@@ -54,6 +54,8 @@ _MAX_AUDIO_CHUNK_BYTES = 15 * 1024 * 1024
 
 @dataclass(slots=True)
 class RealtimeRuntime:
+    """Coordinates realtime sessions, validation, event storage, and local tools."""
+
     registry: ProviderRegistry
     event_store: EventStore
     tool_registry: ToolRegistry
@@ -87,6 +89,8 @@ class RealtimeRuntime:
         provider_state: ProviderState | None = None,
         **kwargs: object,
     ) -> ManagedRealtimeSession:
+        """Open a managed realtime session after resolving tools and capabilities."""
+
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource
         if not model_name:
@@ -146,6 +150,8 @@ class RealtimeRuntime:
 
 @dataclass(slots=True)
 class ManagedRealtimeSession:
+    """Handle for commands, events, and auto tool calls in a realtime session."""
+
     provider: RealtimeProvider
     ref: RealtimeSessionRef
     config: RealtimeSessionConfig
@@ -362,6 +368,8 @@ class ManagedRealtimeSession:
         future.set_result(decision)
 
     async def _execute_tool_call(self, event: AgentEvent) -> AsyncIterator[AgentEvent]:
+        """Run a provider-requested tool call through policy, approval, and runtime handling."""
+
         call_id = _event_string(event, "call_id") or event.item_id or f"call_{uuid4().hex}"
         name = _event_string(event, "name")
         if not name:

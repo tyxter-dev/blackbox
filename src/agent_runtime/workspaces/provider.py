@@ -55,6 +55,8 @@ class WorkspaceApprovalRequired(ApprovalError):  # noqa: N818
 
 @runtime_checkable
 class WorkspaceProvider(Protocol):
+    """Protocol for providers that expose file, command, artifact, and approval workspace operations."""
+
     @property
     def provider_id(self) -> str:
         ...
@@ -69,15 +71,19 @@ class WorkspaceProvider(Protocol):
         ...
 
     async def close(self, ws: WorkspaceRef, *, delete: bool = False) -> None:
+        """Close an open workspace and optionally delete provider-owned resources."""
         ...
 
     async def read_file(self, ws: WorkspaceRef, path: str) -> str:
+        """Return text content from a workspace-relative file path."""
         ...
 
     async def write_file(self, ws: WorkspaceRef, path: str, content: str) -> FileChange:
+        """Write text content to a workspace-relative file path and report the change."""
         ...
 
     async def delete_file(self, ws: WorkspaceRef, path: str) -> FileChange:
+        """Delete a workspace-relative file path and report the change."""
         ...
 
     async def list_files(
@@ -88,12 +94,15 @@ class WorkspaceProvider(Protocol):
         recursive: bool = False,
         limit: int = 1000,
     ) -> list[str]:
+        """List workspace-relative file paths under a directory."""
         ...
 
     async def apply_patch(self, ws: WorkspaceRef, patch: Patch) -> PatchArtifact:
+        """Apply a structured patch and return its patch artifact."""
         ...
 
     async def run_command(self, ws: WorkspaceRef, spec: CommandSpec) -> CommandResult:
+        """Run a command in the workspace and return the completed result."""
         ...
 
     def stream_command(
@@ -101,9 +110,11 @@ class WorkspaceProvider(Protocol):
         ws: WorkspaceRef,
         spec: CommandSpec,
     ) -> AsyncIterator[AgentEvent]:
+        """Run a command in the workspace and stream workspace events while it executes."""
         ...
 
     async def snapshot(self, ws: WorkspaceRef, *, name: str | None = None) -> Artifact:
+        """Create an artifact that captures the workspace state."""
         ...
 
     async def restore(
@@ -112,6 +123,7 @@ class WorkspaceProvider(Protocol):
         *,
         spec: WorkspaceSpec | None = None,
     ) -> WorkspaceRef:
+        """Restore a workspace from a snapshot artifact, optionally using a new spec."""
         ...
 
     async def expose_port(
@@ -122,6 +134,7 @@ class WorkspaceProvider(Protocol):
         protocol: str = "http",
         name: str | None = None,
     ) -> WorkspacePort:
+        """Expose a workspace network port and return the provider-published endpoint."""
         ...
 
     async def list_artifacts(
@@ -132,12 +145,15 @@ class WorkspaceProvider(Protocol):
         after: str | None = None,
         limit: int = 100,
     ) -> ArtifactPage:
+        """Return a paginated list of artifacts associated with a workspace."""
         ...
 
     async def export_artifact(self, ws: WorkspaceRef, ref: ArtifactRef) -> Artifact:
+        """Resolve a provider artifact reference into an exported artifact payload."""
         ...
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
+        """Apply an approval decision to a pending workspace operation."""
         ...
 
     def session_state(self, ws: WorkspaceRef) -> WorkspaceSessionState:

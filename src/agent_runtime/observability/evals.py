@@ -21,6 +21,8 @@ class EvaluationResult:
 
 
 class Evaluator(Protocol):
+    """Protocol for trace evaluators that return an EvaluationResult."""
+
     name: str
 
     def evaluate(self, trace: Trace) -> EvaluationResult | Awaitable[EvaluationResult]: ...
@@ -46,6 +48,10 @@ async def evaluate_trace(
     *,
     run_id: str | None = None,
 ) -> EvaluationReport:
+    """Run evaluators against a trace and return a report plus lifecycle events.
+
+    Evaluator exceptions are captured as failed results so later evaluators run.
+    """
     effective_run_id = run_id or _trace_run_id(trace)
     events: list[AgentEvent] = []
     results: list[EvaluationResult] = []

@@ -29,6 +29,7 @@ load_dotenv()
 
 
 async def main() -> None:
+    """Run an OpenAI Agents-backed release notes example and save returned artifacts."""
     if not os.getenv("OPENAI_API_KEY"):
         raise SystemExit("Set OPENAI_API_KEY before running this example.")
 

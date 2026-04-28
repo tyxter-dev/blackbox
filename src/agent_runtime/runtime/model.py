@@ -46,6 +46,8 @@ from agent_runtime.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
 
 @dataclass(slots=True)
 class ModelRuntime:
+    """Facade for direct model turns with tracing, tools, and result aggregation."""
+
     registry: ProviderRegistry
     model_catalog: ModelCatalog = field(default_factory=ModelCatalog)
     provider_cache_store: ProviderCacheStore = field(
@@ -97,6 +99,8 @@ class ModelRuntime:
         parent_span_id: str | None = None,
         **kwargs: object,
     ) -> AsyncIterator[AgentEvent]:
+        """Validate and stream a single model turn as traced runtime events."""
+
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource
         if not model_name:
@@ -178,6 +182,8 @@ class ModelRuntime:
         run_id: str | None = None,
         **kwargs: object,
     ) -> TurnResult:
+        """Execute a model turn and collect text, artifacts, state, usage, and metadata."""
+
         events: list[AgentEvent] = []
         text_parts: list[str] = []
         artifacts: list[Artifact] = []

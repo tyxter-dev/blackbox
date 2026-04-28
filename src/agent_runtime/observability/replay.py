@@ -76,6 +76,7 @@ def diff_traces(
     *,
     duration_threshold_ms: float = 0,
 ) -> RunDiff:
+    """Compare two traces by span keys, status, duration, and cost metadata."""
     left_spans = {_span_key(span): span for span in left.spans}
     right_spans = {_span_key(span): span for span in right.spans}
     left_keys = set(left_spans)
@@ -117,6 +118,7 @@ def diff_runs(
     right_metadata: dict[str, Any] | None = None,
     duration_threshold_ms: float = 0,
 ) -> RunDiff:
+    """Build traces from two event lists and return their diff."""
     return diff_traces(
         trace_from_events(left_events, metadata=left_metadata),
         trace_from_events(right_events, metadata=right_metadata),

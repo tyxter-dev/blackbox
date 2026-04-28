@@ -114,6 +114,11 @@ class TraceContext:
         sequence: int | None = None,
         preserve_sequence: bool = True,
     ) -> AgentEvent:
+        """Return a copy of an event stamped with run, trace, and span IDs.
+
+        Existing IDs are preserved while missing span IDs are assigned
+        consistently within this trace context.
+        """
         kind = event.span_kind or infer_span_kind(event.type)
         if event.span_id is not None:
             self._span_ids.setdefault(_span_key(event, kind), event.span_id)
@@ -162,6 +167,7 @@ class TraceContext:
 
 
 def infer_span_kind(event_type: str) -> str:
+    """Map a runtime event type string to the span kind used for grouping."""
     if event_type.startswith("run."):
         return SpanKinds.WORKFLOW
     if event_type.startswith("session."):
@@ -231,6 +237,7 @@ def trace_from_events(
     metadata: dict[str, Any] | None = None,
     trace_id: str | None = None,
 ) -> Trace:
+    """Build a Trace from events, preserving order and deriving spans."""
     ordered = _ordered_events(events)
     if not ordered:
         return Trace(id=trace_id or f"trace_{uuid4().hex}", metadata=dict(metadata or {}))
@@ -277,6 +284,7 @@ def spans_from_events(
     metadata: dict[str, Any] | None = None,
     trace_id: str | None = None,
 ) -> list[TraceSpan]:
+    """Derive root and child TraceSpan records from runtime events."""
     ordered = _ordered_events(events)
     if not ordered:
         return []
@@ -471,6 +479,7 @@ def _attributes_from_events(events: list[AgentEvent]) -> dict[str, Any]:
 
 
 def _span_name(kind: str, event: AgentEvent) -> str:
+    """Return the canonical display name for a derived span kind."""
     if kind == SpanKinds.MODEL:
         return "model.turn"
     if kind == SpanKinds.REALTIME_SESSION:

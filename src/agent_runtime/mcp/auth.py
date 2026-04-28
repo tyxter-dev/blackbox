@@ -8,17 +8,23 @@ from agent_runtime.mcp.spec import MCPServerSpec
 
 @runtime_checkable
 class MCPAuthProvider(Protocol):
+    """Supplies MCP request headers and refreshes them after auth challenges."""
+
     async def headers_for(self, spec: MCPServerSpec) -> dict[str, str]: ...
 
     async def handle_auth_challenge(
         self,
         spec: MCPServerSpec,
         challenge: MCPAuthChallenge,
-    ) -> dict[str, str] | None: ...
+    ) -> dict[str, str] | None:
+        """Return replacement headers for an auth challenge, or None to fail."""
+        ...
 
 
 @runtime_checkable
 class LegacyMCPAuthProvider(Protocol):
+    """Legacy auth provider contract for one Authorization header value."""
+
     async def authorization_header(self, server: MCPServerSpec) -> str | None: ...
 
 

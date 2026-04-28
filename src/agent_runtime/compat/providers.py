@@ -48,6 +48,8 @@ _EXACT_BARE: dict[str, ProviderKey] = {
 
 @dataclass(frozen=True, slots=True)
 class ModelRoute:
+    """Resolved provider key and provider-local model name for a model string."""
+
     provider: ProviderKey
     model: str
 

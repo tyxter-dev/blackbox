@@ -43,6 +43,8 @@ class ToolRuntimeFacade:
         metadata: dict[str, Any] | None = None,
         prompt_fragments: list[PromptFragment] | None = None,
     ) -> ToolDefinition:
+        """Register a callable tool with schema, routing metadata, and prompt fragments."""
+
         return self.registry.register(
             function,
             name=name,

@@ -24,6 +24,7 @@ def register_workspace_tools(
     *,
     prefix: str = "workspace",
 ) -> list[ToolDefinition]:
+    """Register file, patch, command, snapshot, and port tools bound to a workspace ref."""
     async def read_file(path: str) -> ToolResult:
         content = await workspace.read_file(ref, path)
         return _tool_result(
@@ -272,6 +273,7 @@ def _tool_result(
     metadata: dict[str, Any] | None = None,
     artifacts: list[Artifact] | None = None,
 ) -> ToolResult:
+    """Wrap workspace operation output with drained events, artifacts, and session metadata."""
     events = _drain_events(workspace)
     event_artifacts = _artifacts_from_events(events)
     all_artifacts = _dedupe_artifacts([*(artifacts or []), *event_artifacts])

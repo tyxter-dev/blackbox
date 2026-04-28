@@ -70,6 +70,8 @@ def _validate_output(
     *,
     allow_dict_schema: bool = False,
 ) -> Any:
+    """Coerce final text into the requested output type or JSON schema."""
+
     if output_type is None or output_type is str:
         return text
     if isinstance(output_type, dict):

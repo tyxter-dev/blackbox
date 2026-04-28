@@ -20,6 +20,8 @@ from agent_runtime.mcp.spec import MCPServerSpec
 
 @runtime_checkable
 class MCPTransportClient(Protocol):
+    """Protocol implemented by MCP transports used by MCPClient."""
+
     async def start(self) -> None: ...
 
     async def stop(self) -> None: ...
@@ -30,13 +32,17 @@ class MCPTransportClient(Protocol):
         params: dict[str, Any] | None = None,
         *,
         timeout_seconds: float | None = None,
-    ) -> Any: ...
+    ) -> Any:
+        """Send a JSON-RPC request and return its result payload."""
+        ...
 
     async def notify(
         self,
         method: str,
         params: dict[str, Any] | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Send a JSON-RPC notification without waiting for a response."""
+        ...
 
     @property
     def session_id(self) -> str | None: ...
@@ -128,6 +134,11 @@ class StdioMCPTransport(JsonRPCTransport):
         self._stderr_task = asyncio.create_task(self._drain_stderr())
 
     async def stop(self) -> None:
+        """Shut down the stdio server process and fail pending requests.
+
+        The shutdown path closes stdin first, then escalates from graceful wait
+        to terminate and kill using the configured timeout.
+        """
         process = self.process
         if process is None:
             return
@@ -252,6 +263,8 @@ class _HTTPAuthRequiredError(Exception):
 
 @dataclass(slots=True)
 class StreamableHTTPMCPTransport(JsonRPCTransport):
+    """HTTP MCP transport with session, protocol, and auth challenge handling."""
+
     spec: MCPServerSpec
     auth_provider: MCPAuthProvider | LegacyMCPAuthProvider | None = None
     _session_id: str | None = None

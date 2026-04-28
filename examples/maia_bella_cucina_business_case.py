@@ -128,6 +128,7 @@ Total visits: {customer.notes["total_visits"]}
 
 
 def install_bella_cucina_tools(runtime: AgentRuntime, crm: BellaCucinaCRM) -> None:
+    """Register the Bella Cucina CRM and scheduling tools with prompt fragments."""
     runtime.tools.register(
         lambda name=None, phone_number=None: query_customers(
             crm,
@@ -261,6 +262,7 @@ def install_bella_cucina_tools(runtime: AgentRuntime, crm: BellaCucinaCRM) -> No
 
 
 def install_bella_cucina_prompt_pack(runtime: AgentRuntime) -> None:
+    """Register prompt fragments for returning guests, WhatsApp, and private dining."""
     runtime.prompt_fragments.register(
         PromptFragment(
             id="bella.returning_guest.no_duplicate_customer",

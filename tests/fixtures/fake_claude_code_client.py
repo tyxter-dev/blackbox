@@ -10,6 +10,8 @@ from agent_runtime.providers.base import AgentSpec, TaskSpec
 
 @dataclass(slots=True)
 class FakeClaudeCodeClient:
+    """Scriptable Claude Code client fake for exercising agent provider flows."""
+
     events: list[dict[str, Any]] = field(default_factory=list)
     artifacts: list[dict[str, Any]] = field(default_factory=list)
     approvals: list[tuple[str, ApprovalDecision]] = field(default_factory=list)

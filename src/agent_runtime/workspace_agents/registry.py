@@ -12,9 +12,13 @@ from agent_runtime.workspace_agents.spec import (
 
 @runtime_checkable
 class WorkspaceAgentRegistry(Protocol):
+    """Persistence and publication contract for workspace agent specs."""
+
     async def save(self, spec: WorkspaceAgentSpec) -> WorkspaceAgentSpec: ...
 
-    async def get(self, agent_id: str, *, version: str | None = None) -> WorkspaceAgentSpec: ...
+    async def get(self, agent_id: str, *, version: str | None = None) -> WorkspaceAgentSpec:
+        """Return the requested agent version or the latest version when omitted."""
+        ...
 
     async def list(self, *, visibility: WorkspaceAgentVisibility | None = None) -> list[WorkspaceAgentSpec]: ...
 
@@ -24,9 +28,13 @@ class WorkspaceAgentRegistry(Protocol):
         *,
         visibility: WorkspaceAgentVisibility = "workspace",
         directory_enabled: bool = True,
-    ) -> WorkspaceAgentSpec: ...
+    ) -> WorkspaceAgentSpec:
+        """Mark an agent as publishable with the requested visibility settings."""
+        ...
 
-    async def deprecate(self, agent_id: str, *, reason: str | None = None) -> WorkspaceAgentSpec: ...
+    async def deprecate(self, agent_id: str, *, reason: str | None = None) -> WorkspaceAgentSpec:
+        """Hide an agent from the directory while preserving its stored spec."""
+        ...
 
 
 @dataclass(slots=True)

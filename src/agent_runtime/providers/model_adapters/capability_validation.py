@@ -58,6 +58,7 @@ def capability_request_from_turn(request: TurnRequest) -> ModelCapabilityRequest
 
 
 def requested_controls(controls: ModelRequestControls) -> list[ControlName]:
+    """Return the capability control names explicitly requested by runtime controls."""
     requested: list[ControlName] = []
 
     if controls.instructions is not None:
@@ -110,6 +111,7 @@ def validate_capability_request(
     *,
     output_fallback: OutputFallback | None = None,
 ) -> None:
+    """Raise when a requested model capability is unsupported by the profile."""
     for kind in requirement.hosted_tools:
         detail = profile.hosted_tools.get(kind)
         if detail is None or detail.status == "unsupported":
@@ -166,6 +168,7 @@ def resolve_output_strategy(
     requested: OutputStrategyKind,
     fallback: OutputFallback,
 ) -> OutputStrategyKind:
+    """Return the requested output strategy or a supported fallback."""
     detail = profile.output_strategies.get(requested)
     if detail is not None and detail.is_supported:
         return requested

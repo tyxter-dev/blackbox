@@ -35,6 +35,7 @@ class CodeReviewSummary:
 
 
 async def main() -> None:
+    """Run a Claude Code-backed repository review example and save returned artifacts."""
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise SystemExit("Set ANTHROPIC_API_KEY before running this example.")
 

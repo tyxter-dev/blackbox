@@ -47,6 +47,8 @@ class HostedToolContext:
 
 
 class HostedToolHandler(Protocol):
+    """Runtime-side executor for a specific hosted tool call type."""
+
     @property
     def hosted_tool_type(self) -> str: ...
 
@@ -54,20 +56,30 @@ class HostedToolHandler(Protocol):
         self,
         call: HostedToolCall,
         context: HostedToolContext,
-    ) -> HostedToolOutput: ...
+    ) -> HostedToolOutput:
+        """Execute a hosted tool call and return provider continuation output."""
+        ...
 
 
 class ShellHandler(HostedToolHandler, Protocol):
+    """Handler contract for provider shell calls executed by the runtime."""
+
     pass
 
 
 class ApplyPatchHandler(HostedToolHandler, Protocol):
+    """Handler contract for provider patch calls applied by the runtime."""
+
     pass
 
 
 class ComputerUseHandler(HostedToolHandler, Protocol):
+    """Handler contract for provider computer-use calls driven by the runtime."""
+
     pass
 
 
 class TextEditorHandler(HostedToolHandler, Protocol):
+    """Handler contract for provider text-editor calls executed by the runtime."""
+
     pass

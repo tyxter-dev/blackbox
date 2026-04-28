@@ -21,6 +21,8 @@ from agent_runtime.realtime.provider import (
 
 
 class OpenAIRealtimeProvider:
+    """Provider adapter shell for OpenAI Realtime capabilities and event mapping."""
+
     provider_aliases = ("openai",)
 
     @property
@@ -98,6 +100,8 @@ def map_openai_realtime_event(
     provider: str = "openai-realtime",
     session_id: str | None = None,
 ) -> list[AgentEvent]:
+    """Map an OpenAI Realtime server event into canonical runtime events."""
+
     provider_event_type = str(raw_event.get("type") or "")
     data_base = _common_data(raw_event, provider_event_type)
     raw_schema = f"openai.realtime.{provider_event_type}" if provider_event_type else None

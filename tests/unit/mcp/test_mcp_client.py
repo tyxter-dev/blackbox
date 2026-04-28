@@ -7,6 +7,8 @@ from agent_runtime.mcp import MCPClient, MCPServerSpec
 
 
 class _Transport:
+    """In-memory MCP transport fake used to assert client initialization and tool calls."""
+
     def __init__(self, protocol_version: str = "2025-11-25") -> None:
         self.protocol_version = protocol_version
         self.requests: list[tuple[str, dict[str, object] | None]] = []

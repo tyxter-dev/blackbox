@@ -45,6 +45,7 @@ class ScriptedModelProvider:
         )
 
     def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        """Return a permissive test profile that mirrors the scripted provider capabilities."""
         summary = self.capabilities(model)
         return ModelCapabilityProfile(
             provider=self.provider_id,

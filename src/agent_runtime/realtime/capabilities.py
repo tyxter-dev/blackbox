@@ -9,6 +9,8 @@ from agent_runtime.core.realtime import TransportKind
 
 @dataclass(slots=True, frozen=True)
 class RealtimeCapabilities:
+    """Summary of realtime features supported by a provider and model."""
+
     supports_sessions: bool = True
     supported_transports: tuple[TransportKind, ...] = ("websocket",)
     input_modalities: tuple[str, ...] = ("text",)
@@ -36,6 +38,8 @@ class RealtimeCapabilities:
 
 @dataclass(slots=True, frozen=True)
 class RealtimeCapabilityProfile:
+    """Detailed realtime capability metadata for a provider and optional model."""
+
     provider: str
     model: str | None = None
     summary: RealtimeCapabilities = field(default_factory=RealtimeCapabilities)
@@ -55,6 +59,8 @@ def derive_realtime_profile(
     model: str | None,
     summary: RealtimeCapabilities,
 ) -> RealtimeCapabilityProfile:
+    """Build a detailed realtime profile from summarized capability flags."""
+
     return RealtimeCapabilityProfile(
         provider=provider_id,
         model=model,

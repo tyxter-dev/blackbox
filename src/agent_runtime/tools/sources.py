@@ -39,6 +39,8 @@ def hosted_tool_candidates(hosted_tools: Iterable[HostedToolSpec]) -> list[ToolC
 
 
 async def mcp_tool_candidates(toolsets: Iterable[MCPToolset]) -> list[ToolCandidate]:
+    """Build routing candidates for configured MCP servers or explicit MCP tools."""
+
     candidates: list[ToolCandidate] = []
     for toolset in toolsets:
         server = toolset.server

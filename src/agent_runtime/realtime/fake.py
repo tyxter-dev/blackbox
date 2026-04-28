@@ -125,6 +125,8 @@ class FakeRealtimeProvider:
         session: RealtimeSessionRef,
         command: RealtimeClientCommand,
     ) -> InvocationRef:
+        """Record a command, enqueue deterministic fake events, and return its invocation."""
+
         fake_session = self._session(session)
         self.sent_commands.append(command)
         invocation = InvocationRef(

@@ -19,6 +19,8 @@ def realtime_event(
     raw: Any | None = None,
     raw_schema_name: str | None = None,
 ) -> AgentEvent:
+    """Build a normalized realtime event with optional raw provider payload."""
+
     return AgentEvent(
         type=event_type,
         provider=provider,
@@ -39,6 +41,8 @@ def raw_envelope(
     sensitivity: Sensitivity = "internal",
     storage_allowed: bool = True,
 ) -> RawEnvelope:
+    """Wrap a provider-native realtime payload with raw-envelope metadata."""
+
     return RawEnvelope(
         provider=provider,
         payload=payload,

@@ -40,6 +40,8 @@ from agent_runtime.workspaces.spec import (
 
 @dataclass(slots=True)
 class SandboxWorkspaceProvider:
+    """Workspace provider that delegates sandbox operations to a SandboxClient."""
+
     client: SandboxClient
     policy: Policy | None = None
     provider_id: str = "sandbox-workspace"
@@ -480,6 +482,7 @@ class SandboxWorkspaceProvider:
         action: str,
         arguments: dict[str, Any],
     ) -> None:
+        """Evaluate policy and one-shot approval overrides for a sandbox operation."""
         approval_id = _approval_id(self.provider_id, workspace_id, checkpoint, action, arguments)
         if approval_id in self._approved_operations:
             self._approved_operations.remove(approval_id)

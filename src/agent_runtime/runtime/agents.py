@@ -50,6 +50,8 @@ T = TypeVar("T")
 
 @dataclass(slots=True)
 class AgentRuntimeFacade:
+    """Facade for provider-managed agent sessions, streaming, and result collection."""
+
     registry: ProviderRegistry
     event_store: EventStore | None = None
     run_store: RunStore | None = None
@@ -76,6 +78,8 @@ class AgentRuntimeFacade:
         metadata: dict[str, Any] | None = None,
         extra: dict[str, Any] | None = None,
     ) -> AgentSession:
+        """Create a provider-backed agent session and attach a workspace if requested."""
+
         adapter = self.registry.get_agent(ProviderRef.parse(provider).provider_key)
         task_spec = _agent_task_spec(
             task,
@@ -121,6 +125,8 @@ class AgentRuntimeFacade:
         trace_id: str | None = None,
         parent_span_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
+        """Stream a provider-managed session with tracing, storage, and workspace events."""
+
         adapter = self.registry.get_agent(session.provider)
         effective_run_id = run_id or f"run_{uuid4().hex}"
         trace_context = TraceContext.for_run(
