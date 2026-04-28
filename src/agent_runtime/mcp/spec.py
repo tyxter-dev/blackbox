@@ -20,6 +20,16 @@ _SECRET_KEY_PARTS = (
 
 @dataclass(slots=True, frozen=True, repr=False)
 class MCPServerSpec:
+    """Connection and policy specification for one MCP server.
+
+    ``stdio`` servers are launched and owned by the runtime. HTTP/SSE servers
+    are remote endpoints and require explicit ``allow_remote_http`` when local
+    runtime dispatch would connect outside localhost. Tool allow/deny lists
+    define the runtime-visible catalog, ``require_approval`` controls tool-call
+    approval policy, and auth/header fields are redacted from ``repr`` so specs
+    can be logged safely.
+    """
+
     name: str
     transport: MCPTransport
     command: str | None = None

@@ -26,6 +26,14 @@ class ContainerSpec:
 
 @dataclass(slots=True, frozen=True)
 class WebSearch:
+    """Provider-native web search tool configuration.
+
+    This describes a search capability the provider may execute on its own
+    servers. Domain limits such as allowed/blocked domains are requests to the
+    adapter; adapters should raise when the provider cannot enforce an
+    explicitly requested restriction.
+    """
+
     search_context_size: str | None = None
     user_location: dict[str, Any] | None = None
     max_uses: int | None = None
@@ -36,6 +44,13 @@ class WebSearch:
 
 @dataclass(slots=True, frozen=True)
 class WebFetch:
+    """Provider-native URL fetch tool configuration.
+
+    ``urls`` can pre-authorize known pages for a turn, while domain lists
+    constrain any provider-side fetch behavior when the provider supports
+    those controls.
+    """
+
     urls: list[str] = field(default_factory=list)
     allowed_domains: list[str] = field(default_factory=list)
     blocked_domains: list[str] = field(default_factory=list)
@@ -44,12 +59,26 @@ class WebFetch:
 
 @dataclass(slots=True, frozen=True)
 class URLContext:
+    """Static URL context attached to a model request.
+
+    Unlike ``WebFetch``, this is context selection rather than a general fetch
+    capability: the model/provider receives or resolves the listed URLs as
+    bounded reference material for the current turn.
+    """
+
     urls: list[str]
     max_pages: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
 class FileSearch:
+    """Provider-native retrieval over configured file/vector corpora.
+
+    Vector stores and corpus IDs identify provider-managed indexes. ``filters``
+    and ``include_results`` are mapped only when a provider exposes comparable
+    retrieval controls.
+    """
+
     vector_store_ids: list[str] = field(default_factory=list)
     max_num_results: int | None = None
     filters: dict[str, Any] | None = None
@@ -60,6 +89,13 @@ class FileSearch:
 
 @dataclass(slots=True, frozen=True)
 class CodeInterpreter:
+    """Provider-hosted code execution tool.
+
+    The provider owns execution when available. Container fields describe the
+    desired execution environment and attached files; adapters should not fall
+    back to local execution unless the caller explicitly selected a local tool.
+    """
+
     container_id: str | None = None
     container: ContainerSpec | None = None
     file_ids: list[str] = field(default_factory=list)
@@ -128,6 +164,8 @@ class Memory:
 
 @dataclass(slots=True, frozen=True)
 class ImageGeneration:
+    """Provider-native image generation or editing tool configuration."""
+
     size: str | None = None
     quality: str | None = None
     format: str | None = None
@@ -138,6 +176,8 @@ class ImageGeneration:
 
 @dataclass(slots=True, frozen=True)
 class ToolNamespace:
+    """Searchable namespace exposed to provider or runtime tool search."""
+
     name: str
     description: str | None = None
     tools: list[dict[str, Any]] = field(default_factory=list)
@@ -145,6 +185,13 @@ class ToolNamespace:
 
 @dataclass(slots=True, frozen=True)
 class ToolSearch:
+    """Deferred tool discovery configuration.
+
+    Provider strategy asks the model API to search tool namespaces natively.
+    Runtime catalog strategy exposes a client-side catalog so the runtime can
+    load concrete tools after the model selects a relevant capability.
+    """
+
     namespaces: list[ToolNamespace] = field(default_factory=list)
     strategy: Literal["provider", "runtime_catalog"] = "provider"
     max_results: int | None = None
@@ -157,6 +204,15 @@ MCPApprovalPolicy: TypeAlias = Literal["always", "never"] | dict[str, Any]
 
 @dataclass(slots=True, frozen=True)
 class RemoteMCP:
+    """Provider-native remote MCP server declaration.
+
+    This is the model-visible MCP server configuration for providers that can
+    connect to remote MCP directly. ``allowed_tools``/``denied_tools`` scope the
+    provider-visible catalog, ``require_approval`` requests provider-side
+    approval behavior, and ``cache_control`` carries provider-specific prompt
+    cache hints for stable server/tool descriptions.
+    """
+
     server_label: str
     server_url: str | None = None
     connector_id: str | None = None
@@ -174,11 +230,15 @@ class RemoteMCP:
 
 @dataclass(slots=True, frozen=True)
 class HostedToolRaw:
+    """Provider-specific hosted tool payload passed through unchanged."""
+
     payload: dict[str, Any]
     provider: str | None = None
 
 
 class HostedToolHandler(Protocol):
+    """Runtime-side executor for hosted tools that need client handling."""
+
     @property
     def hosted_tool_type(self) -> str: ...
 
@@ -187,6 +247,8 @@ class HostedToolHandler(Protocol):
 
 @dataclass(slots=True)
 class HostedToolHandlers:
+    """Handlers the runtime can use for client-executed hosted tools."""
+
     shell: HostedToolHandler | None = None
     apply_patch: HostedToolHandler | None = None
     computer: HostedToolHandler | None = None

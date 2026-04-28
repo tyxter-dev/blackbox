@@ -19,6 +19,8 @@ from agent_runtime.tools.registry import ToolDefinition
 
 @dataclass(slots=True, frozen=True)
 class AudioConfig:
+    """Audio formats, transcription, and voice settings for realtime sessions."""
+
     input_format: str | None = None
     output_format: str | None = None
     input_sample_rate_hz: int | None = None
@@ -31,6 +33,8 @@ class AudioConfig:
 
 @dataclass(slots=True, frozen=True)
 class TurnDetectionConfig:
+    """Server or provider VAD settings for realtime turn boundaries."""
+
     type: str = "server_vad"
     create_response: bool = True
     interrupt_response: bool = True
@@ -41,6 +45,13 @@ class TurnDetectionConfig:
 
 @dataclass(slots=True, frozen=True)
 class RealtimeSessionConfig:
+    """Mutable provider session configuration.
+
+    Providers use this at connect time and may accept later updates through
+    ``RealtimeProvider.update_session``. ``extra`` carries provider-native
+    session options that the common runtime surface does not model yet.
+    """
+
     instructions: str | None = None
     input_modalities: list[str] = field(default_factory=lambda: ["text", "audio"])
     output_modalities: list[str] = field(default_factory=lambda: ["text"])
@@ -52,6 +63,13 @@ class RealtimeSessionConfig:
 
 @dataclass(slots=True, frozen=True)
 class RealtimeConnectRequest:
+    """Request to open a realtime model session.
+
+    The runtime resolves tools and hosted tools before connect, chooses whether
+    tool calls are manually handled or provider-managed via ``tool_mode``, and
+    passes any resumable ``provider_state`` through to the adapter.
+    """
+
     model: str
     config: RealtimeSessionConfig = field(default_factory=RealtimeSessionConfig)
     transport: TransportKind = "websocket"
@@ -66,6 +84,8 @@ class RealtimeConnectRequest:
 
 @dataclass(slots=True, frozen=True)
 class RealtimeSessionRef(SessionRef):
+    """Stable handle for an opened realtime session."""
+
     model: str | None = None
     transport: TransportKind = "websocket"
     provider_session_id: str | None = None
@@ -74,6 +94,8 @@ class RealtimeSessionRef(SessionRef):
 
 @dataclass(slots=True, frozen=True)
 class RealtimeClientCommand:
+    """Client-to-provider command sent into an open realtime session."""
+
     type: str
     data: dict[str, Any] = field(default_factory=dict)
     content: ContentItem | None = None
@@ -82,6 +104,14 @@ class RealtimeClientCommand:
 
 @runtime_checkable
 class RealtimeProvider(Protocol):
+    """Provider adapter contract for bidirectional realtime sessions.
+
+    Adapters connect sessions, stream provider events, accept client commands,
+    apply session updates, and close provider resources. The protocol mirrors
+    the normal model-provider contract but keeps session transport and
+    low-latency command flow explicit.
+    """
+
     @property
     def provider_id(self) -> str:
         ...

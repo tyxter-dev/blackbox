@@ -99,6 +99,13 @@ StateMode: TypeAlias = Literal[
 
 @dataclass(slots=True, frozen=True)
 class HostedToolSupport:
+    """How a provider supports one hosted tool kind.
+
+    The flags distinguish request mapping, event mapping, provider-side
+    execution, and runtime-side execution because providers often expose the
+    same tool name with different ownership and observability guarantees.
+    """
+
     tool_type: str
     request_mapping: bool
     event_mapping: bool
@@ -134,6 +141,14 @@ class ModelCapabilities:
 
 @dataclass(slots=True, frozen=True)
 class CapabilityDetail:
+    """Granular support information for one provider capability.
+
+    ``supported`` means the adapter can honor the feature natively.
+    ``conditional`` means support depends on another setting or model.
+    ``passthrough`` means the runtime can send provider-specific data but
+    cannot validate the behavior uniformly.
+    """
+
     status: CapabilityStatus
     reason: str | None = None
     native_name: str | None = None
@@ -151,6 +166,13 @@ class CapabilityDetail:
 
 @dataclass(slots=True, frozen=True)
 class CapabilityConstraint:
+    """Cross-feature rule that can change or block capability support.
+
+    Constraints describe requirements like "finalizer tools require function
+    tools" or "this hosted tool is unavailable with a given output strategy."
+    They are used for validation and diagnostics, not as prompt text.
+    """
+
     name: str
     status: CapabilityStatus
     reason: str
@@ -164,6 +186,14 @@ class CapabilityConstraint:
 
 @dataclass(slots=True, frozen=True)
 class ModelCapabilityProfile:
+    """Provider/model feature profile used by planning and adapters.
+
+    ``summary`` keeps the broad legacy feature flags, while the typed maps
+    explain support for specific hosted tools, output strategies, controls, and
+    state modes. Runtime planning should prefer these granular details when
+    deciding whether to map, reject, or pass through a requested feature.
+    """
+
     provider: str
     model: str | None = None
     hosted_tools: dict[HostedToolKind, CapabilityDetail] = field(default_factory=dict)
@@ -178,6 +208,8 @@ class ModelCapabilityProfile:
 
 @runtime_checkable
 class GranularModelCapabilityProvider(Protocol):
+    """Provider protocol for adapters that expose detailed capability profiles."""
+
     @property
     def provider_id(self) -> str:
         ...

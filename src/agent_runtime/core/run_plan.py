@@ -14,6 +14,13 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True, frozen=True)
 class ResolvedTool:
+    """Executable local tool that is enabled for this run.
+
+    This is the bridge between registry metadata and provider tool schemas. The
+    ``definition`` is what adapters send to the model; tags and fragments are
+    runtime metadata used for prompt composition and diagnostics.
+    """
+
     name: str
     definition: Mapping[str, Any] = field(default_factory=dict)
     tags: frozenset[str] = field(default_factory=frozenset)
@@ -25,6 +32,8 @@ class ResolvedTool:
 
 @dataclass(slots=True, frozen=True)
 class ResolvedHostedTool:
+    """Provider-hosted tool enabled for this run."""
+
     kind: str
     spec: HostedToolSpec
     metadata: Mapping[str, Any] = field(default_factory=dict)
@@ -32,6 +41,13 @@ class ResolvedHostedTool:
 
 @dataclass(slots=True, frozen=True)
 class ResolvedMCPToolset:
+    """MCP server/toolset after routing has been decided for this run.
+
+    ``route`` is usually ``"local"`` or ``"provider_native"``. ``allowed_tools``
+    is best-effort metadata for prompt selectors and observability; provider
+    native MCP servers may discover the concrete tools later.
+    """
+
     server_label: str
     route: str
     allowed_tools: tuple[str, ...] = ()
@@ -40,12 +56,16 @@ class ResolvedMCPToolset:
 
 @dataclass(slots=True, frozen=True)
 class DynamicToolLoadingSpec:
+    """Describes a run where the visible tool set may expand during execution."""
+
     mode: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
 class DataSourceRef:
+    """Reference to external context that influenced the run plan."""
+
     kind: str
     id: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
@@ -53,20 +73,37 @@ class DataSourceRef:
 
 @dataclass(slots=True)
 class ResolvedRunSpec:
+    """Single source of truth for a planned runtime invocation.
+
+    The runtime builds this after provider, model, tools, hosted tools, MCP,
+    workspace, output, and cache controls have been resolved. Prompt composition
+    and executable model/tool configuration both consume this object, which is
+    the invariant that prevents prompt/tool drift.
+    """
+
+    # Provider/model identity and capability profile.
     provider: str
     model: str | None
     provider_profile: ModelCapabilityProfile
+
+    # User-visible request inputs.
     input: object
     base_instructions: str | None = None
     channel: str | None = None
+
+    # Effective execution surface for this run.
     tools: list[ResolvedTool] = field(default_factory=list)
     hosted_tools: list[ResolvedHostedTool] = field(default_factory=list)
     mcp_toolsets: list[ResolvedMCPToolset] = field(default_factory=list)
     workspace: Any | None = None
+
+    # Output and provider-control choices after capability negotiation.
     output_spec: OutputSpec | None = None
     output_strategy: OutputStrategy | str | None = None
     dynamic_loading: DynamicToolLoadingSpec | None = None
     cache: Any | None = None
+
+    # Runtime metadata for selectors, observability, and dry-run inspection.
     data_sources: list[DataSourceRef] = field(default_factory=list)
     context_flags: list[str] = field(default_factory=list)
     available_tool_ids: list[str] = field(default_factory=list)

@@ -14,6 +14,8 @@ WorkspacePortProtocol = Literal["http", "https", "tcp"]
 
 @dataclass(slots=True, frozen=True)
 class WorkspaceProviderCapabilities:
+    """Feature flags advertised by a workspace provider implementation."""
+
     supports_local_files: bool = False
     supports_sandbox: bool = False
     supports_docker: bool = False
@@ -32,6 +34,8 @@ class WorkspaceProviderCapabilities:
 
 @dataclass(slots=True, frozen=True)
 class WorkspaceSessionState:
+    """Serializable provider state for resuming an opened workspace."""
+
     provider: str
     workspace_id: str
     kind: WorkspaceKind
@@ -97,6 +101,16 @@ class WorkspaceMount:
 
 @dataclass(slots=True, frozen=True)
 class WorkspaceSpec:
+    """Requested workspace source and execution environment.
+
+    ``kind`` selects the provider mode. Source fields such as ``root``,
+    ``repo``, ``url``, ``branch``, and ``ref`` identify what should be opened;
+    execution fields such as ``image``, ``user``, ``workdir``, ``network``, and
+    ``resources`` describe how sandbox/docker providers should run it.
+    ``snapshot`` and ``session_state`` let providers restore or resume an
+    existing workspace instead of creating a fresh one.
+    """
+
     kind: WorkspaceKind
     root: str | None = None
     repo: str | None = None
@@ -241,6 +255,8 @@ class WorkspaceSpec:
 
 @dataclass(slots=True, frozen=True)
 class WorkspacePort:
+    """Provider-published network port for a workspace session."""
+
     id: str = field(default_factory=lambda: f"port_{uuid4().hex}")
     workspace_id: str = ""
     port: int = 0

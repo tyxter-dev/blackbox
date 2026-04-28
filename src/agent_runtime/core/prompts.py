@@ -33,20 +33,39 @@ def _frozen(values: Any) -> frozenset[str]:
 
 @dataclass(slots=True, frozen=True)
 class FragmentSelector:
+    """Conditions that decide whether an instruction fragment applies to a run.
+
+    Selectors match against the already-resolved run plan, not against global
+    runtime state. For example, ``tools={"create_task"}`` means the fragment is
+    selected only when ``create_task`` is in the effective tool list for this
+    run. Empty selector fields are ignored, and non-empty fields are combined
+    with AND semantics.
+
+    ``context_flags`` is the app/domain escape hatch for facts that are not
+    tools, such as ``"customer.exists"`` or ``"channel.whatsapp"``.
+    """
+
+    # Tool surfaces.
     tools: frozenset[str] = field(default_factory=frozenset)
     tool_tags: frozenset[str] = field(default_factory=frozenset)
     hosted_tool_kinds: frozenset[str] = field(default_factory=frozenset)
     mcp_servers: frozenset[str] = field(default_factory=frozenset)
     mcp_tools: frozenset[str] = field(default_factory=frozenset)
     workspace_kinds: frozenset[str] = field(default_factory=frozenset)
+
+    # Provider/model and request-mode surfaces.
     providers: frozenset[str] = field(default_factory=frozenset)
     models: frozenset[str] = field(default_factory=frozenset)
     channels: frozenset[str] = field(default_factory=frozenset)
     output_strategies: frozenset[str] = field(default_factory=frozenset)
     dynamic_loading_modes: frozenset[str] = field(default_factory=frozenset)
+
+    # App-provided semantic facts that are not tools or provider capabilities.
     context_flags: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
+        # Public callers can pass str/list/set values; the runtime normalizes
+        # them once so matching can stay simple and deterministic.
         for name in self.__dataclass_fields__:
             object.__setattr__(self, name, _frozen(getattr(self, name)))
 
@@ -56,6 +75,14 @@ class FragmentSelector:
 
 @dataclass(slots=True, frozen=True)
 class FragmentRequirements:
+    """Hard prerequisites for selecting a fragment.
+
+    Selectors answer "is this kind of run relevant?" Requirements answer "can
+    this guidance actually be honored?" A fragment about calling
+    ``create_customer`` should require that tool so the composer can skip or
+    fail before telling the model to do something impossible.
+    """
+
     required_tools: frozenset[str] = field(default_factory=frozenset)
     forbidden_tools: frozenset[str] = field(default_factory=frozenset)
     required_capabilities: frozenset[str] = field(default_factory=frozenset)
@@ -68,6 +95,15 @@ class FragmentRequirements:
 
 @dataclass(slots=True, frozen=True)
 class PromptFragment:
+    """Reusable instruction text plus machine-readable selection metadata.
+
+    Fragments are the unit domain packages and tool authors contribute to the
+    prompt. They may be tool-specific, channel-specific, output-strategy
+    specific, or tied to app context. The text is model-visible; selectors,
+    requirements, conflict groups, cacheability, and metadata remain runtime
+    structure for composition, diagnostics, tests, and future evaluators.
+    """
+
     id: str
     text: str
     source: str = "app"
@@ -82,6 +118,14 @@ class PromptFragment:
 
 @dataclass(slots=True)
 class PromptSpec:
+    """Caller controls for prompt composition on one run.
+
+    ``mode`` chooses how much composition occurs. ``base`` preserves caller
+    instructions only, while ``tool_aware`` adds matching fragments from tools
+    and prompt registries. ``parity`` controls whether prompt/tool drift is
+    ignored, reported as warnings, or rejected before the model call.
+    """
+
     mode: PromptMode = "base"
     channel: str | None = None
     cache_sections: bool = True
@@ -91,6 +135,13 @@ class PromptSpec:
 
 @dataclass(slots=True, frozen=True)
 class PromptSection:
+    """One ordered section of the composed prompt.
+
+    Sections keep provider-visible text separate from runtime metadata. That
+    lets adapters map stable sections to provider cache controls later without
+    forcing private metadata into the model request.
+    """
+
     id: str
     content: str
     placement: PromptPlacement = "system"
@@ -101,6 +152,13 @@ class PromptSection:
 
 @dataclass(slots=True, frozen=True)
 class CacheSection:
+    """Cache metadata for a prompt section.
+
+    The content mirrors a ``PromptSection``; this object exists so examples,
+    diagnostics, and provider adapters can reason about cache boundaries without
+    parsing the final instruction string.
+    """
+
     id: str
     content: str
     cacheable: bool
@@ -108,12 +166,16 @@ class CacheSection:
 
 @dataclass(slots=True, frozen=True)
 class SelectedPromptFragment:
+    """A fragment selected for a run and the selector fields that matched."""
+
     fragment: PromptFragment
     matched_on: Mapping[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
 class SkippedPromptFragment:
+    """A fragment considered by the composer but intentionally excluded."""
+
     fragment: PromptFragment
     reason: str
     details: Mapping[str, Any] = field(default_factory=dict)
@@ -121,6 +183,8 @@ class SkippedPromptFragment:
 
 @dataclass(slots=True, frozen=True)
 class PromptParityIssue:
+    """A prompt/tool consistency finding produced during composition."""
+
     code: str
     message: str
     severity: Literal["warning", "error"] = "warning"
@@ -145,6 +209,14 @@ class PromptParityIssue:
 
 @dataclass(slots=True)
 class PromptBundle:
+    """Composed prompt artifact returned by planning.
+
+    ``instructions`` is the provider-visible instruction string. The remaining
+    fields explain how it was built: section order, selected/skipped fragments,
+    cache sections, effective tools, parity issues, and fingerprints. Tests and
+    observability should inspect this object instead of scraping strings.
+    """
+
     instructions: str
     input: object
     sections: list[PromptSection] = field(default_factory=list)
@@ -159,7 +231,11 @@ class PromptBundle:
 
 
 class PromptFragmentRegistry:
-    """Registry for reusable runtime-aware instruction fragments."""
+    """Application/domain registry for reusable runtime-aware fragments.
+
+    Tools can also carry default fragments. This registry is for guidance that
+    belongs to an app, vertical package, channel package, or deployment policy.
+    """
 
     def __init__(self) -> None:
         self._fragments: dict[str, PromptFragment] = {}
@@ -206,7 +282,13 @@ class PromptFragmentRegistry:
 
 
 class PromptComposer:
-    """Selects prompt fragments from a resolved run plan."""
+    """Builds a ``PromptBundle`` from a resolved run plan.
+
+    The composer is deliberately downstream of tool resolution. It never enables
+    tools. It only selects instructions that match the same resolved plan the
+    agent loop will execute with, then records why fragments were selected or
+    skipped.
+    """
 
     _PLACEMENT_ORDER: ClassVar[dict[str, int]] = {
         "system": 0,
