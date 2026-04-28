@@ -12,18 +12,20 @@ Scope: package, test, and documentation organization only
   compatibility checks and migration notes.
 - Phase 2 is implemented: `AgentLoop` lives in `runtime/agent_loop.py`, with
   `agent_runtime.loop` retained as a compatibility shim.
-- Phase 3 is in progress: OpenAI Responses, Anthropic Messages, Gemini
-  GenerateContent, and xAI Responses have been converted into packages with
-  stable public re-exports. Remaining adapter package splits should move one
-  at a time when they become large enough to justify it.
-- Phase 4 is in progress: output-specific runtime helpers have been split into
+- Phase 3 is implemented: OpenAI Responses, Anthropic Messages, Gemini
+  GenerateContent, and xAI Responses are packages with stable public
+  re-exports. Remaining adapter package splits should move one at a time when
+  they become large enough to justify it.
+- Phase 4 is implemented: output-specific runtime helpers have been split into
   `runtime/output.py`, and workspace event/result helpers have been split into
   `runtime/workspace_results.py`. Run-planning helpers have been split into
   `runtime/run_planning.py`, and event/accounting metadata helpers have been
   split into `runtime/event_metadata.py`. The remaining generic helper module
   has been renamed to `runtime/session_results.py`.
-- Phases 5-6 remain follow-up work because they involve larger file/package
-  moves that should land one package group at a time.
+- Phase 5 is implemented: `tests/unit` now mirrors source ownership for the
+  package areas with unit coverage, and validation references point at the new
+  paths.
+- Phase 6 remains follow-up documentation alignment.
 
 ## Goal
 
@@ -56,7 +58,8 @@ reducing structural ambiguity created by rushed feature work.
    of under `runtime`.
 3. Large modules such as provider adapters and `runtime/main.py` hide useful
    internal boundaries.
-4. `tests/unit` is flat, so test location does not reinforce package ownership.
+4. Before Phase 5, `tests/unit` was flat, so test location did not reinforce
+   package ownership.
 5. The top-level `agent_runtime.__init__` is broad enough that it can obscure
    the intended package boundaries.
 

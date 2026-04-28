@@ -15,7 +15,7 @@ from agent_runtime.integrations.google import (
 )
 from agent_runtime.mcp import to_remote_mcp
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_google_maps_mcp_toolset_uses_api_key_header() -> None:

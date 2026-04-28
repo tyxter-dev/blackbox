@@ -93,7 +93,7 @@ billing/tenancy
 | Runtime integration | `src/agent_runtime/runtime.py` | Implemented. `runtime.workspaces` opens provider-backed workspaces; `runtime.agents.run(..., workspace=...)` receives a resolved `WorkspaceRef`; `runtime.run/stream(..., workspace=...)` keeps the run-scoped workspace-tool compatibility bridge. |
 | Workspace tools | `src/agent_runtime/workspaces/tools.py` | Implemented. Registers read/write/delete/list/apply_patch/run_command/snapshot/expose_port tools against a provider/ref. |
 | Backward-compatible alias | `src/agent_runtime/workspaces/runtime.py` | Implemented. `WorkspaceRuntime` aliases the local provider for older local-workspace tests/imports. |
-| Tests | `tests/unit/test_workspace_runtime.py`, `tests/unit/test_local_workspace_provider.py`, `tests/unit/test_sandbox_workspace_provider.py`, `tests/unit/test_workspace_provider_contracts.py`, `tests/runtime/test_workspace_tool_loop.py` | Current behavior is covered by unit, contract, and runtime loop tests. |
+| Tests | `tests/unit/workspaces/test_workspace_runtime.py`, `tests/unit/workspaces/test_local_workspace_provider.py`, `tests/unit/workspaces/test_sandbox_workspace_provider.py`, `tests/unit/workspaces/test_workspace_provider_contracts.py`, `tests/runtime/test_workspace_tool_loop.py` | Current behavior is covered by unit, contract, and runtime loop tests. |
 
 ## 5. Primary Users
 

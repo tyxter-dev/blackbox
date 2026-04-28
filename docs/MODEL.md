@@ -90,7 +90,7 @@ owns workspace operations. `AgentProvider` owns session lifecycle.
 | Echo/test providers | `src/agent_runtime/providers/model_adapters/echo.py`, `tests/fixtures/scripted_model.py` | Implemented. Used for deterministic local loop and contract coverage. |
 | Capability profiles | `src/agent_runtime/core/capabilities.py`, `src/agent_runtime/providers/model_adapters/capability_validation.py` | Implemented. Profiles cover hosted tools, output strategies, controls, state modes, constraints, and pre-dispatch validation. |
 | Output strategies | `src/agent_runtime/core/results.py`, `src/agent_runtime/output/schema.py` | Implemented. Supports `provider_native`, `finalizer_tool`, `posthoc_parse`, and `posthoc_parse_with_retry`. |
-| Tests | `tests/golden/`, `tests/runtime/`, `tests/unit/test_model_request_controls.py`, `tests/contracts/test_capability_honesty.py` | Current behavior is covered by golden provider mappings, runtime loop tests, capability validation, request controls, accounting, and integration gates. |
+| Tests | `tests/golden/`, `tests/runtime/`, `tests/unit/providers/model_adapters/test_model_request_controls.py`, `tests/contracts/test_capability_honesty.py` | Current behavior is covered by golden provider mappings, runtime loop tests, capability validation, request controls, accounting, and integration gates. |
 
 ## 5. Primary Users
 
