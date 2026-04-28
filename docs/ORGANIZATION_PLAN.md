@@ -12,9 +12,10 @@ Scope: package, test, and documentation organization only
   compatibility checks and migration notes.
 - Phase 2 is implemented: `AgentLoop` lives in `runtime/agent_loop.py`, with
   `agent_runtime.loop` retained as a compatibility shim.
-- Phase 3 is in progress: OpenAI Responses, Anthropic Messages, and Gemini
-  GenerateContent have been converted into packages with stable public
-  re-exports. The remaining adapters should move one at a time.
+- Phase 3 is in progress: OpenAI Responses, Anthropic Messages, Gemini
+  GenerateContent, and xAI Responses have been converted into packages with
+  stable public re-exports. Remaining adapter package splits should move one
+  at a time when they become large enough to justify it.
 - Phases 4-6 remain follow-up work because they involve larger file/package
   moves that should land one package group at a time.
 
