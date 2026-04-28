@@ -26,6 +26,9 @@ export OPENAI_API_KEY=...
 export OPENAI_EXAMPLE_MODEL=gpt-4o-mini
 ```
 
+The examples also load `examples/.env` when it exists. Model selection checks
+`OPENAI_EXAMPLE_MODEL`, `OPENAI_AGENT_MODEL`, then `OPENAI_TEST_MODEL`.
+
 PowerShell:
 
 ```powershell
@@ -44,14 +47,16 @@ python examples/model_provider_knowledge_drawer.py
 ## Library Support Being Exercised
 
 - `OutputSpec(strategy="provider_native", fallback="posthoc_parse")` gives a
-  concise path for provider-native schemas with a runtime fallback.
+  concise path for provider-native schemas with a runtime fallback. The examples
+  use `structured_output(...)` as the short form for that common configuration.
 - `FileSearch(vector_store_ids=[...], include_results=True)` exposes
   provider-hosted retrieval without registering fake local tools.
-- `temporary_openai_vector_store(...)` creates a self-contained OpenAI vector
-  store fixture from inline documents, waits for ingestion, and cleans up the
-  store plus uploaded files.
-- Result metadata and provider state expose validation attempts, usage,
-  hosted-tool events, and source references for review.
+- `temporary_openai_file_search(...)` creates a self-contained OpenAI vector
+  store fixture from inline documents, waits for ingestion, yields a ready
+  `FileSearch` spec, and cleans up the store plus uploaded files.
+- `AgentResult.summary()` exposes validation attempts, usage, hosted-tool
+  events, and source references for review without reaching into provider
+  state in example code.
 
 ## Review Checklist
 

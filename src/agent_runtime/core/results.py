@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from typing import Any, Generic, Literal, TypeVar
 
@@ -59,6 +60,36 @@ class OutputSpec:
     fallback: OutputFallback = "error"
 
 
+def structured_output(
+    schema: type[Any] | dict[str, Any],
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    strategy: OutputStrategy = "provider_native",
+    fallback: OutputFallback = "posthoc_parse",
+    max_validation_retries: int = 1,
+    strict: bool = True,
+    allow_partial: bool = False,
+) -> OutputSpec:
+    """Return the common structured-output configuration for app workflows.
+
+    The default asks providers that support native schemas to enforce the
+    structure, while retaining runtime post-hoc parsing as a practical fallback
+    when a provider cannot honor native structured output.
+    """
+
+    return OutputSpec(
+        schema=schema,
+        strategy=strategy,
+        max_validation_retries=max_validation_retries,
+        allow_partial=allow_partial,
+        name=name,
+        description=description,
+        strict=strict,
+        fallback=fallback,
+    )
+
+
 @dataclass(slots=True)
 class ToolPayload:
     """A single payload returned by a tool during a high-level run.
@@ -89,6 +120,11 @@ class AgentResult(Generic[T]):
     provider_state: ProviderState | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def summary(self, *, include_output: bool = False) -> dict[str, Any]:
+        """Return compact JSON-safe metadata for logs, examples, and demos."""
+
+        return result_summary(self, include_output=include_output)
+
 
 @dataclass(slots=True)
 class AgentSessionResult(Generic[T]):
@@ -110,3 +146,80 @@ class AgentSessionResult(Generic[T]):
     usage: ModelUsage | None = None
     trace: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def summary(self, *, include_output: bool = False) -> dict[str, Any]:
+        """Return compact JSON-safe metadata for logs, examples, and demos."""
+
+        return result_summary(self, include_output=include_output)
+
+
+def result_summary(result: Any, *, include_output: bool = False) -> dict[str, Any]:
+    """Return a compact, JSON-safe summary of a runtime result.
+
+    The summary intentionally excludes full text by default. It keeps the parts
+    that are useful when reviewing examples or production logs: validation,
+    fallback, usage, hosted/MCP metadata, payloads, artifacts, and provider
+    source references.
+    """
+
+    metadata = getattr(result, "metadata", {}) or {}
+    provider_state = getattr(result, "provider_state", None)
+    tool_state = getattr(provider_state, "tool_state", {}) if provider_state is not None else {}
+    summary: dict[str, Any] = {
+        "validation_attempts": metadata.get("validation_attempts"),
+        "provider_native_fallback": metadata.get("provider_native_fallback"),
+        "usage": metadata.get("usage"),
+    }
+    for key in ("hosted_tools", "mcp", "cost", "cache"):
+        if key in metadata:
+            summary[key] = metadata[key]
+    payloads = getattr(result, "payloads", None)
+    if payloads:
+        summary["payloads"] = [_payload_summary(payload) for payload in payloads]
+    artifacts = getattr(result, "artifacts", None)
+    if artifacts:
+        summary["artifacts"] = [_artifact_summary(artifact) for artifact in artifacts]
+    source_references = tool_state.get("source_references")
+    if source_references:
+        summary["source_references"] = _jsonable(source_references)
+    if include_output:
+        summary["output"] = _jsonable(getattr(result, "output", None))
+    return {key: _jsonable(value) for key, value in summary.items()}
+
+
+def _payload_summary(payload: Any) -> dict[str, Any]:
+    return {
+        "tool_name": getattr(payload, "tool_name", None),
+        "call_id": getattr(payload, "call_id", None),
+        "payload": _jsonable(getattr(payload, "payload", None)),
+    }
+
+
+def _artifact_summary(artifact: Any) -> dict[str, Any]:
+    data = getattr(artifact, "data", None)
+    return {
+        "id": getattr(artifact, "id", None),
+        "type": getattr(artifact, "type", None),
+        "name": getattr(artifact, "name", None),
+        "uri": getattr(artifact, "uri", None),
+        "data_present": data is not None,
+        "metadata": _jsonable(getattr(artifact, "metadata", {})),
+    }
+
+
+def _jsonable(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_jsonable(item) for item in value]
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return _jsonable(model_dump())
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return _jsonable(to_dict())
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return _jsonable(dataclasses.asdict(value))
+    return str(value)

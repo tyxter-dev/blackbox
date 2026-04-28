@@ -5,10 +5,12 @@ import inspect
 import tempfile
 import time
 from collections.abc import AsyncIterator, Iterable, Mapping
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from agent_runtime.tools.hosted.specs import FileSearch
 
 
 @dataclass(slots=True, frozen=True)
@@ -85,36 +87,42 @@ async def create_openai_vector_store(
     store = await _maybe_await(vector_stores.create(name=name))
     store_id = _object_id(store, object_name="vector store")
     file_ids: list[str] = []
-
-    with tempfile.TemporaryDirectory(prefix="agent-runtime-openai-vs-") as temp_dir:
-        root = Path(temp_dir)
-        for document in normalized_documents:
-            filename = _safe_filename(document.filename)
-            path = root / filename
-            path.write_text(document.text, encoding="utf-8")
-            uploaded_file = await _upload_openai_file(client, path)
-            file_id = _object_id(uploaded_file, object_name="file")
-            file_ids.append(file_id)
-            await _attach_file_to_vector_store(
-                vector_stores,
-                vector_store_id=store_id,
-                file_id=file_id,
-                poll_interval=poll_interval,
-                ingestion_timeout=ingestion_timeout,
-            )
-
-    await _wait_for_vector_store(
-        vector_stores,
-        vector_store_id=store_id,
-        poll_interval=poll_interval,
-        ingestion_timeout=ingestion_timeout,
-    )
-    return OpenAIVectorStoreHandle(
+    handle = OpenAIVectorStoreHandle(
         id=store_id,
         client=client,
         name=_attr(store, "name") or name,
         file_ids=file_ids,
     )
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="agent-runtime-openai-vs-") as temp_dir:
+            root = Path(temp_dir)
+            for document in normalized_documents:
+                filename = _safe_filename(document.filename)
+                path = root / filename
+                path.write_text(document.text, encoding="utf-8")
+                uploaded_file = await _upload_openai_file(client, path)
+                file_id = _object_id(uploaded_file, object_name="file")
+                file_ids.append(file_id)
+                await _attach_file_to_vector_store(
+                    vector_stores,
+                    vector_store_id=store_id,
+                    file_id=file_id,
+                    poll_interval=poll_interval,
+                    ingestion_timeout=ingestion_timeout,
+                )
+
+        await _wait_for_vector_store(
+            vector_stores,
+            vector_store_id=store_id,
+            poll_interval=poll_interval,
+            ingestion_timeout=ingestion_timeout,
+        )
+    except Exception:
+        with suppress(Exception):
+            await handle.delete(delete_files=True)
+        raise
+    return handle
 
 
 @asynccontextmanager
@@ -140,6 +148,49 @@ async def temporary_openai_vector_store(
         yield handle
     finally:
         await handle.delete(delete_files=delete_files)
+
+
+@asynccontextmanager
+async def temporary_openai_file_search(
+    *,
+    name: str,
+    documents: Mapping[str, str] | Iterable[OpenAIVectorStoreDocument | tuple[str, str]],
+    client: Any | None = None,
+    api_key: str | None = None,
+    max_num_results: int | None = None,
+    include_results: bool = True,
+    poll_interval: float = 1.0,
+    ingestion_timeout: float = 120.0,
+    delete_files: bool = True,
+) -> AsyncIterator[FileSearch]:
+    """Yield a ``FileSearch`` spec backed by a temporary OpenAI vector store.
+
+    This is the shortest path for examples and demos that need retrieval over a
+    few inline documents. It creates an OpenAI client when one is not supplied,
+    uploads the documents, waits for ingestion, yields a ready-to-use
+    ``FileSearch`` spec, and cleans up the vector store plus uploaded files.
+    """
+
+    resolved_client, owns_client = _openai_client(client=client, api_key=api_key)
+    try:
+        async with temporary_openai_vector_store(
+            client=resolved_client,
+            name=name,
+            documents=documents,
+            poll_interval=poll_interval,
+            ingestion_timeout=ingestion_timeout,
+            delete_files=delete_files,
+        ) as vector_store:
+            yield FileSearch(
+                vector_store_ids=[vector_store.id],
+                max_num_results=max_num_results,
+                include_results=include_results,
+            )
+    finally:
+        if owns_client:
+            close = getattr(resolved_client, "close", None)
+            if callable(close):
+                await _maybe_await(close())
 
 
 def _normalize_documents(
@@ -248,6 +299,21 @@ def _vector_stores_resource(client: Any) -> Any:
     if resource is not None:
         return resource
     raise RuntimeError("vector_stores is not available on the OpenAI client.")
+
+
+def _openai_client(*, client: Any | None, api_key: str | None) -> tuple[Any, bool]:
+    if client is not None:
+        return client, False
+    try:
+        from openai import AsyncOpenAI
+    except ImportError as exc:
+        raise RuntimeError(
+            "OpenAI vector store helpers require the openai package. "
+            "Install with `pip install -e .[openai]`."
+        ) from exc
+    if api_key is not None:
+        return AsyncOpenAI(api_key=api_key), True
+    return AsyncOpenAI(), True
 
 
 async def _maybe_await(value: Any) -> Any:

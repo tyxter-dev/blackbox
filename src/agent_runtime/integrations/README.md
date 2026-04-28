@@ -10,7 +10,8 @@ existing runtime primitives.
 - Small adapters that return MCP specs, toolsets, or provider-neutral runtime
   configuration.
 - Example/demo helpers that create temporary provider resources and return
-  runtime-native specs or handles, such as OpenAI vector stores for `FileSearch`.
+  runtime-native specs or handles, such as OpenAI vector stores or ready
+  `FileSearch` specs.
 
 ## Does Not Belong Here
 

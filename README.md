@@ -341,7 +341,8 @@ Runnable scripts live under `examples/`:
 - `examples/model_provider_form_fill.py` — one-call extraction into several
   nested app forms.
 - `examples/model_provider_knowledge_drawer.py` — support drawer answer grounded
-  in a temporary OpenAI vector store and `FileSearch`.
+  in a temporary OpenAI vector store and `FileSearch`. These examples load
+  `examples/.env` when present.
 - `examples/launchmybakery.py` — Google Maps and BigQuery remote MCP toolsets
   rebuilt from Google's Launch My Bakery demo (requires Google ADC,
   `MAPS_API_KEY`, and a provider with remote MCP support).

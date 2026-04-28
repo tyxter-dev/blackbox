@@ -77,9 +77,8 @@ class FileSearch:
     Vector stores and corpus IDs identify provider-managed indexes. ``filters``
     and ``include_results`` are mapped only when a provider exposes comparable
     retrieval controls. For small OpenAI demos, use
-    ``agent_runtime.temporary_openai_vector_store(...)`` to create a temporary
-    vector store from inline text, then pass its ``id`` through
-    ``vector_store_ids``.
+    ``agent_runtime.temporary_openai_file_search(...)`` to create a ready
+    ``FileSearch`` spec from inline documents.
     """
 
     vector_store_ids: list[str] = field(default_factory=list)

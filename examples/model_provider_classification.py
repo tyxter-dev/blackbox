@@ -14,16 +14,14 @@ from __future__ import annotations
 # ruff: noqa: E402
 import asyncio
 import json
-import os
 from typing import Literal
 
-from _bootstrap import bootstrap
+from _bootstrap import bootstrap, example_model
 from pydantic import BaseModel, Field
 
-bootstrap()
+bootstrap(load_env=True)
 
-from agent_runtime import AgentRuntime, OutputSpec
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from agent_runtime import create_runtime_with_default_providers, structured_output
 
 
 class RequestClassification(BaseModel):
@@ -36,13 +34,8 @@ class RequestClassification(BaseModel):
 
 
 async def main() -> None:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise SystemExit("OPENAI_API_KEY is not set")
-
-    model = os.getenv("OPENAI_EXAMPLE_MODEL", "gpt-4o-mini")
-    runtime = AgentRuntime()
-    runtime.registry.register_model(OpenAIResponsesProvider(api_key=api_key))
+    model = example_model()
+    runtime = create_runtime_with_default_providers(include=["openai"])
 
     try:
         result = await runtime.run(
@@ -55,10 +48,8 @@ async def main() -> None:
                 "Classify the user request for an application router. Pick exactly one "
                 "intent and one queue. Keep the rationale short."
             ),
-            output_spec=OutputSpec(
-                schema=RequestClassification,
-                strategy="provider_native",
-                fallback="posthoc_parse",
+            output_spec=structured_output(
+                RequestClassification,
                 name="request_classification",
             ),
             max_output_tokens=500,
@@ -68,15 +59,7 @@ async def main() -> None:
 
     print(json.dumps(result.output.model_dump(), indent=2))
     print("\nmetadata:")
-    print(json.dumps(_summary(result.metadata), indent=2, default=str))
-
-
-def _summary(metadata: dict[str, object]) -> dict[str, object]:
-    return {
-        "validation_attempts": metadata.get("validation_attempts"),
-        "provider_native_fallback": metadata.get("provider_native_fallback"),
-        "usage": metadata.get("usage"),
-    }
+    print(json.dumps(result.summary(), indent=2, default=str))
 
 
 if __name__ == "__main__":
