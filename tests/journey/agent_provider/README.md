@@ -8,7 +8,7 @@ provider-managed journeys run only when explicitly enabled.
 Run with:
 
 ```bash
-pytest -m journey_agent_provider -s tests/journey/AgentProvider
+pytest -m journey_agent_provider -s tests/journey/agent_provider
 ```
 
 ## Covered Journeys

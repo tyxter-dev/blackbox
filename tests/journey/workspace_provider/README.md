@@ -9,7 +9,7 @@ print structured reports for LLM review.
 Run with:
 
 ```bash
-pytest -m journey_workspace_provider -s tests/journey/WorkspaceProvider
+pytest -m journey_workspace_provider -s tests/journey/workspace_provider
 ```
 
 ## Covered Journeys

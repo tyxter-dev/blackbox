@@ -8,7 +8,7 @@ structured report for LLM review.
 Run with:
 
 ```bash
-pytest -m journey_model_provider -s tests/journey/ModelProvider
+pytest -m journey_model_provider -s tests/journey/model_provider
 ```
 
 ## Covered Journeys
