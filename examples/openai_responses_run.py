@@ -7,11 +7,16 @@ Set ``OPENAI_API_KEY`` in your environment, install the optional extra
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
 import asyncio
 import os
 
+from _bootstrap import bootstrap
+
+bootstrap()
+
 from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 
 async def main() -> None:

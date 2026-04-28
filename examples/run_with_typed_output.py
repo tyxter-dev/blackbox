@@ -12,11 +12,15 @@ Run::
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
 import asyncio
 import json
 from collections.abc import AsyncIterator, Iterable
 
+from _bootstrap import bootstrap
 from pydantic import BaseModel
+
+bootstrap()
 
 from agent_runtime import AgentRuntime
 from agent_runtime.core.capabilities import ModelCapabilities

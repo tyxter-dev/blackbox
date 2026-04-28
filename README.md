@@ -13,8 +13,8 @@ ModelProvider
 
 AgentProvider
   Runs agent sessions.
-  Examples: OpenAI cloud coding agents, Anthropic managed agents, Google Agent Platform,
-  local model-backed agents.
+  Examples: Local model-backed agents, OpenAI Agents SDK, Claude Code,
+  Vertex AI Agent Engine.
 
 Workspace contracts
   Describe where agents work and how packaged workspace agents are governed.
@@ -35,14 +35,21 @@ Chat messages can be an import/export compatibility layer later, but they should
 ```text
 src/agent_runtime/
   core/             # events, items, state, sessions, capabilities, artifacts, approvals
-  providers/        # ModelProvider and AgentProvider protocols + registry
-  models/           # model provider adapters; EchoModelProvider included for tests
-  agents/           # cloud/local agent provider adapters; LocalAgentProvider included
-  tools/            # local tool registry/runtime/context injection
+  providers/        # provider protocols, registry, request contracts, and adapters
+    model_adapters/ # OpenAI, Anthropic, Gemini, xAI, and Echo model adapters
+    agent_adapters/ # Local, OpenAI Agents SDK, Claude Code, and Vertex agent adapters
+  models/           # compatibility namespace for old model adapter imports
+  agents/           # compatibility namespace for old agent adapter imports
+  runtime/          # high-level facades and run orchestration helpers
+  planning/         # resolved run specs, prompt composition, and parity checks
+  tools/            # local tools, hosted-tool specs, catalogs, and sessions
+  mcp/              # MCP server specs, connector, cache, and transports
   workspaces/       # workspace abstractions for files, patches, repos, sandboxes
   workspace_agents/ # governed agent package contracts, permissions, schedules, registry
-  mcp/              # MCP server specs, connector, and stdio/HTTP transports
-  observability/    # traces and event sink placeholders
+  output/           # structured-output schema conversion and validation helpers
+  observability/    # traces, replay, evals, and event sinks
+  realtime/         # realtime session contracts and provider adapters
+  compat/           # migration and compatibility helpers
 ```
 
 ## High-level blackbox API
@@ -56,7 +63,7 @@ loop end-to-end.
 from pydantic import BaseModel
 
 from agent_runtime import AgentRuntime
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 
 class TicketDecision(BaseModel):
@@ -150,7 +157,7 @@ provider to list the same MCP tools again.
 
 ```python
 from agent_runtime import AgentRuntime
-from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(EchoModelProvider())
@@ -203,8 +210,8 @@ or state model.
 
 ```python
 from agent_runtime import AgentRuntime
-from agent_runtime.agents.local import LocalAgentProvider
-from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(EchoModelProvider())
@@ -271,7 +278,7 @@ from agent_runtime import (
     WorkspaceAgentSpec,
     run_workspace_agent,
 )
-from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(EchoModelProvider())
@@ -365,7 +372,7 @@ to `MODEL_ITEM_CREATED` with the original item type stashed in
 
 ```python
 from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.models.openai_responses import OpenAIResponsesProvider
+from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(OpenAIResponsesProvider(api_key="..."))
@@ -387,7 +394,7 @@ capability flags for surfaces that are not wired as native xAI features here
 
 ```python
 from agent_runtime import AgentRuntime
-from agent_runtime.models.xai_responses import XAIResponsesProvider
+from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(XAIResponsesProvider(api_key="..."))
@@ -490,7 +497,7 @@ on `event.raw`. `ProviderState.native_history` carries the full Anthropic
 
 ```python
 from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.models.anthropic_messages import AnthropicMessagesProvider
+from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(AnthropicMessagesProvider(api_key="..."))

@@ -7,14 +7,19 @@ Run::
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
 import asyncio
 from collections.abc import AsyncIterator, Iterable
 
+from _bootstrap import bootstrap
+
+bootstrap()
+
 from agent_runtime import AgentRuntime, AgentSpec, EventTypes
-from agent_runtime.agents.local import LocalAgentProvider
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.items import RunItem
 from agent_runtime.core.state import ProviderState
+from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
 from agent_runtime.providers.base import TurnRequest
 from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
 
@@ -27,7 +32,7 @@ class _ScriptedModel:
     def __init__(self) -> None:
         self._calls = 0
 
-    def capabilities(self):
+    def capabilities(self, model: str | None = None):
         from agent_runtime.core.capabilities import ModelCapabilities
         return ModelCapabilities(supports_streaming_events=True, supports_function_tools=True)
 

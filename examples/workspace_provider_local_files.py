@@ -9,9 +9,14 @@ Run:
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
 import asyncio
 import sys
 from pathlib import Path
+
+from _bootstrap import bootstrap
+
+bootstrap()
 
 from agent_runtime.core.events import EventTypes
 from agent_runtime.workspaces import (

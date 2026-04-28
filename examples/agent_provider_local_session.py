@@ -8,11 +8,16 @@ Run:
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
 import asyncio
 
+from _bootstrap import bootstrap
+
+bootstrap()
+
 from agent_runtime import AgentRuntime, AgentSession, AgentSpec, EventTypes
-from agent_runtime.agents.local import LocalAgentProvider
-from agent_runtime.models.echo import EchoModelProvider
+from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 
 
 async def _print_stream(runtime: AgentRuntime, session: AgentSession) -> None:

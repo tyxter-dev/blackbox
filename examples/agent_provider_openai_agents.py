@@ -10,16 +10,20 @@ Run:
 """
 from __future__ import annotations
 
+# ruff: noqa: E402
 import asyncio
 import json
 import os
 from pathlib import Path
 from typing import Any
 
+from _bootstrap import bootstrap
 from dotenv import load_dotenv
 
+bootstrap()
+
 from agent_runtime import AgentRuntime, AgentSpec, Artifact, EventTypes
-from agent_runtime.agents.openai_cloud import OpenAICloudAgentProvider
+from agent_runtime.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
 
 load_dotenv()
 

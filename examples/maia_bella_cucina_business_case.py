@@ -43,7 +43,7 @@ from agent_runtime import (  # noqa: E402
     PromptFragment,
     PromptSpec,
 )
-from agent_runtime.models.echo import EchoModelProvider  # noqa: E402
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider  # noqa: E402
 from agent_runtime.tools import ToolResult  # noqa: E402
 
 CASE_KEY = "bella_cucina__returning_guest"
