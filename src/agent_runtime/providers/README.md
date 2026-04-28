@@ -22,5 +22,5 @@ how runtime requests cross the boundary into model APIs or agent-session APIs.
 
 - `model_adapters/`: direct `ModelProvider` adapters such as OpenAI Responses,
   Anthropic Messages, Gemini Generate Content, xAI Responses, and Echo.
-- `agents/`: agent-session adapters still live under `agent_runtime.agents`
-  until the next compatibility-preserving structure pass.
+- `agent_adapters/`: `AgentProvider` adapters such as local agents, Claude Code,
+  OpenAI Agents SDK, and Vertex AI Agent Engine.

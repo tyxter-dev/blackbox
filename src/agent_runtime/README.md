@@ -10,7 +10,7 @@ runtime responsibilities, not around provider brands.
 - `runtime/`: high-level orchestration facades and private runtime helpers.
 - `planning/`: resolved run specs, prompt composition, and prompt/tool parity.
 - `models/`: compatibility import namespace for model adapters.
-- `agents/`: agent-provider adapters such as local agents and cloud coding agents.
+- `agents/`: compatibility import namespace for agent adapters.
 - `tools/`: local Python tools, hosted-tool specs/calls, catalogs, and tool sessions.
 - `mcp/`: MCP server specs, auth, toolset routing, connector, cache, and transports.
 - `workspaces/`: workspace provider contracts and local/sandbox/docker/cloud backends.
@@ -31,5 +31,5 @@ runtime responsibilities, not around provider brands.
 
 The next structural refactors should be mechanical and compatibility-preserving:
 
-1. Move agent-provider adapters under `providers/agent_adapters/` while keeping
-   compatibility imports under `agent_runtime.agents`.
+1. Normalize journey test directory names and README markers so examples,
+   journey tests, and provider packages use the same vocabulary.

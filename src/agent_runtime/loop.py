@@ -4,9 +4,9 @@ The :class:`AgentLoop` is the execution layer between provider-native model
 turns and tool execution. It owns the iterative control flow described in
 PRD §8.4 and §14.5.
 
-Both :class:`agent_runtime.agents.local.LocalAgentProvider` (session-shaped
-API) and :meth:`agent_runtime.runtime.AgentRuntime.run` (blackbox high-level
-API) delegate their loop body to this class.
+Both :class:`agent_runtime.providers.agent_adapters.local.LocalAgentProvider`
+(session-shaped API) and :meth:`agent_runtime.runtime.AgentRuntime.run`
+(blackbox high-level API) delegate their loop body to this class.
 """
 from __future__ import annotations
 

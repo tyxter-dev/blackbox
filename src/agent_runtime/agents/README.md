@@ -1,23 +1,10 @@
 # agents
 
-`agents` contains `AgentProvider` adapter implementations. These providers
-supervise agent sessions, which are different from individual model turns.
+`agents` is now a compatibility package for older imports such as
+`agent_runtime.agents.local`.
 
-## Belongs Here
+New code should import agent provider adapters from
+`agent_runtime.providers.agent_adapters`.
 
-- Local model-backed agent provider adapters.
-- Cloud or SDK-backed coding-agent adapters.
-- Session lifecycle mapping: create, start, stream, follow up, approve, cancel.
-- Provider-native session and artifact handling.
-
-## Does Not Belong Here
-
-- Direct model-turn adapters.
-- Local Python tool registry/runtime code.
-- Workspace provider implementations.
-- Workspace-agent package metadata and scheduling contracts.
-
-## Naming Direction
-
-This package may eventually become `providers/agent_adapters/`. Until then,
-`agents/` means "agent-provider adapters", not business agents or prompt packs.
+The implementation modules moved so provider contracts and provider adapters
+live under the same top-level package.
