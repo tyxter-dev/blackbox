@@ -6,6 +6,7 @@ from agent_runtime.observability.evals import (
     evaluate_trace,
 )
 from agent_runtime.observability.otel import OpenTelemetryTraceExporter, span_to_otel_attributes
+from agent_runtime.observability.presets import ObservabilityPreset
 from agent_runtime.observability.replay import (
     RunDiff,
     SpanDiff,
@@ -15,7 +16,9 @@ from agent_runtime.observability.replay import (
     replay_run,
 )
 from agent_runtime.observability.sinks import (
+    CompositeEventSink,
     EventSink,
+    JSONLEventSink,
     MemoryEventSink,
     RedactingEventSink,
     RedactionPolicy,
@@ -34,12 +37,15 @@ from agent_runtime.observability.traces import (
 )
 
 __all__ = [
+    "CompositeEventSink",
     "EvaluationReport",
     "EvaluationResult",
     "Evaluator",
     "EvaluatorHook",
     "EventSink",
+    "JSONLEventSink",
     "MemoryEventSink",
+    "ObservabilityPreset",
     "OpenTelemetryTraceExporter",
     "RedactingEventSink",
     "RedactionPolicy",
