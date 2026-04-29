@@ -2,23 +2,43 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
+from agent_runtime.core.events import AgentEvent
 from agent_runtime.observability.metrics import (
     MemoryMetricExporter,
     MetricExporter,
     OpenTelemetryMetricExporter,
+    metrics_from_trace,
 )
+from agent_runtime.observability.otel import OpenTelemetryTraceExporter
 from agent_runtime.observability.sinks import (
     CompositeEventSink,
     EventSink,
     JSONLEventSink,
     RedactingEventSink,
 )
+from agent_runtime.observability.traces import Trace, trace_from_events
 
 TraceBackend = Literal["none", "memory", "otlp"]
 MetricBackend = Literal["none", "memory", "otlp"]
 LogBackend = Literal["none", "jsonl"]
+
+
+class TraceExporter(Protocol):
+    """Protocol for trace exporters used by observability presets."""
+
+    def export(self, trace: Trace) -> None: ...
+
+
+class MemoryTraceExporter:
+    """Collect exported traces in memory for tests and local diagnostics."""
+
+    def __init__(self) -> None:
+        self.traces: list[Trace] = []
+
+    def export(self, trace: Trace) -> None:
+        self.traces.append(trace)
 
 
 @dataclass(slots=True, frozen=True)
@@ -33,6 +53,7 @@ class ObservabilityPreset:
     evaluations: str | None = None
     redact: bool = True
     event_sink: EventSink | None = None
+    trace_exporter: TraceExporter | None = None
     metric_exporter: MetricExporter | None = None
     log_path: Path | None = None
     keep_raw_payloads: bool = False
@@ -85,6 +106,11 @@ class ObservabilityPreset:
             event_sink = CompositeEventSink(sinks)
         if redact and event_sink is not None:
             event_sink = RedactingEventSink(inner=event_sink)
+        trace_exporter: TraceExporter | None = None
+        if traces == "memory":
+            trace_exporter = MemoryTraceExporter()
+        elif traces == "otlp":
+            trace_exporter = OpenTelemetryTraceExporter()
         metric_exporter: MetricExporter | None = None
         if metrics == "memory":
             metric_exporter = MemoryMetricExporter()
@@ -100,6 +126,7 @@ class ObservabilityPreset:
             evaluations=evaluations,
             redact=redact,
             event_sink=event_sink,
+            trace_exporter=trace_exporter,
             metric_exporter=metric_exporter,
             log_path=resolved_log_path,
             keep_raw_payloads=keep_raw_payloads,
@@ -117,6 +144,29 @@ class ObservabilityPreset:
     @property
     def event_logging_enabled(self) -> bool:
         return self.event_sink is not None
+
+    async def emit_event(self, event: AgentEvent) -> None:
+        if self.event_sink is not None:
+            await self.event_sink.emit(event)
+
+    def export_run(
+        self,
+        events: list[AgentEvent],
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> Trace:
+        trace = trace_from_events(events, metadata=metadata)
+        if self.trace_exporter is not None:
+            self.trace_exporter.export(trace)
+        if self.metric_exporter is not None:
+            self.metric_exporter.export(
+                metrics_from_trace(
+                    trace,
+                    metadata=metadata,
+                    service_name=self.service_name,
+                )
+            )
+        return trace
 
 
 def _validate_backend(name: str, value: str, allowed: set[str]) -> None:

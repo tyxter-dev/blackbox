@@ -36,6 +36,7 @@ from agent_runtime.core.stores import (
     SessionStore,
 )
 from agent_runtime.mcp import MCPConnector, MCPToolset, resolve_mcp_route, to_remote_mcp
+from agent_runtime.observability.presets import ObservabilityPreset
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.planning.prompts import (
@@ -150,8 +151,10 @@ class AgentRuntime:
         run_store: RunStore | None = None,
         session_store: SessionStore | None = None,
         provider_cache_store: ProviderCacheStore | None = None,
+        observability: ObservabilityPreset | None = None,
     ) -> None:
         self.registry = registry or ProviderRegistry()
+        self.observability = observability or ObservabilityPreset.disabled()
         self.model_catalog = ModelCatalog()
         self.event_store: EventStore = event_store or InMemoryEventStore()
         self.run_store: RunStore = run_store or InMemoryRunStore()
@@ -163,6 +166,7 @@ class AgentRuntime:
             self.registry,
             model_catalog=self.model_catalog,
             provider_cache_store=self.provider_cache_store,
+            observability=self.observability,
         )
         self.prompt_fragments = PromptFragmentRegistry()
         self.prompt_composer = PromptComposer(self.prompt_fragments)
@@ -176,6 +180,7 @@ class AgentRuntime:
             run_store=self.run_store,
             session_store=self.session_store,
             workspaces=self.workspaces,
+            observability=self.observability,
         )
         self.caches = ProviderCacheRuntime(self.registry, self.provider_cache_store)
         from agent_runtime.realtime.runtime import RealtimeRuntime
@@ -184,12 +189,17 @@ class AgentRuntime:
             self.registry,
             event_store=self.event_store,
             tool_registry=self.tools.registry,
+            observability=self.observability,
         )
         self._active_loops: dict[str, Any] = {}
 
     async def close(self) -> None:
         """Release resources held by registered provider adapters."""
         await self.registry.close()
+
+    async def _record_event(self, event: AgentEvent) -> None:
+        await self.event_store.append(event)
+        await self.observability.emit_event(event)
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
         """Approve a pending high-level ``runtime.run/stream`` operation."""
@@ -1125,6 +1135,7 @@ class AgentRuntime:
                 run_id=run_id,
                 trace_id=trace_context.trace_id,
                 parent_span_id=trace_context.root_span_id,
+                emit_observability=False,
                 **kwargs,
             ):
                 yield event
@@ -1171,7 +1182,7 @@ class AgentRuntime:
                     preserve_sequence=False,
                 )
                 sequence += 1
-                await self.event_store.append(stamped)
+                await self._record_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
             for event in routing_events:
@@ -1182,7 +1193,7 @@ class AgentRuntime:
                     preserve_sequence=False,
                 )
                 sequence += 1
-                await self.event_store.append(stamped)
+                await self._record_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
             for event in tool_choice_events:
@@ -1193,7 +1204,7 @@ class AgentRuntime:
                     preserve_sequence=False,
                 )
                 sequence += 1
-                await self.event_store.append(stamped)
+                await self._record_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
             if opened_workspace is not None:
@@ -1206,7 +1217,7 @@ class AgentRuntime:
                         preserve_sequence=False,
                     )
                     sequence += 1
-                    await self.event_store.append(stamped)
+                    await self._record_event(stamped)
                     routing_history_events.append(stamped)
                     yield stamped
 
@@ -1223,7 +1234,7 @@ class AgentRuntime:
                     preserve_sequence=False,
                 )
                 sequence += 1
-                await self.event_store.append(stamped)
+                await self._record_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
             if opened_workspace is not None and not workspace_preserve:
@@ -1238,7 +1249,7 @@ class AgentRuntime:
                             preserve_sequence=False,
                         )
                         sequence += 1
-                        await self.event_store.append(stamped)
+                        await self._record_event(stamped)
                         routing_history_events.append(stamped)
                         yield stamped
         finally:
@@ -1666,6 +1677,7 @@ class AgentRuntime:
             if trace_metadata["spans"]:
                 metadata["trace"] = trace_metadata
             _attach_accounting_metadata(metadata)
+            self.observability.export_run(events, metadata=metadata)
             return AgentResult(
                 output=cast(T, output),
                 text=last_text,

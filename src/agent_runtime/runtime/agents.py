@@ -38,6 +38,7 @@ from agent_runtime.core.session_state import (
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.core.stores import EventStore, RunStore, SessionStore
+from agent_runtime.observability.presets import ObservabilityPreset
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
@@ -82,6 +83,9 @@ class AgentRuntimeFacade:
     run_store: RunStore | None = None
     session_store: SessionStore | None = None
     workspaces: WorkspaceRuntimeFacade | None = None
+    observability: ObservabilityPreset = field(
+        default_factory=ObservabilityPreset.disabled
+    )
     _sessions: dict[str, AgentSession] = field(default_factory=dict)
     _live_sessions: set[str] = field(default_factory=set)
     _session_workspaces: dict[str, tuple[Any, Any, bool]] = field(default_factory=dict)
@@ -329,8 +333,7 @@ class AgentRuntimeFacade:
                     sequence=sequence,
                 )
                 sequence += 1
-                if self.event_store is not None:
-                    await self.event_store.append(stamped)
+                await self._record_event(stamped)
                 await self._persist_session_event(state.session.id, stamped)
                 yield stamped
         async for event in adapter.stream_events(provider_session, after_event_id=provider_cursor):
@@ -343,8 +346,7 @@ class AgentRuntimeFacade:
                 sequence=sequence,
             )
             sequence += 1
-            if self.event_store is not None:
-                await self.event_store.append(stamped)
+            await self._record_event(stamped)
             await self._persist_session_event(state.session.id, stamped)
             yield stamped
         if workspace_context is not None:
@@ -361,8 +363,7 @@ class AgentRuntimeFacade:
                         sequence=sequence,
                     )
                     sequence += 1
-                    if self.event_store is not None:
-                        await self.event_store.append(stamped)
+                    await self._record_event(stamped)
                     await self._persist_session_event(state.session.id, stamped)
                     yield stamped
 
@@ -565,6 +566,7 @@ class AgentRuntimeFacade:
         if workspace_metadata:
             result_metadata["workspaces"] = workspace_metadata
         _attach_accounting_metadata(result_metadata)
+        self.observability.export_run(events, metadata=result_metadata)
 
         if self.run_store is not None:
             await self.run_store.save(
@@ -805,6 +807,11 @@ class AgentRuntimeFacade:
     async def _save_session_state(self, state: AgentSessionState) -> None:
         if self.session_store is not None:
             await self.session_store.save_session_state(state)
+
+    async def _record_event(self, event: AgentEvent) -> None:
+        if self.event_store is not None:
+            await self.event_store.append(event)
+        await self.observability.emit_event(event)
 
     async def _persist_session_event(self, session_id: str, event: AgentEvent) -> None:
         if self.session_store is None:

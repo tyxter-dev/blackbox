@@ -13,7 +13,11 @@ from agent_runtime.observability.metrics import (
     metrics_from_trace,
 )
 from agent_runtime.observability.otel import OpenTelemetryTraceExporter, span_to_otel_attributes
-from agent_runtime.observability.presets import ObservabilityPreset
+from agent_runtime.observability.presets import (
+    MemoryTraceExporter,
+    ObservabilityPreset,
+    TraceExporter,
+)
 from agent_runtime.observability.replay import (
     RunDiff,
     SpanDiff,
@@ -53,6 +57,7 @@ __all__ = [
     "JSONLEventSink",
     "MemoryEventSink",
     "MemoryMetricExporter",
+    "MemoryTraceExporter",
     "MetricExporter",
     "MetricRecord",
     "ObservabilityPreset",
@@ -65,6 +70,7 @@ __all__ = [
     "SpanKinds",
     "Trace",
     "TraceContext",
+    "TraceExporter",
     "TraceReplay",
     "TraceSpan",
     "default_redaction_policy",

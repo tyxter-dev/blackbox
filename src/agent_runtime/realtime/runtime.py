@@ -34,6 +34,7 @@ from agent_runtime.core.realtime import ToolMode, TransportKind
 from agent_runtime.core.sessions import InvocationRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import EventStore
+from agent_runtime.observability.presets import ObservabilityPreset
 from agent_runtime.observability.traces import TraceContext
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.realtime.capabilities import RealtimeCapabilityProfile
@@ -61,6 +62,9 @@ class RealtimeRuntime:
     registry: ProviderRegistry
     event_store: EventStore
     tool_registry: ToolRegistry
+    observability: ObservabilityPreset = field(
+        default_factory=ObservabilityPreset.disabled
+    )
     _active_sessions: dict[str, ManagedRealtimeSession] = field(default_factory=dict)
 
     def capabilities(
@@ -180,6 +184,7 @@ class RealtimeRuntime:
             ref=ref,
             config=request.config,
             event_store=self.event_store,
+            observability=self.observability,
             run_id=run_id or f"run_{uuid4().hex}",
             tool_mode=tool_mode,
             tool_runtime=ToolRuntime(
@@ -214,6 +219,7 @@ class ManagedRealtimeSession:
     ref: RealtimeSessionRef
     config: RealtimeSessionConfig
     event_store: EventStore
+    observability: ObservabilityPreset
     run_id: str
     tool_mode: ToolMode = "manual"
     tool_runtime: ToolRuntime | None = None
@@ -609,6 +615,7 @@ class ManagedRealtimeSession:
         )
         self._sequence += 1
         await self.event_store.append(stamped)
+        await self.observability.emit_event(stamped)
         return stamped
 
     def _require_part_modality(self, part: ContentPart) -> None:

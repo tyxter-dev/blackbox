@@ -18,6 +18,7 @@ from agent_runtime.core.errors import ConfigurationError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.results import OutputSpec, OutputStrategy
 from agent_runtime.core.state import ProviderState
+from agent_runtime.observability.presets import ObservabilityPreset
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
@@ -54,6 +55,9 @@ class ModelRuntime:
     model_catalog: ModelCatalog = field(default_factory=ModelCatalog)
     provider_cache_store: ProviderCacheStore = field(
         default_factory=InMemoryProviderCacheStore
+    )
+    observability: ObservabilityPreset = field(
+        default_factory=ObservabilityPreset.disabled
     )
 
     def capabilities(
@@ -100,6 +104,7 @@ class ModelRuntime:
         run_id: str | None = None,
         trace_id: str | None = None,
         parent_span_id: str | None = None,
+        emit_observability: bool = True,
         **kwargs: object,
     ) -> AsyncIterator[AgentEvent]:
         """Validate and stream a single model turn as traced runtime events."""
@@ -245,11 +250,14 @@ class ModelRuntime:
         )
         sequence = 0
         async for event in adapter.stream_turn(request):
-            yield trace_context.stamp(
+            stamped = trace_context.stamp(
                 event,
                 run_id=effective_run_id,
                 sequence=sequence,
             )
+            if emit_observability:
+                await self.observability.emit_event(stamped)
+            yield stamped
             sequence += 1
 
     async def run(
@@ -283,6 +291,7 @@ class ModelRuntime:
         compaction: CompactionControl | None = None,
         modalities: list[str] | None = None,
         run_id: str | None = None,
+        emit_observability: bool = True,
         **kwargs: object,
     ) -> TurnResult:
         """Execute a model turn and collect text, artifacts, state, usage, and metadata."""
@@ -326,6 +335,7 @@ class ModelRuntime:
             compaction=compaction,
             modalities=modalities,
             run_id=run_id,
+            emit_observability=emit_observability,
             **cast(Any, kwargs),
         ):
             events.append(event)
@@ -384,6 +394,8 @@ class ModelRuntime:
         if trace_metadata["spans"]:
             metadata["trace"] = trace_metadata
         _attach_accounting_metadata(metadata)
+        if emit_observability:
+            self.observability.export_run(events, metadata=metadata)
         return TurnResult(
             text="".join(text_parts),
             events=events,

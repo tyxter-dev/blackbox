@@ -124,6 +124,7 @@ from agent_runtime.mcp import (
     MCPTrustLevel,
     trust_fingerprint,
 )
+from agent_runtime.observability import ObservabilityPreset
 from agent_runtime.output.schema import OutputSchema
 from agent_runtime.planning.prompts import (
     CacheSection,
@@ -319,6 +320,7 @@ __all__ = [
     "ModelRoute",
     "ModelRuntime",
     "ModelUsage",
+    "ObservabilityPreset",
     "OpenAIVectorStoreDocument",
     "OpenAIVectorStoreHandle",
     "OutputSchema",
