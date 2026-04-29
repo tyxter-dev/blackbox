@@ -657,6 +657,44 @@ error back into the model via a repair prompt, up to
 shortcut still works and uses the default `posthoc_parse` strategy
 (fail-fast).
 
+## Production observability preset
+
+Use `ObservabilityPreset.production(...)` to enable trace export, metric
+export, and redacted event logging with one runtime switch:
+
+```python
+from agent_runtime import AgentRuntime, ObservabilityPreset
+
+runtime = AgentRuntime(
+    observability=ObservabilityPreset.production(
+        service_name="my-agent-service",
+        traces="otlp",
+        metrics="otlp",
+        logs="jsonl",
+        redact=True,
+    )
+)
+```
+
+The `otel` backends use the OpenTelemetry SDK/exporter pipeline configured by
+the application. The `jsonl` log backend writes normalized runtime events and
+drops raw provider payloads by default; if `keep_raw_payloads=True` is used,
+`RawEnvelope` payloads are still redacted before they reach the log sink.
+
+The preset emits spans and span events for the production operation vocabulary:
+`agent.run`, `model.turn`, `model.stream`, `tool.call`,
+`hosted_tool.call`, `mcp.list_tools`, `mcp.call_tool`,
+`workspace.command`, `workspace.patch`, `approval.wait`, `cache.lookup`,
+`cache.create`, and `artifact.write`. Provider request IDs, provider trace IDs,
+and runtime session IDs are attached to reconstructed span attributes whenever
+events carry them.
+
+Standard metrics include `time_to_first_event`, `time_to_first_token`,
+`model_latency_ms`, `tool_latency_ms`, `mcp_discovery_latency_ms`,
+`workspace_command_latency_ms`, `output_validation_attempts`, `retry_count`,
+`cache_hit_rate`, `input_tokens`, `output_tokens`, `cached_tokens`,
+`estimated_cost`, and `provider_error_rate`.
+
 ## Redacting sensitive raw payloads
 
 Wrap an event sink with `RedactingEventSink` to scrub `RawEnvelope`-tagged
@@ -695,14 +733,17 @@ trace = trace_from_events(result.events, metadata=result.metadata)
 # Reconstruct a persisted run without calling a model.
 replay = await replay_run(runtime.event_store, result.events[0].run_id)
 print("\n".join(replay.timeline()))
+print(replay.to_dict()["trace_link"])
 
 # Export through the OpenTelemetry SDK configured by the application.
 OpenTelemetryTraceExporter().export(trace)
 ```
 
-`result.metadata["trace"]` includes a workflow root span plus child spans
+`result.metadata["trace"]` includes an `agent.run` root span plus child spans
 for model calls, tool calls, hosted tools, MCP calls, workspace actions,
 approvals, artifacts, retries, handoffs, guardrails, and eval events.
+Replay and diff dictionaries include trace links (`trace://...`) so external
+debugging views can correlate reconstructed output back to the exported trace.
 Evaluator hooks can score reconstructed traces and emit canonical
 `eval.started` / `eval.completed` / `eval.failed` events.
 

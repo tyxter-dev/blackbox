@@ -175,9 +175,11 @@ Status legend:
 | MCP runtime tool bridge | Supported | `MCPConnector.register_runtime_tools(...)` | Exposes discovered MCP tools to a `ToolRegistry` while preserving MCP payload metadata and routing calls through the connector. |
 | MCP toolset routing | Supported | `MCPToolset` / `runtime.run(..., toolsets=[...])` | Routes MCP servers to local dispatch or provider-native `RemoteMCP` based on mode, provider capability, transport, URL locality, auth, and policy. |
 | Observability sink protocol | Supported | `observability.sinks` | Event sink abstractions exist and can be wrapped by redaction before telemetry export. |
+| Production observability presets | Supported | `ObservabilityPreset.production(...)` | One runtime config switch enables OTLP trace export, OTLP/memory metrics, redacted JSONL event logging, and replay/diff trace links. |
 | Event trace context | Supported | `AgentEvent.trace_id`, `span_id`, `parent_span_id`, `span_kind` | Runtime stamps every streamed event with workflow trace context while preserving provider correlation IDs. |
-| Workflow trace spans | Supported | `result.metadata["trace"]`, `trace_from_events(...)` | Runtime reconstructs workflow-rooted span trees for model, tool, hosted tool, MCP, workspace, approval, artifact, retry, handoff, guardrail, and eval events. |
+| Workflow trace spans | Supported | `result.metadata["trace"]`, `trace_from_events(...)` | Runtime reconstructs `agent.run` rooted span trees and span events for model, tool, hosted tool, MCP, workspace, approval, artifact, cache, retry, handoff, guardrail, and eval events. |
 | OpenTelemetry trace export | Supported | `OpenTelemetryTraceExporter` | Optional `otel` extra exports reconstructed traces through the installed OpenTelemetry SDK/exporter pipeline. |
+| Standard production metrics | Supported | `metrics_from_trace(...)`, `OpenTelemetryMetricExporter` | Extracts first-event/token timing, model/tool/MCP/workspace latency, validation attempts, retries, cache hit rate, tokens, estimated cost, and provider error rate. |
 | Replay and run diffing | Supported | `replay_run(...)`, `diff_runs(...)`, `diff_traces(...)` | Stored events can be replayed into timelines and compared by span topology, status, duration, and cost. |
 | Evaluator hooks | Supported | `evaluate_trace(...)` | Replay-time or post-run evaluators can emit `eval.started` / `eval.completed` / `eval.failed` events. |
 

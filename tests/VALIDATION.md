@@ -218,6 +218,7 @@ run_store.load(...)
 | 5.8 | ✅ | Raw redaction | `unit/observability/test_event_sinks.py` (9 tests) | `RedactingEventSink` rewrites sensitive `RawEnvelope` payloads before forwarding. |
 | 5.9 | ✅ | Workflow trace context | `runtime/test_runtime_stream.py::test_every_event_carries_trace_context_and_tool_span_is_shared` | Every runtime event carries trace/span context and related tool events share a span. |
 | 5.10 | ✅ | Replay, diff, eval, OTEL projection | `unit/observability/test_observability_workflows.py` | Stored events reconstruct traces; runs can be diffed; evaluators emit eval events; spans convert to OpenTelemetry attributes. |
+| 5.11 | ✅ | Production observability preset | `unit/observability/test_presets.py`, `unit/observability/test_metrics.py`, `runtime/test_observability_presets.py` | `ObservabilityPreset.production(...)` enables redacted event logging, trace export, standardized metrics, runtime fan-out, provider/session correlation attributes, and replay/diff trace links. |
 
 ---
 
