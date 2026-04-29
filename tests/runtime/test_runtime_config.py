@@ -6,13 +6,16 @@ from typing import Any
 
 import pytest
 
-from agent_runtime.core.errors import ConfigurationError
+from agent_runtime import AgentRuntime, ModelCacheControl
+from agent_runtime.core.errors import ConfigurationError, UnsupportedFeatureError
+from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 from agent_runtime.runtime.config import (
     RuntimeConfig,
     get_workflow_profile,
     workflow_profile_docs,
     workflow_profiles,
 )
+from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 EXPECTED_PROFILES = {
     "fast_text",
@@ -173,3 +176,73 @@ def test_yaml_loader_reports_optional_dependency_when_missing(
 def test_unknown_profile_lists_known_profiles() -> None:
     with pytest.raises(ConfigurationError, match="fast_text"):
         get_workflow_profile("unknown")
+
+
+async def test_model_runtime_accepts_config_and_expands_existing_arguments() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    scripted.queue(text_only_turn("ok"))
+    runtime.registry.register_model(scripted)
+    config = RuntimeConfig.profile("fast_text").with_overrides(
+        provider="scripted:test",
+        cache={"strategy": "ephemeral"},
+    )
+
+    result = await runtime.models.run(
+        input="hello",
+        config=config,
+        max_output_tokens=128,
+    )
+
+    assert result.text == "ok"
+    request = scripted.calls[0]
+    assert request.model == "test"
+    assert request.controls.temperature == 0.2
+    assert request.controls.max_output_tokens == 128
+    assert isinstance(request.controls.cache, ModelCacheControl)
+    assert request.controls.cache.strategy == "ephemeral"
+
+
+async def test_model_runtime_explicit_provider_overrides_config_provider() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    scripted.queue(text_only_turn("ok"))
+    runtime.registry.register_model(scripted)
+    config = RuntimeConfig.profile("fast_text").with_overrides(provider="echo:echo-mini")
+
+    result = await runtime.models.run(
+        provider="scripted:test",
+        input="hello",
+        config=config,
+    )
+
+    assert result.text == "ok"
+    assert scripted.calls[0].model == "test"
+
+
+async def test_model_runtime_rejects_invalid_profile_before_provider_call() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    config = RuntimeConfig.profile("structured_extraction").with_overrides(
+        provider="scripted:test"
+    )
+
+    with pytest.raises(ConfigurationError, match="schema"):
+        await runtime.models.run(input="hello", config=config)
+
+    assert scripted.calls == []
+
+
+async def test_model_runtime_rejects_unsupported_config_before_dispatch() -> None:
+    runtime = AgentRuntime()
+    runtime.registry.register_model(EchoModelProvider())
+    config = RuntimeConfig.profile("high_reliability").with_overrides(
+        provider="echo:echo-mini"
+    )
+
+    with pytest.raises(
+        UnsupportedFeatureError,
+        match=r"temperature|parallel_tool_calls|reasoning_effort",
+    ):
+        await runtime.models.run(input="hello", config=config)

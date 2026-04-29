@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 from uuid import uuid4
@@ -14,11 +14,12 @@ from agent_runtime.core.accounting import (
 from agent_runtime.core.artifacts import Artifact
 from agent_runtime.core.cache import InMemoryProviderCacheStore, ProviderCacheStore
 from agent_runtime.core.capabilities import ModelCapabilityProfile, get_model_capability_profile
+from agent_runtime.core.errors import ConfigurationError
 from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.results import OutputStrategy
+from agent_runtime.core.results import OutputSpec, OutputStrategy
 from agent_runtime.core.state import ProviderState
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
-from agent_runtime.output.schema import OutputSchema
+from agent_runtime.output.schema import OutputSchema, build_output_schema
 from agent_runtime.providers.base import (
     CompactionControl,
     ModelCacheControl,
@@ -31,6 +32,7 @@ from agent_runtime.providers.model_adapters.capability_validation import (
     validate_turn_request_capabilities,
 )
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
+from agent_runtime.runtime.config import RuntimeConfig
 from agent_runtime.runtime.event_metadata import (
     _attach_accounting_metadata,
     _event_usage,
@@ -68,9 +70,10 @@ class ModelRuntime:
     async def stream(
         self,
         *,
-        provider: str,
+        provider: str | None = None,
         model: str | None = None,
         input: str | Sequence[object],
+        config: RuntimeConfig | None = None,
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
@@ -101,6 +104,100 @@ class ModelRuntime:
     ) -> AsyncIterator[AgentEvent]:
         """Validate and stream a single model turn as traced runtime events."""
 
+        config_values = config.to_kwargs(surface="model") if config is not None else {}
+        provider = cast(
+            str | None,
+            _consume_config_value(config_values, "provider", provider),
+        )
+        model = cast(str | None, _consume_config_value(config_values, "model", model))
+        provider_state = cast(
+            ProviderState | None,
+            _consume_config_value(config_values, "provider_state", provider_state),
+        )
+        tools = cast(list[Any] | None, _consume_config_value(config_values, "tools", tools))
+        hosted_tools = cast(
+            list[HostedToolSpec] | None,
+            _consume_config_value(config_values, "hosted_tools", hosted_tools),
+        )
+        output_schema = _coerce_output_schema(
+            _consume_config_value(config_values, "output_schema", output_schema)
+        )
+        output_spec = _coerce_output_spec(config_values.pop("output_spec", None))
+        if output_schema is None and output_spec is not None:
+            output_schema = build_output_schema(output_spec)
+            if output_strategy is None:
+                output_strategy = output_spec.strategy
+        output_strategy = cast(
+            OutputStrategy | None,
+            _consume_config_value(config_values, "output_strategy", output_strategy),
+        )
+        instructions = cast(
+            str | None,
+            _consume_config_value(config_values, "instructions", instructions),
+        )
+        temperature = cast(
+            float | None,
+            _consume_config_value(config_values, "temperature", temperature),
+        )
+        top_p = cast(float | None, _consume_config_value(config_values, "top_p", top_p))
+        max_output_tokens = cast(
+            int | None,
+            _consume_config_value(config_values, "max_output_tokens", max_output_tokens),
+        )
+        tool_choice = _consume_config_value(config_values, "tool_choice", tool_choice)
+        parallel_tool_calls = cast(
+            bool | None,
+            _consume_config_value(
+                config_values, "parallel_tool_calls", parallel_tool_calls
+            ),
+        )
+        reasoning_effort = cast(
+            str | None,
+            _consume_config_value(config_values, "reasoning_effort", reasoning_effort),
+        )
+        cache = _coerce_cache(_consume_config_value(config_values, "cache", cache))
+        verbosity = cast(
+            str | None,
+            _consume_config_value(config_values, "verbosity", verbosity),
+        )
+        reasoning_summary = cast(
+            str | None,
+            _consume_config_value(
+                config_values, "reasoning_summary", reasoning_summary
+            ),
+        )
+        state_mode = cast(
+            str | None,
+            _consume_config_value(config_values, "state_mode", state_mode),
+        )
+        background = cast(
+            bool | None,
+            _consume_config_value(config_values, "background", background),
+        )
+        store = cast(bool | None, _consume_config_value(config_values, "store", store))
+        include = _coerce_str_list(
+            _consume_config_value(config_values, "include", include)
+        )
+        tool_search = _coerce_tool_search(
+            _consume_config_value(config_values, "tool_search", tool_search)
+        )
+        compaction = _coerce_compaction(
+            _consume_config_value(config_values, "compaction", compaction)
+        )
+        modalities = _coerce_str_list(
+            _consume_config_value(config_values, "modalities", modalities)
+        )
+        run_id = cast(str | None, _consume_config_value(config_values, "run_id", run_id))
+        trace_id = cast(
+            str | None,
+            _consume_config_value(config_values, "trace_id", trace_id),
+        )
+        parent_span_id = cast(
+            str | None,
+            _consume_config_value(config_values, "parent_span_id", parent_span_id),
+        )
+        if provider is None:
+            raise ValueError("provider must be provided explicitly or through config.")
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource
         if not model_name:
@@ -110,8 +207,8 @@ class ModelRuntime:
             model=model_name,
             input=input if isinstance(input, str) else list(input),
             provider_state=provider_state,
-            tools=list(tools or []),
-            hosted_tools=list(hosted_tools or []),
+            tools=_list_or_empty(tools),
+            hosted_tools=cast(list[HostedToolSpec], _list_or_empty(hosted_tools)),
             output_schema=output_schema,
             output_strategy=output_strategy,
             controls=ModelRequestControls(
@@ -133,7 +230,7 @@ class ModelRuntime:
                 compaction=compaction,
                 modalities=modalities,
             ),
-            extra=dict(kwargs),
+            extra={**config_values, **dict(kwargs)},
         )
         validate_turn_request_capabilities(provider=adapter, request=request)
         effective_run_id = run_id or f"run_{uuid4().hex}"
@@ -153,9 +250,10 @@ class ModelRuntime:
     async def run(
         self,
         *,
-        provider: str,
+        provider: str | None = None,
         model: str | None = None,
         input: str | Sequence[object],
+        config: RuntimeConfig | None = None,
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
@@ -184,6 +282,9 @@ class ModelRuntime:
     ) -> TurnResult:
         """Execute a model turn and collect text, artifacts, state, usage, and metadata."""
 
+        effective_cache = cache
+        if effective_cache is None and config is not None:
+            effective_cache = _coerce_cache(config.to_kwargs(surface="model").get("cache"))
         events: list[AgentEvent] = []
         text_parts: list[str] = []
         artifacts: list[Artifact] = []
@@ -195,6 +296,7 @@ class ModelRuntime:
             provider=provider,
             model=model,
             input=input,
+            config=config,
             provider_state=provider_state,
             tools=tools,
             hosted_tools=hosted_tools,
@@ -255,7 +357,7 @@ class ModelRuntime:
         cache_metadata = await _provider_cache_metadata(
             provider=completed_provider,
             model=completed_model,
-            cache=cache,
+            cache=effective_cache,
             usage=usage,
             provider_cache_store=self.provider_cache_store,
         )
@@ -284,3 +386,96 @@ class ModelRuntime:
             artifacts=artifacts,
             metadata=metadata,
         )
+
+
+def _consume_config_value(
+    values: dict[str, Any],
+    name: str,
+    explicit: Any,
+) -> Any:
+    configured = values.pop(name, None)
+    return explicit if explicit is not None else configured
+
+
+def _list_or_empty(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Sequence):
+        return list(value)
+    return [value]
+
+
+def _coerce_str_list(value: Any) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Sequence):
+        return [str(item) for item in value]
+    raise ConfigurationError(f"Expected a string list, got {type(value)!r}.")
+
+
+def _coerce_cache(value: Any) -> ModelCacheControl | None:
+    if value is None or isinstance(value, ModelCacheControl):
+        return value
+    if isinstance(value, str):
+        return ModelCacheControl(strategy=cast(Any, value))
+    if isinstance(value, Mapping):
+        return ModelCacheControl(**dict(value))
+    raise ConfigurationError(f"Invalid cache config: {value!r}.")
+
+
+def _coerce_tool_search(value: Any) -> ToolSearchControl | None:
+    if value is None or isinstance(value, ToolSearchControl):
+        return value
+    if isinstance(value, bool):
+        return ToolSearchControl(enabled=value)
+    if isinstance(value, Mapping):
+        return ToolSearchControl(**dict(value))
+    raise ConfigurationError(f"Invalid tool_search config: {value!r}.")
+
+
+def _coerce_compaction(value: Any) -> CompactionControl | None:
+    if value is None or isinstance(value, CompactionControl):
+        return value
+    if isinstance(value, str):
+        return CompactionControl(strategy=cast(Any, value))
+    if isinstance(value, Mapping):
+        return CompactionControl(**dict(value))
+    raise ConfigurationError(f"Invalid compaction config: {value!r}.")
+
+
+def _coerce_output_spec(value: Any) -> OutputSpec | None:
+    if value is None or isinstance(value, OutputSpec):
+        return value
+    if isinstance(value, Mapping):
+        return OutputSpec(**dict(value))
+    raise ConfigurationError(f"Invalid output_spec config: {value!r}.")
+
+
+def _coerce_output_schema(value: Any) -> OutputSchema | None:
+    if value is None or isinstance(value, OutputSchema):
+        return value
+    if isinstance(value, Mapping):
+        payload = dict(value)
+        raw_schema = payload.get("schema")
+        if isinstance(raw_schema, Mapping):
+            return OutputSchema(
+                name=str(payload.get("name") or "output"),
+                schema=dict(raw_schema),
+                description=(
+                    str(payload["description"])
+                    if payload.get("description") is not None
+                    else None
+                ),
+                strict=bool(payload.get("strict", True)),
+                target_type=dict(raw_schema),
+            )
+        return OutputSchema(
+            name="output",
+            schema=payload,
+            target_type=payload,
+        )
+    raise ConfigurationError(f"Invalid output_schema config: {value!r}.")
