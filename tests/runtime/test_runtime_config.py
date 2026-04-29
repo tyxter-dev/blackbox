@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from agent_runtime import AgentRuntime, AgentSpec, ModelCacheControl
+from agent_runtime import RuntimeConfig as PublicRuntimeConfig
 from agent_runtime.core.errors import ConfigurationError, UnsupportedFeatureError
 from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
 from agent_runtime.providers.model_adapters.echo import EchoModelProvider
@@ -46,6 +47,12 @@ def test_all_builtin_profiles_have_documented_defaults_and_tradeoffs() -> None:
     docs = workflow_profile_docs()
     assert set(docs) == EXPECTED_PROFILES
     assert docs["coding_agent"]["required"][0]["any_of"] == ["workspace"]
+
+
+def test_runtime_config_is_publicly_exported() -> None:
+    assert PublicRuntimeConfig.profile("fast_text").to_kwargs(surface="model")[
+        "max_output_tokens"
+    ] == 512
 
 
 def test_profile_expands_surface_defaults_and_overrides() -> None:

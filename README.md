@@ -219,6 +219,37 @@ an unsupported hosted tool, output strategy, control, or state mode, the
 runtime raises `UnsupportedFeatureError` before making the provider SDK call.
 `HostedToolRaw` and `extra` remain explicit provider-native escape hatches.
 
+## Workflow configuration profiles
+
+`RuntimeConfig` provides typed presets for common workflows without adding a
+new top-level facade. A config object expands into the same keyword arguments
+accepted by `runtime.run(...)`, `runtime.models.run(...)`,
+`runtime.agents.run(...)`, and `runtime.realtime.connect(...)`.
+
+```python
+from agent_runtime import RuntimeConfig, WorkspaceSpec
+
+config = RuntimeConfig.profile("coding_agent").with_overrides(
+    provider="openai:gpt-5.5",
+    workspace=WorkspaceSpec.git(url=repo_url, ref="main"),
+)
+
+result = await runtime.run(
+    input="Refactor this module and run tests",
+    config=config,
+)
+```
+
+Built-in profiles are `fast_text`, `structured_extraction`, `tool_agent`,
+`retrieval_agent`, `coding_agent`, `cloud_agent_session`, `realtime_voice`,
+`eval_run`, `cost_sensitive`, and `high_reliability`. Each profile includes
+documented defaults, required values, compatible runtime surfaces, and
+tradeoffs. Config can be built as a Python object, loaded from environment
+variables with `RuntimeConfig.from_env()`, or loaded from JSON/TOML/YAML with
+`RuntimeConfig.from_file(...)`. YAML loading requires PyYAML.
+
+See `docs/WORKFLOW_PROFILES.md` for the full defaults and examples.
+
 ## Chat compatibility facade
 
 Chat messages are supported as an explicit compatibility projection:

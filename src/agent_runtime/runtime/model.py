@@ -73,7 +73,7 @@ class ModelRuntime:
         provider: str | None = None,
         model: str | None = None,
         input: str | Sequence[object],
-        config: RuntimeConfig | None = None,
+        config: RuntimeConfig | Mapping[str, Any] | None = None,
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
@@ -104,7 +104,12 @@ class ModelRuntime:
     ) -> AsyncIterator[AgentEvent]:
         """Validate and stream a single model turn as traced runtime events."""
 
-        config_values = config.to_kwargs(surface="model") if config is not None else {}
+        if isinstance(config, RuntimeConfig):
+            config_values = config.to_kwargs(surface="model")
+        else:
+            config_values = {}
+            if config is not None:
+                kwargs = {**dict(kwargs), "config": config}
         provider = cast(
             str | None,
             _consume_config_value(config_values, "provider", provider),
@@ -253,7 +258,7 @@ class ModelRuntime:
         provider: str | None = None,
         model: str | None = None,
         input: str | Sequence[object],
-        config: RuntimeConfig | None = None,
+        config: RuntimeConfig | Mapping[str, Any] | None = None,
         provider_state: ProviderState | None = None,
         tools: list[Any] | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
@@ -283,7 +288,7 @@ class ModelRuntime:
         """Execute a model turn and collect text, artifacts, state, usage, and metadata."""
 
         effective_cache = cache
-        if effective_cache is None and config is not None:
+        if effective_cache is None and isinstance(config, RuntimeConfig):
             effective_cache = _coerce_cache(config.to_kwargs(surface="model").get("cache"))
         events: list[AgentEvent] = []
         text_parts: list[str] = []
