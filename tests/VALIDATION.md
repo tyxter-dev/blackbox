@@ -183,7 +183,7 @@ await runtime.agents.list_artifacts(...)
 | 4.2 | ✅ | Create session | same | Agent sessions are first-class objects. |
 | 4.3 | ✅ | Session starts running | same | Session status transitions work. |
 | 4.4 | ✅ | Stream session events | same | Agent emits normalized events. |
-| 4.5 | ✅ | Send message creates invocation | `runtime/test_local_agent_provider.py::test_send_message_updates_session_and_returns_invocation_ref` | Existing sessions can receive more work and return an `InvocationRef`. |
+| 4.5 | ✅ | Send message resumes session | `runtime/test_local_agent_provider.py::test_send_message_queues_follow_up_and_resumes_provider_state` | Existing sessions can receive more work, return an `InvocationRef`, and continue with the accumulated `ProviderState`. |
 | 4.6 | ✅ | Cancel session | `runtime/test_local_agent_provider.py::test_cancel_between_turns` | Cancellation changes state and emits event. |
 | 4.7 | ✅ | List artifacts | `contracts/test_capability_honesty.py::test_local_agent_artifacts_default_empty_page` | Artifacts attached to sessions. |
 | 4.8 | ✅ | Agent approval | `runtime/test_local_agent_provider.py::test_approval_pause_and_approve` | Sessions pause/resume for approval. |

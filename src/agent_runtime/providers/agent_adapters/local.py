@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 from uuid import uuid4
 
@@ -21,10 +22,17 @@ from agent_runtime.core.sessions import (
     SessionRef,
     SessionStatus,
 )
+from agent_runtime.core.state import ProviderState
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.runtime import ModelRuntime
 from agent_runtime.runtime.agent_loop import AgentLoop, ApprovalPolicy
 from agent_runtime.tools.runtime import ToolRuntime
+
+
+@dataclass(slots=True)
+class _PendingInvocation:
+    id: str
+    input: str | list[Any]
 
 
 @dataclass(slots=True)
@@ -44,6 +52,8 @@ class LocalAgentProvider:
     _agents: dict[str, AgentSpec] = field(default_factory=dict)
     _sessions: dict[str, AgentSession] = field(default_factory=dict)
     _session_tasks: dict[str, TaskSpec] = field(default_factory=dict)
+    _session_states: dict[str, ProviderState] = field(default_factory=dict)
+    _pending_invocations: dict[str, deque[_PendingInvocation]] = field(default_factory=dict)
     _loops: dict[str, AgentLoop] = field(default_factory=dict)
 
     def capabilities(self) -> AgentCapabilities:
@@ -75,6 +85,7 @@ class LocalAgentProvider:
         )
         self._sessions[session.id] = session
         self._session_tasks[session.id] = task
+        self._enqueue_invocation(session.id, task.prompt)
         return session
 
     async def stream_events(
@@ -85,12 +96,16 @@ class LocalAgentProvider:
     ) -> AsyncIterator[AgentEvent]:
         """Run the local agent loop and stream normalized session, model, and tool events."""
         session_obj = self._session(session)
+        invocation = self._next_invocation(session_obj.id)
+        if invocation is None:
+            return
+
         session_obj.status = "running"
         yield AgentEvent(
             type=EventTypes.SESSION_STARTED,
             provider=self.provider_id,
             session_id=session_obj.id,
-            data={"agent_id": session_obj.agent_id},
+            data={"agent_id": session_obj.agent_id, "invocation_id": invocation.id},
         )
 
         agent_spec = self._agents.get(session_obj.agent_id or "")
@@ -142,12 +157,17 @@ class LocalAgentProvider:
         self._loops[session_obj.id] = loop
 
         terminal_seen: str | None = None
+        last_state = self._session_states.get(session_obj.id)
         text_parts: list[str] = []
         async for event in loop.run(
-            input=session_obj.task,
+            input=invocation.input,
+            provider_state=last_state,
             session_id=session_obj.id,
             provider_id=self.provider_id,
         ):
+            maybe_state = event.data.get("provider_state")
+            if isinstance(maybe_state, ProviderState):
+                last_state = maybe_state
             if event.type == EventTypes.MODEL_TEXT_DELTA:
                 delta = event.data.get("delta")
                 if isinstance(delta, str):
@@ -161,8 +181,10 @@ class LocalAgentProvider:
             current_status: SessionStatus = session_obj.status
             if current_status == "cancelled":
                 loop.cancel()
-            yield event
+            yield _with_invocation(event, invocation.id)
 
+        if last_state is not None:
+            self._session_states[session_obj.id] = last_state
         if terminal_seen == EventTypes.SESSION_CANCELLED:
             session_obj.status = "cancelled"
             return
@@ -177,8 +199,9 @@ class LocalAgentProvider:
                     type=EventTypes.AGENT_RESPONSE_MESSAGE_CREATED,
                     provider=self.provider_id,
                     session_id=session_obj.id,
-                    item_id=f"{session_obj.id}_message_{message.index}",
+                    item_id=f"{invocation.id}_message_{message.index}",
                     data={
+                        "invocation_id": invocation.id,
                         "message": message,
                         "index": message.index,
                         "role": message.role,
@@ -191,16 +214,20 @@ class LocalAgentProvider:
             type=EventTypes.SESSION_COMPLETED,
             provider=self.provider_id,
             session_id=session_obj.id,
-            data={"agent_id": session_obj.agent_id, "message_count": len(messages)},
+            data={
+                "agent_id": session_obj.agent_id,
+                "invocation_id": invocation.id,
+                "message_count": len(messages),
+            },
         )
 
     async def send_message(self, session: SessionRef | AgentSession, message: str) -> InvocationRef:
         session_obj = self._session(session)
-        session_obj.task = f"{session_obj.task}\n\nUser: {message}"
+        invocation = self._enqueue_invocation(session_obj.id, message)
         return InvocationRef(
             provider=self.provider_id,
             session_id=session_obj.id,
-            id=f"inv_{uuid4().hex}",
+            id=invocation.id,
         )
 
     async def approve(self, approval_id: str, decision: ApprovalDecision) -> None:
@@ -235,6 +262,24 @@ class LocalAgentProvider:
             return session
         return self._sessions[session.id]
 
+    def _enqueue_invocation(
+        self,
+        session_id: str,
+        input: str | list[Any],
+    ) -> _PendingInvocation:
+        invocation = _PendingInvocation(id=f"inv_{uuid4().hex}", input=input)
+        self._pending_invocations.setdefault(session_id, deque()).append(invocation)
+        return invocation
+
+    def _next_invocation(self, session_id: str) -> _PendingInvocation | None:
+        queue = self._pending_invocations.get(session_id)
+        if not queue:
+            return None
+        invocation = queue.popleft()
+        if not queue:
+            self._pending_invocations.pop(session_id, None)
+        return invocation
+
     @property
     def _approvals(self) -> dict[str, Any]:
         """Compat shim for the existing test that reads _approvals directly."""
@@ -249,6 +294,12 @@ def _tool_payload(runtime: ToolRuntime | None, names: list[str]) -> list[dict[st
         return []
     wanted = set(names)
     return [tool for tool in runtime.registry.to_provider_tools() if tool.get("name") in wanted]
+
+
+def _with_invocation(event: AgentEvent, invocation_id: str) -> AgentEvent:
+    if event.data.get("invocation_id") == invocation_id:
+        return event
+    return replace(event, data={**event.data, "invocation_id": invocation_id})
 
 
 def _supports_model_control(models: ModelRuntime, model_ref: str, control: ControlName) -> bool:

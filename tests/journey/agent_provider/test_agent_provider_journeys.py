@@ -118,16 +118,18 @@ async def test_journey_local_agent_follow_up_message() -> None:
                 task="Draft a one sentence project status note.",
                 model=model_provider.ref,
             )
+            initial_events = [event async for event in runtime.agents.stream(session)]
             invocation = await runtime.agents.send_message(
                 session,
                 "Add that the owner needs a deploy risk callout.",
             )
-            events = [event async for event in runtime.agents.stream(session)]
+            follow_up_events = [event async for event in runtime.agents.stream(session)]
+            events = [*initial_events, *follow_up_events]
             _print_report(
                 journey="local_agent_follow_up_message",
                 goal=(
-                    "A user sends a follow-up message into an existing agent session and "
-                    "receives an invocation reference for correlation."
+                    "A user receives an initial agent response, sends a follow-up message "
+                    "into the same session, and receives a resumed agent response."
                 ),
                 agent_provider=local.provider_id,
                 model_provider=model_provider,
@@ -136,6 +138,13 @@ async def test_journey_local_agent_follow_up_message() -> None:
                 prompt=session.task,
                 events=events,
                 invocation=invocation,
+                extra={
+                    "initial_response_text": _clip(_collected_text(initial_events)),
+                    "follow_up_response_text": _clip(_collected_text(follow_up_events)),
+                    "initial_event_summary": _event_summary(initial_events),
+                    "follow_up_event_summary": _event_summary(follow_up_events),
+                    "session_task_unchanged": session.task == "Draft a one sentence project status note.",
+                },
             )
         finally:
             await runtime.close()

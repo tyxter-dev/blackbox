@@ -85,28 +85,42 @@ async def test_local_agent_streams_model_events_inside_session() -> None:
     assert events[-1].session_id == session.id
 
 
-async def test_send_message_updates_session_and_returns_invocation_ref() -> None:
-    runtime = AgentRuntime()
-    runtime.registry.register_model(EchoModelProvider())
-    runtime.registry.register_agent(LocalAgentProvider(runtime.models))
+async def test_send_message_queues_follow_up_and_resumes_provider_state() -> None:
+    runtime, scripted, _ = _build_runtime()
+    scripted.queue(text_only_turn("initial answer"))
+    scripted.queue(text_only_turn("follow-up answer"))
 
     await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="default"))
     session = await runtime.agents.create_session(
         provider="local",
         agent="default",
         task="initial task",
-        model="echo/echo-mini",
+        model="scripted/test",
+    )
+    first_events = [event async for event in runtime.agents.stream(session)]
+    first_state = next(
+        event.data["provider_state"]
+        for event in first_events
+        if event.type == EventTypes.MODEL_COMPLETED
     )
 
     invocation = await runtime.agents.send_message(
         session,
         "follow-up request",
     )
+    second_events = [event async for event in runtime.agents.stream(session)]
+    exhausted_events = [event async for event in runtime.agents.stream(session)]
 
     assert invocation.provider == "local"
     assert invocation.session_id == session.id
     assert invocation.id.startswith("inv_")
-    assert session.task == "initial task\n\nUser: follow-up request"
+    assert session.task == "initial task"
+    assert [call.input for call in scripted.calls] == ["initial task", "follow-up request"]
+    assert scripted.calls[0].provider_state is None
+    assert scripted.calls[1].provider_state == first_state
+    assert second_events[0].data["invocation_id"] == invocation.id
+    assert second_events[-1].data["invocation_id"] == invocation.id
+    assert exhausted_events == []
 
 
 # --- tool dispatch loop -----------------------------------------------------
