@@ -6,9 +6,11 @@ from typing import Any
 
 import pytest
 
-from agent_runtime import AgentRuntime, ModelCacheControl
+from agent_runtime import AgentRuntime, AgentSpec, ModelCacheControl
 from agent_runtime.core.errors import ConfigurationError, UnsupportedFeatureError
+from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
 from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from agent_runtime.realtime.fake import FakeRealtimeProvider
 from agent_runtime.runtime.config import (
     RuntimeConfig,
     get_workflow_profile,
@@ -312,3 +314,58 @@ async def test_agent_runtime_coding_profile_maps_named_approval_policy(
 
     assert result.text == "done"
     assert scripted.calls[0].model == "test"
+
+
+async def test_agent_session_runtime_accepts_cloud_agent_profile_config() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    scripted.queue(text_only_turn("agent done"))
+    runtime.registry.register_model(scripted)
+    runtime.registry.register_agent(LocalAgentProvider(runtime.models))
+    config = RuntimeConfig.profile("cloud_agent_session").with_overrides(
+        provider="local",
+        agent=AgentSpec(name="cloudish", model="scripted/test"),
+    )
+
+    result = await runtime.agents.run(task="go", config=config)
+
+    assert result.text == "agent done"
+    assert scripted.calls[0].model == "test"
+
+
+async def test_agent_session_rejects_wrong_surface_config() -> None:
+    runtime = AgentRuntime()
+    runtime.registry.register_agent(LocalAgentProvider(runtime.models))
+    config = RuntimeConfig.profile("realtime_voice").with_overrides(
+        provider="local",
+        agent=AgentSpec(name="voice", model="scripted/test"),
+    )
+
+    with pytest.raises(ConfigurationError, match="cannot be used"):
+        await runtime.agents.run(task="go", config=config)
+
+
+async def test_realtime_runtime_accepts_realtime_profile_config() -> None:
+    runtime = AgentRuntime()
+    runtime.registry.register_realtime(FakeRealtimeProvider())
+    config = RuntimeConfig.profile("realtime_voice").with_overrides(
+        provider="fake-realtime:gpt-realtime"
+    )
+
+    async with await runtime.realtime.connect(runtime_config=config) as session:
+        assert session.ref.model == "gpt-realtime"
+        assert session.config.input_modalities == ["text", "audio"]
+        assert session.config.output_modalities == ["text", "audio"]
+        assert session.config.audio is not None
+        assert session.config.audio.voice == "alloy"
+
+
+async def test_realtime_runtime_rejects_wrong_surface_config() -> None:
+    runtime = AgentRuntime()
+    runtime.registry.register_realtime(FakeRealtimeProvider())
+    config = RuntimeConfig.profile("fast_text").with_overrides(
+        provider="fake-realtime:gpt-realtime"
+    )
+
+    with pytest.raises(ConfigurationError, match="cannot be used"):
+        await runtime.realtime.connect(runtime_config=config)

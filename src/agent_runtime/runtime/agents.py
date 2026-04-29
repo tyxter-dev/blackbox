@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, TypeVar, cast
@@ -41,6 +41,7 @@ from agent_runtime.core.stores import EventStore, RunStore, SessionStore
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.providers.base import AgentSpec, TaskSpec
 from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
+from agent_runtime.runtime.config import RuntimeConfig, workflow_policy
 from agent_runtime.runtime.event_metadata import (
     _attach_accounting_metadata,
     _event_usage,
@@ -67,6 +68,7 @@ from agent_runtime.runtime.workspace_results import (
 )
 from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
 from agent_runtime.tools.hosted.specs import HostedToolSpec
+from agent_runtime.workspaces.spec import WorkspaceSpec
 
 T = TypeVar("T")
 
@@ -91,9 +93,10 @@ class AgentRuntimeFacade:
     async def create_session(
         self,
         *,
-        provider: str,
-        agent: AgentRef | AgentSpec | str,
-        task: str | TaskSpec,
+        provider: str | None = None,
+        agent: AgentRef | AgentSpec | str | None = None,
+        task: str | TaskSpec | None = None,
+        config: RuntimeConfig | None = None,
         model: str | None = None,
         workspace: Any | None = None,
         workspace_provider: str | Any | None = None,
@@ -107,6 +110,58 @@ class AgentRuntimeFacade:
     ) -> AgentSession:
         """Create a provider-backed agent session and attach a workspace if requested."""
 
+        config_values = config.to_kwargs(surface="agent_session") if config is not None else {}
+        provider = cast(str | None, _consume_config_value(config_values, "provider", provider))
+        agent = cast(
+            AgentRef | AgentSpec | str | None,
+            _consume_config_value(config_values, "agent", agent),
+        )
+        task = cast(
+            str | TaskSpec | None,
+            _consume_config_value(config_values, "task", task),
+        )
+        model = cast(str | None, _consume_config_value(config_values, "model", model))
+        workspace = _coerce_agent_workspace(
+            _consume_config_value(config_values, "workspace", workspace)
+        )
+        workspace_provider = _consume_config_value(
+            config_values, "workspace_provider", workspace_provider
+        )
+        workspace_policy = workflow_policy(
+            _consume_config_value(config_values, "workspace_policy", workspace_policy)
+        )
+        workspace_preserve = cast(
+            bool,
+            _consume_config_value(
+                config_values, "workspace_preserve", workspace_preserve
+            ),
+        )
+        inputs = cast(
+            list[ArtifactRef] | None,
+            _consume_config_value(config_values, "inputs", inputs),
+        )
+        hosted_tools = cast(
+            list[HostedToolSpec] | None,
+            _consume_config_value(config_values, "hosted_tools", hosted_tools),
+        )
+        response = cast(
+            AgentResponseSpec | None,
+            _consume_config_value(config_values, "response", response),
+        )
+        metadata = cast(
+            dict[str, Any] | None,
+            _consume_config_value(config_values, "metadata", metadata),
+        )
+        extra = cast(
+            dict[str, Any] | None,
+            _consume_config_value(config_values, "extra", extra),
+        )
+        if provider is None:
+            raise ValueError("provider must be provided explicitly or through config.")
+        if agent is None:
+            raise ValueError("agent must be provided explicitly or through config.")
+        if task is None:
+            raise ValueError("task must be provided explicitly or through config.")
         adapter = self.registry.get_agent(ProviderRef.parse(provider).provider_key)
         task_spec = _agent_task_spec(
             task,
@@ -314,9 +369,10 @@ class AgentRuntimeFacade:
     async def run(
         self,
         *,
-        provider: str,
-        agent: AgentRef | AgentSpec | str,
-        task: str | TaskSpec,
+        provider: str | None = None,
+        agent: AgentRef | AgentSpec | str | None = None,
+        task: str | TaskSpec | None = None,
+        config: RuntimeConfig | None = None,
         model: str | None = None,
         workspace: Any | None = None,
         workspace_provider: str | Any | None = None,
@@ -335,6 +391,80 @@ class AgentRuntimeFacade:
         run_id: str | None = None,
     ) -> AgentSessionResult[T]:
         """Run a provider-managed agent session and collect the useful result."""
+        config_values = config.to_kwargs(surface="agent_session") if config is not None else {}
+        provider = cast(str | None, _consume_config_value(config_values, "provider", provider))
+        agent = cast(
+            AgentRef | AgentSpec | str | None,
+            _consume_config_value(config_values, "agent", agent),
+        )
+        task = cast(
+            str | TaskSpec | None,
+            _consume_config_value(config_values, "task", task),
+        )
+        model = cast(str | None, _consume_config_value(config_values, "model", model))
+        workspace = _coerce_agent_workspace(
+            _consume_config_value(config_values, "workspace", workspace)
+        )
+        workspace_provider = _consume_config_value(
+            config_values, "workspace_provider", workspace_provider
+        )
+        workspace_policy = workflow_policy(
+            _consume_config_value(config_values, "workspace_policy", workspace_policy)
+        )
+        workspace_preserve = cast(
+            bool,
+            _consume_config_value(
+                config_values, "workspace_preserve", workspace_preserve
+            ),
+        )
+        inputs = cast(
+            list[ArtifactRef] | None,
+            _consume_config_value(config_values, "inputs", inputs),
+        )
+        hosted_tools = cast(
+            list[HostedToolSpec] | None,
+            _consume_config_value(config_values, "hosted_tools", hosted_tools),
+        )
+        response = cast(
+            AgentResponseSpec | None,
+            _consume_config_value(config_values, "response", response),
+        )
+        metadata = cast(
+            dict[str, Any] | None,
+            _consume_config_value(config_values, "metadata", metadata),
+        )
+        extra = cast(
+            dict[str, Any] | None,
+            _consume_config_value(config_values, "extra", extra),
+        )
+        output_type = cast(
+            type[T] | None,
+            _consume_config_value(config_values, "output_type", output_type),
+        )
+        output_spec = _coerce_agent_output_spec(
+            _consume_config_value(config_values, "output_spec", output_spec)
+        )
+        artifact_type = cast(
+            str | None,
+            _consume_config_value(config_values, "artifact_type", artifact_type),
+        )
+        artifact_limit = cast(
+            int,
+            _consume_config_value(config_values, "artifact_limit", artifact_limit),
+        )
+        collect_artifacts = cast(
+            bool,
+            _consume_config_value(
+                config_values, "collect_artifacts", collect_artifacts
+            ),
+        )
+        run_id = cast(str | None, _consume_config_value(config_values, "run_id", run_id))
+        if provider is None:
+            raise ValueError("provider must be provided explicitly or through config.")
+        if agent is None:
+            raise ValueError("agent must be provided explicitly or through config.")
+        if task is None:
+            raise ValueError("task must be provided explicitly or through config.")
         session = await self.create_session(
             provider=provider,
             agent=agent,
@@ -704,6 +834,31 @@ async def _resolve_agent_ref(adapter: Any, agent: AgentRef | AgentSpec | str) ->
     if isinstance(agent, AgentSpec):
         return cast(AgentRef, await adapter.create_agent(agent))
     return agent
+
+
+def _consume_config_value(
+    values: dict[str, Any],
+    name: str,
+    explicit: Any,
+) -> Any:
+    configured = values.pop(name, None)
+    return explicit if explicit is not None else configured
+
+
+def _coerce_agent_workspace(value: Any) -> Any | None:
+    if value is None or isinstance(value, WorkspaceSpec):
+        return value
+    if isinstance(value, Mapping):
+        return WorkspaceSpec(**dict(value))
+    return value
+
+
+def _coerce_agent_output_spec(value: Any) -> OutputSpec | None:
+    if value is None or isinstance(value, OutputSpec):
+        return value
+    if isinstance(value, Mapping):
+        return OutputSpec(**dict(value))
+    raise ConfigurationError(f"Invalid output_spec config: {value!r}.")
 
 
 def _initial_session_state(

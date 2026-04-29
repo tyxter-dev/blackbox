@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, cast
 from uuid import uuid4
@@ -44,7 +44,9 @@ from agent_runtime.realtime.provider import (
     RealtimeProvider,
     RealtimeSessionConfig,
     RealtimeSessionRef,
+    TurnDetectionConfig,
 )
+from agent_runtime.runtime.config import RuntimeConfig, workflow_policy
 from agent_runtime.tools.hosted.specs import HostedToolSpec
 from agent_runtime.tools.registry import ToolDefinition, ToolRegistry
 from agent_runtime.tools.runtime import ToolRuntime
@@ -75,8 +77,9 @@ class RealtimeRuntime:
     async def connect(
         self,
         *,
-        provider: str,
+        provider: str | None = None,
         model: str | None = None,
+        runtime_config: RuntimeConfig | None = None,
         config: RealtimeSessionConfig | None = None,
         transport: TransportKind = "websocket",
         tools: list[str | ToolDefinition] | None = None,
@@ -91,6 +94,61 @@ class RealtimeRuntime:
     ) -> ManagedRealtimeSession:
         """Open a managed realtime session after resolving tools and capabilities."""
 
+        config_values = (
+            runtime_config.to_kwargs(surface="realtime")
+            if runtime_config is not None
+            else {}
+        )
+        provider = cast(
+            str | None,
+            _consume_config_value(config_values, "provider", provider),
+        )
+        model = cast(str | None, _consume_config_value(config_values, "model", model))
+        config = _coerce_realtime_session_config(
+            _consume_config_value(
+                config_values,
+                "realtime_session",
+                _consume_config_value(config_values, "config", config),
+            )
+        )
+        transport = cast(
+            TransportKind,
+            _consume_config_value(config_values, "transport", transport),
+        )
+        tools = cast(
+            list[str | ToolDefinition] | None,
+            _consume_config_value(config_values, "tools", tools),
+        )
+        hosted_tools = cast(
+            list[HostedToolSpec] | None,
+            _consume_config_value(config_values, "hosted_tools", hosted_tools),
+        )
+        tool_mode = cast(
+            ToolMode,
+            _consume_config_value(config_values, "tool_mode", tool_mode),
+        )
+        tool_execution_context = cast(
+            dict[str, Any] | None,
+            _consume_config_value(
+                config_values, "tool_execution_context", tool_execution_context
+            ),
+        )
+        approval_policy = _consume_config_value(
+            config_values, "approval_policy", approval_policy
+        )
+        policy = workflow_policy(_consume_config_value(config_values, "policy", policy))
+        if isinstance(approval_policy, str):
+            if policy is None:
+                policy = workflow_policy(approval_policy)
+            approval_policy = None
+        run_id = cast(str | None, _consume_config_value(config_values, "run_id", run_id))
+        provider_state = cast(
+            ProviderState | None,
+            _consume_config_value(config_values, "provider_state", provider_state),
+        )
+        kwargs = {**config_values, **dict(kwargs)}
+        if provider is None:
+            raise ValueError("provider must be provided explicitly or through runtime_config.")
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource
         if not model_name:
@@ -678,6 +736,30 @@ def _validate_realtime_config(
                 f"Realtime provider '{provider.provider_id}' does not support audio output "
                 f"format '{config.audio.output_format}'."
             )
+
+
+def _consume_config_value(
+    values: dict[str, Any],
+    name: str,
+    explicit: Any,
+) -> Any:
+    configured = values.pop(name, None)
+    return explicit if explicit is not None else configured
+
+
+def _coerce_realtime_session_config(value: Any) -> RealtimeSessionConfig | None:
+    if value is None or isinstance(value, RealtimeSessionConfig):
+        return value
+    if isinstance(value, Mapping):
+        data = dict(value)
+        audio = data.get("audio")
+        if isinstance(audio, Mapping):
+            data["audio"] = AudioConfig(**dict(audio))
+        turn_detection = data.get("turn_detection")
+        if isinstance(turn_detection, Mapping):
+            data["turn_detection"] = TurnDetectionConfig(**dict(turn_detection))
+        return RealtimeSessionConfig(**data)
+    raise RealtimeUnsupportedFeatureError(f"Invalid realtime session config: {value!r}.")
 
 
 def _resolve_realtime_tools(
