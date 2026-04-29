@@ -885,6 +885,8 @@ result = await runtime.run(
 ```bash
 pip install -e .[dev]
 pytest                            # offline suite
+python -m pytest tests/perf -q    # offline performance benchmark smoke suite
+python benchmarks/run_perf.py     # emit performance benchmark JSON
 pytest -m integration_openai      # network-gated, requires OPENAI_API_KEY
 pytest -m integration_xai         # network-gated, requires XAI_API_KEY
 pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
