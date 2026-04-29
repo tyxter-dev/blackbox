@@ -45,6 +45,8 @@ python examples/agent_provider_support_conversation.py
 - `AgentSpec.instructions` remains the configured support-agent system prompt.
 - `AgentSpec.hosted_tools` lets an AgentProvider-backed agent receive hosted
   retrieval tools without plumbing raw provider SDK clients through example code.
+- `runtime.agents.run(..., agent=AgentSpec(...))` supports one-off agent
+  definitions without a separate `create_agent(...)` call.
 - `temporary_openai_file_search(...)` creates the temporary OpenAI vector store,
   waits for ingestion, yields a ready `FileSearch`, and cleans up resources.
 - `conversational_response(...)` asks the provider for short chat-style
@@ -56,6 +58,8 @@ python examples/agent_provider_support_conversation.py
 ## Review Checklist
 
 - The example should read like application code, not test scaffolding.
+- One-off agents should pass `AgentSpec` directly as `agent=...` instead of
+  introducing a second `spec=` wrapper.
 - The support prompt, retrieval setup, and response style should be configured
   on the agent rather than encoded as a Pydantic response model.
 - The output should include at least two assistant messages from one agent turn.

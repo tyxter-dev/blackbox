@@ -71,9 +71,9 @@ async def main() -> None:
             max_num_results=4,
             include_results=True,
         ) as file_search:
-            agent = await runtime.agents.create_agent(
+            result = await runtime.agents.run(
                 provider="local",
-                spec=AgentSpec(
+                agent=AgentSpec(
                     name="support-conversation-agent",
                     instructions=(
                         "You are a support agent for a logistics analytics product. "
@@ -89,10 +89,6 @@ async def main() -> None:
                         max_chars_per_message=220,
                     ),
                 ),
-            )
-            result = await runtime.agents.run(
-                provider="local",
-                agent=agent,
                 task=(
                     "Customer message: We're starting an analytics trial for 35 "
                     "dispatch managers in IST. Can you create our Slack channel before "

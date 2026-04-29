@@ -176,18 +176,17 @@ async def test_agent_spec_hosted_tools_and_response_messages_reach_session_resul
     runtime, scripted, _ = _build_runtime()
     scripted.queue(text_only_turn("Yes, we can help with that.\n\nNext step: book kickoff."))
 
-    agent = await runtime.agents.create_agent(
+    result = await runtime.agents.run(
         provider="local",
-        spec=AgentSpec(
+        agent=AgentSpec(
             name="support",
             instructions="Use support policy before answering.",
             model="scripted/test",
             hosted_tools=[WebSearch()],
             response=conversational_response(min_messages=2, max_messages=3),
         ),
+        task="go",
     )
-
-    result = await runtime.agents.run(provider="local", agent=agent, task="go")
 
     assert [message.content for message in result.messages] == [
         "Yes, we can help with that.",
@@ -198,6 +197,23 @@ async def test_agent_spec_hosted_tools_and_response_messages_reach_session_resul
     assert len(scripted.calls[0].hosted_tools) == 1
     assert scripted.calls[0].controls.instructions is not None
     assert "short assistant messages" in scripted.calls[0].controls.instructions
+
+
+async def test_create_session_accepts_inline_agent_spec() -> None:
+    runtime, scripted, _ = _build_runtime()
+    scripted.queue(text_only_turn("done"))
+
+    session = await runtime.agents.create_session(
+        provider="local",
+        agent=AgentSpec(name="inline", model="scripted/test"),
+        task="go",
+    )
+
+    events = [event async for event in runtime.agents.stream(session)]
+
+    assert session.agent_id == "inline"
+    assert events[-1].type == EventTypes.SESSION_COMPLETED
+    assert scripted.calls[0].model == "test"
 
 
 async def test_tool_call_without_tool_runtime_raises() -> None:

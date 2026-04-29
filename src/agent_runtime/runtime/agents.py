@@ -76,7 +76,7 @@ class AgentRuntimeFacade:
         self,
         *,
         provider: str,
-        agent: AgentRef | str,
+        agent: AgentRef | AgentSpec | str,
         task: str | TaskSpec,
         model: str | None = None,
         workspace: Any | None = None,
@@ -120,7 +120,8 @@ class AgentRuntimeFacade:
                 },
             )
             resolved_workspace = (provider_obj, workspace_ref, opened and not workspace_preserve)
-        session = await adapter.start_session(agent, task_spec)
+        agent_ref = await _resolve_agent_ref(adapter, agent)
+        session = await adapter.start_session(agent_ref, task_spec)
         if resolved_workspace is not None:
             provider_obj, workspace_ref, should_close = resolved_workspace
             self._session_workspaces[session.id] = (provider_obj, workspace_ref, should_close)
@@ -197,7 +198,7 @@ class AgentRuntimeFacade:
         self,
         *,
         provider: str,
-        agent: AgentRef | str,
+        agent: AgentRef | AgentSpec | str,
         task: str | TaskSpec,
         model: str | None = None,
         workspace: Any | None = None,
@@ -411,3 +412,9 @@ class AgentRuntimeFacade:
             after=after,
             limit=limit,
         )
+
+
+async def _resolve_agent_ref(adapter: Any, agent: AgentRef | AgentSpec | str) -> AgentRef | str:
+    if isinstance(agent, AgentSpec):
+        return cast(AgentRef, await adapter.create_agent(agent))
+    return agent

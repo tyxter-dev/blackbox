@@ -172,6 +172,20 @@ result = await runtime.agents.run(
 )
 ```
 
+For one-off agents, the runtime facade also accepts an inline `AgentSpec`:
+
+```python
+result = await runtime.agents.run(
+    provider="local",
+    agent=AgentSpec(
+        name="support-agent",
+        instructions="Answer briefly and use support policy.",
+        model="openai:gpt-5.4",
+    ),
+    task="Handle this support request.",
+)
+```
+
 The collector starts a session, stores stamped events, lists artifacts, exposes
 a strict result `status`, keeps the `SessionRef` for follow-up work, and
 validates final session text into the requested output type.
