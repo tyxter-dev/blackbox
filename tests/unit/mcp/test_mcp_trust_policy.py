@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import pytest
+
+from agent_runtime import EventTypes
+from agent_runtime.core.errors import MCPError
+from agent_runtime.mcp import (
+    DefaultMCPTrustEvaluator,
+    MCPApprovalMode,
+    MCPConnector,
+    MCPServerSpec,
+    MCPServerTrustPolicy,
+    MCPTrustLevel,
+)
+
+
+class _TrustTransport:
+    def __init__(self) -> None:
+        self.requests: list[tuple[str, dict[str, object] | None]] = []
+
+    async def start(self) -> None:
+        return None
+
+    async def stop(self) -> None:
+        return None
+
+    async def request(
+        self,
+        method: str,
+        params: dict[str, object] | None = None,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> object:
+        self.requests.append((method, params))
+        if method == "initialize":
+            return {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "trust-test"},
+            }
+        if method == "tools/list":
+            return {
+                "tools": [
+                    {"name": "lookup", "description": "Lookup a ticket."},
+                    {
+                        "name": "write_file",
+                        "description": "Write a file.",
+                        "annotations": {"destructiveHint": True},
+                    },
+                ]
+            }
+        raise AssertionError(method)
+
+
+def test_unknown_server_defaults_to_untrusted() -> None:
+    spec = MCPServerSpec(name="tickets", transport="stdio", command="tickets-mcp")
+    decision = DefaultMCPTrustEvaluator().evaluate_server(spec, None)
+
+    assert decision.allowed is True
+    assert decision.trust_level == MCPTrustLevel.UNTRUSTED
+    assert decision.approval_required is True
+
+
+async def test_blocked_server_cannot_start() -> None:
+    spec = MCPServerSpec(
+        name="tickets",
+        transport="stdio",
+        command="tickets-mcp",
+        trust_policy=MCPServerTrustPolicy(
+            server="tickets",
+            trust_level=MCPTrustLevel.BLOCKED,
+        ),
+    )
+    connector = MCPConnector([spec], transports={"tickets": _TrustTransport()})
+
+    with pytest.raises(MCPError, match="blocked"):
+        await connector.list_tools("tickets")
+
+    assert EventTypes.MCP_SERVER_BLOCKED in [event.type for event in connector.drain_events()]
+
+
+async def test_untrusted_discovered_tools_are_quarantined_by_default() -> None:
+    connector = MCPConnector(
+        [MCPServerSpec(name="tickets", transport="stdio", command="tickets-mcp")],
+        transports={"tickets": _TrustTransport()},
+    )
+
+    tools = await connector.list_tools("tickets")
+    events = connector.drain_events()
+
+    assert tools == []
+    assert EventTypes.MCP_TOOL_QUARANTINED in [event.type for event in events]
+    filtered = next(event for event in events if event.type == EventTypes.MCP_TOOLS_FILTERED)
+    assert filtered.data["quarantined_count"] == 2
+
+
+async def test_allowlisted_tool_exposes_only_allowed_discovery_results() -> None:
+    spec = MCPServerSpec(
+        name="tickets",
+        transport="stdio",
+        command="tickets-mcp",
+        trust_policy=MCPServerTrustPolicy(
+            server="tickets",
+            trust_level=MCPTrustLevel.REVIEWED,
+            allowed_tools=frozenset({"lookup"}),
+            approval_mode=MCPApprovalMode.NEVER,
+        ),
+    )
+    connector = MCPConnector([spec], transports={"tickets": _TrustTransport()})
+
+    tools = await connector.list_tools("tickets")
+
+    assert [tool["name"] for tool in tools] == ["lookup"]
+    assert tools[0]["metadata"]["trust"]["trust_level"] == "reviewed"

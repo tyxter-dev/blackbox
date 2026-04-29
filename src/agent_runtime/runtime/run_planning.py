@@ -5,6 +5,7 @@ from typing import Any
 
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.mcp import MCPToolset
+from agent_runtime.mcp.trust import effective_server_trust_policy, trust_fingerprint
 from agent_runtime.planning.prompts import PromptBundle, PromptMode, PromptSpec
 from agent_runtime.planning.run_plan import (
     DynamicToolLoadingSpec,
@@ -76,6 +77,7 @@ def _resolved_mcp_toolset(
         else toolset.server.allowed_tools
     )
     tools = allowed_tools if allowed_tools is not None else configured_allowed
+    trust_policy = effective_server_trust_policy(toolset.server)
     return ResolvedMCPToolset(
         server_label=toolset.server.name,
         route=route,
@@ -84,6 +86,9 @@ def _resolved_mcp_toolset(
             "mode": toolset.mode,
             "transport": toolset.server.transport,
             "description": toolset.description,
+            "trust_level": trust_policy.trust_level.value,
+            "route_mode": trust_policy.route_mode.value,
+            "fingerprint": trust_fingerprint(toolset.server),
         },
     )
 

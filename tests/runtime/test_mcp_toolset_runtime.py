@@ -7,7 +7,13 @@ import agent_runtime.mcp.connector as connector_module
 from agent_runtime import AgentRuntime, EventTypes
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.mcp import MCPServerSpec, MCPToolset
+from agent_runtime.mcp import (
+    MCPApprovalMode,
+    MCPServerSpec,
+    MCPServerTrustPolicy,
+    MCPToolset,
+    MCPTrustLevel,
+)
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn, tool_call_turn
 
 
@@ -82,6 +88,20 @@ class _FakeTransport:
         self.requests.append((method, params))
 
 
+def _trusted_ticket_spec() -> MCPServerSpec:
+    return MCPServerSpec(
+        name="tickets",
+        transport="stdio",
+        command="fake",
+        trust_policy=MCPServerTrustPolicy(
+            server="tickets",
+            trust_level=MCPTrustLevel.TRUSTED,
+            allowed_tools=frozenset({"lookup"}),
+            approval_mode=MCPApprovalMode.NEVER,
+        ),
+    )
+
+
 async def test_runtime_toolsets_expose_local_mcp_tools_and_stop_connector(monkeypatch: Any) -> None:
     import agent_runtime.mcp.connector as connector_module
 
@@ -108,11 +128,7 @@ async def test_runtime_toolsets_expose_local_mcp_tools_and_stop_connector(monkey
         input="lookup ticket",
         toolsets=[
             MCPToolset(
-                server=MCPServerSpec(
-                    name="tickets",
-                    transport="stdio",
-                    command="fake",
-                ),
+                server=_trusted_ticket_spec(),
                 mode="local",
             )
         ],
@@ -166,11 +182,7 @@ async def test_runtime_toolset_mcp_call_pauses_and_resumes_approval(
             policy=policy,
             toolsets=[
                 MCPToolset(
-                    server=MCPServerSpec(
-                        name="tickets",
-                        transport="stdio",
-                        command="fake",
-                    ),
+                    server=_trusted_ticket_spec(),
                     mode="local",
                 )
             ],

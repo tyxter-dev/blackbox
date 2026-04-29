@@ -15,6 +15,15 @@ from agent_runtime.mcp.cache import MCPToolCacheEntry, mcp_tool_cache_key
 from agent_runtime.mcp.client import MCPClient
 from agent_runtime.mcp.spec import MCPServerSpec
 from agent_runtime.mcp.transports import MCPTransportClient, transport_for_spec
+from agent_runtime.mcp.trust import (
+    DefaultMCPTrustEvaluator,
+    MCPTrustDecision,
+    MCPTrustEvaluator,
+    default_taint_for_tool,
+    effective_server_trust_policy,
+    sanitize_tool_description,
+    trust_fingerprint,
+)
 from agent_runtime.tools.registry import ToolDefinition, ToolRegistry
 from agent_runtime.tools.results import ToolResult
 
@@ -85,11 +94,14 @@ class MCPConnector:
     servers: list[MCPServerSpec]
     policy: Policy | None = None
     auth_provider: MCPAuthProvider | None = None
+    trust_evaluator: MCPTrustEvaluator = field(default_factory=DefaultMCPTrustEvaluator)
     transports: dict[str, MCPTransportClient] = field(default_factory=dict)
     events: list[AgentEvent] = field(default_factory=list)
     _tools: dict[str, MCPToolDefinition] = field(default_factory=dict)
     _clients: dict[str, MCPClient] = field(default_factory=dict)
     _tool_cache: dict[str, MCPToolCacheEntry] = field(default_factory=dict)
+    _server_decisions: dict[str, MCPTrustDecision] = field(default_factory=dict)
+    _risk_profiles: dict[str, Any] = field(default_factory=dict)
 
     def register_tool(
         self,
@@ -218,6 +230,7 @@ class MCPConnector:
                     result = await result
             call_result = self._normalize_call_result(definition, result)
             call_result = self._apply_output_limit(definition, call_result)
+            call_result = self._apply_trust_metadata(definition, call_result)
         except Exception as exc:
             self._emit(
                 EventTypes.MCP_CALL_FAILED,
@@ -269,6 +282,12 @@ class MCPConnector:
             ref = str(descriptor["ref"])
             tool_server = str(descriptor["server"])
             tool_name = str(descriptor["name"])
+            descriptor_metadata = descriptor.get("metadata")
+            descriptor_metadata = (
+                dict(descriptor_metadata) if isinstance(descriptor_metadata, dict) else {}
+            )
+            trust_metadata = descriptor_metadata.get("trust")
+            trust_metadata = dict(trust_metadata) if isinstance(trust_metadata, dict) else {}
 
             async def call_mcp_tool(
                 _server: str = tool_server,
@@ -305,6 +324,7 @@ class MCPConnector:
                         "server": tool_server,
                         "tool": tool_name,
                         "ref": ref,
+                        "trust": trust_metadata,
                     },
                 )
             )
@@ -314,6 +334,25 @@ class MCPConnector:
         drained = list(self.events)
         self.events.clear()
         return drained
+
+    def trust_summary(self) -> dict[str, Any]:
+        servers: dict[str, Any] = {}
+        for spec in self.servers:
+            decision = self._server_decisions.get(spec.name)
+            exposed = [
+                tool for tool in self._tools.values() if tool.server == spec.name
+            ]
+            servers[spec.name] = {
+                "trust_level": (
+                    decision.trust_level.value if decision is not None else "unknown"
+                ),
+                "route_mode": (
+                    decision.route_mode.value if decision is not None else "unknown"
+                ),
+                "tools_exposed": len(exposed),
+                "fingerprint": trust_fingerprint(spec),
+            }
+        return {"servers": servers}
 
     def _resolve(self, server: str, tool: str) -> MCPToolDefinition:
         # Remote discovery is async. Callers should list tools first for managed
@@ -339,6 +378,23 @@ class MCPConnector:
             raise ApprovalError(
                 f"Policy required approval for MCP call {definition.ref}. "
                 "MCP approval resume is handled by the high-level runtime loop."
+            )
+        trust = definition.metadata.get("trust")
+        if isinstance(trust, dict) and trust.get("approval_required") is True:
+            self._emit(EventTypes.MCP_CALL_APPROVAL_REQUIRED, data={
+                "server": definition.server,
+                "server_label": definition.server,
+                "tool": definition.name,
+                "name": definition.name,
+                "ref": definition.ref,
+                "trust_level": trust.get("trust_level"),
+                "route_mode": trust.get("route_mode"),
+                "fingerprint": trust.get("fingerprint"),
+                "reason": "MCP trust policy requires approval.",
+            })
+            self._emit_approval_required(definition, "MCP trust policy requires approval.")
+            raise ApprovalError(
+                f"MCP trust policy required approval for MCP call {definition.ref}."
             )
         if self.policy is None:
             return
@@ -419,12 +475,25 @@ class MCPConnector:
     async def _discover_tools(self, server: str) -> None:
         spec = self._server_spec(server)
         client = self._client_for(server)
+        server_policy = effective_server_trust_policy(spec)
         tools = await client.list_tools()
         session_info = client.session_info
+        self._emit(
+            EventTypes.MCP_TOOLS_DISCOVERED,
+            data={
+                "server": server,
+                "server_label": server,
+                "transport": spec.transport,
+                "tool_count": len(tools),
+                "fingerprint": trust_fingerprint(spec),
+            },
+        )
         definitions: dict[str, MCPToolDefinition] = {}
+        filtered: list[dict[str, Any]] = []
+        quarantined: list[dict[str, Any]] = []
         for tool in tools:
             name = str(tool.get("name", ""))
-            if not name or not self._tool_allowed(spec, name):
+            if not name:
                 continue
             metadata = dict(tool.get("metadata") or {})
             annotations = tool.get("annotations")
@@ -434,10 +503,33 @@ class MCPConnector:
                     metadata["read_only"] = annotations["readOnlyHint"]
                 if "destructiveHint" in annotations:
                     metadata["destructive"] = annotations["destructiveHint"]
+            tool_for_decision = {**tool, "name": name, "metadata": metadata}
+            tool_policy = self._tool_policy_for(spec, name)
+            tool_decision = self.trust_evaluator.evaluate_tool(
+                server_policy,
+                tool_policy,
+                tool_for_decision,
+            )
+            if not tool_decision.allowed:
+                item = {
+                    "server": server,
+                    "server_label": server,
+                    "tool": name,
+                    "name": name,
+                    "ref": f"mcp:{server}.{name}",
+                    "reasons": list(tool_decision.reasons),
+                    "trust_level": tool_decision.trust_level.value,
+                    "fingerprint": trust_fingerprint(spec),
+                }
+                filtered.append(item)
+                if tool_decision.metadata.get("quarantined") is True:
+                    quarantined.append(item)
+                    self._emit(EventTypes.MCP_TOOL_QUARANTINED, data=item)
+                continue
             definition = MCPToolDefinition(
                 server=server,
                 name=name,
-                description=str(tool.get("description", "")),
+                description=sanitize_tool_description(str(tool.get("description", ""))),
                 parameters=dict(
                     tool.get("inputSchema")
                     or tool.get("input_schema")
@@ -452,10 +544,38 @@ class MCPConnector:
                         session_info.server_info if session_info is not None else {}
                     ),
                     "schema_source": "mcp.tools/list",
+                    "trust": {
+                        "trust_level": tool_decision.trust_level.value,
+                        "route_mode": tool_decision.route_mode.value,
+                        "approval_required": tool_decision.approval_required,
+                        "reasons": list(tool_decision.reasons),
+                        "risks": list(tool_decision.metadata.get("risks") or []),
+                        "max_output_bytes": (
+                            tool_policy.max_output_bytes
+                            if tool_policy is not None
+                            and tool_policy.max_output_bytes is not None
+                            else server_policy.max_output_bytes
+                        ),
+                        "fingerprint": trust_fingerprint(spec),
+                    },
                 },
             )
             definitions[definition.ref] = definition
             self._tools[definition.ref] = definition
+        self._emit(
+            EventTypes.MCP_TOOLS_FILTERED,
+            data={
+                "server": server,
+                "server_label": server,
+                "transport": spec.transport,
+                "discovered_count": len(tools),
+                "exposed_count": len(definitions),
+                "filtered_count": len(filtered),
+                "quarantined_count": len(quarantined),
+                "filtered_tools": filtered,
+                "fingerprint": trust_fingerprint(spec),
+            },
+        )
         cache_key = mcp_tool_cache_key(
             spec,
             session_id=session_info.session_id if session_info is not None else None,
@@ -481,11 +601,74 @@ class MCPConnector:
         spec = self._server_spec(server)
         transport = self.transports.get(server)
         if transport is None:
+            self._validate_and_evaluate_server(spec)
             spec.validate_managed()
             transport = transport_for_spec(spec, auth_provider=self.auth_provider)
+        else:
+            self._validate_and_evaluate_server(spec)
         client = MCPClient(spec=spec, transport=transport)
         self._clients[server] = client
         return client
+
+    def _validate_and_evaluate_server(self, spec: MCPServerSpec) -> None:
+        if spec.name in self._server_decisions:
+            return
+        try:
+            risk_profile = spec.validate_security()
+        except ValueError as exc:
+            self._emit(
+                EventTypes.MCP_SERVER_BLOCKED,
+                data={
+                    "server": spec.name,
+                    "server_label": spec.name,
+                    "transport": spec.transport,
+                    "reason": str(exc),
+                    "fingerprint": trust_fingerprint(spec),
+                },
+            )
+            raise MCPError(f"MCP server '{spec.name}' failed security validation: {exc}") from exc
+        self._risk_profiles[spec.name] = risk_profile
+        self._emit(
+            EventTypes.MCP_SERVER_VALIDATED,
+            data={
+                "server": spec.name,
+                "server_label": spec.name,
+                "transport": spec.transport,
+                "risks": sorted(risk.value for risk in risk_profile.capability_risks),
+                "fingerprint": risk_profile.trust_fingerprint,
+            },
+        )
+        policy = effective_server_trust_policy(spec)
+        decision = self.trust_evaluator.evaluate_server(spec, policy)
+        self._server_decisions[spec.name] = decision
+        self._emit(
+            EventTypes.MCP_TRUST_EVALUATED,
+            data={
+                "server": spec.name,
+                "server_label": spec.name,
+                "transport": spec.transport,
+                "trust_level": decision.trust_level.value,
+                "route_mode": decision.route_mode.value,
+                "approval_required": decision.approval_required,
+                "allowed": decision.allowed,
+                "reasons": list(decision.reasons),
+                "fingerprint": decision.metadata.get("fingerprint"),
+            },
+        )
+        if not decision.allowed:
+            self._emit(
+                EventTypes.MCP_SERVER_BLOCKED,
+                data={
+                    "server": spec.name,
+                    "server_label": spec.name,
+                    "transport": spec.transport,
+                    "trust_level": decision.trust_level.value,
+                    "route_mode": decision.route_mode.value,
+                    "reasons": list(decision.reasons),
+                    "fingerprint": decision.metadata.get("fingerprint"),
+                },
+            )
+            raise MCPError(f"MCP server '{spec.name}' is blocked by MCP trust policy.")
 
     def _server_spec(self, server: str) -> MCPServerSpec:
         for spec in self.servers:
@@ -528,6 +711,7 @@ class MCPConnector:
             "session_id": entry.session_id,
             "protocol_version": entry.protocol_version,
             "tool_count": len(entry.tools),
+            "fingerprint": trust_fingerprint(spec),
         }
         if reason is not None:
             data["reason"] = reason
@@ -567,12 +751,12 @@ class MCPConnector:
             },
         )
 
-    def _tool_allowed(self, spec: MCPServerSpec, name: str) -> bool:
-        if spec.allowed_tools is not None and name not in set(spec.allowed_tools):
-            return False
-        if spec.denied_tools is not None and name in set(spec.denied_tools):
-            return False
-        return True
+    def _tool_policy_for(
+        self,
+        spec: MCPServerSpec,
+        name: str,
+    ) -> Any | None:
+        return spec.tool_policies.get(f"mcp:{spec.name}.{name}") or spec.tool_policies.get(name)
 
     def _normalize_call_result(
         self,
@@ -612,7 +796,13 @@ class MCPConnector:
         definition: MCPToolDefinition,
         result: MCPCallResult,
     ) -> MCPCallResult:
-        max_output_bytes = self._server_spec(definition.server).max_output_bytes
+        spec = self._server_spec(definition.server)
+        trust = definition.metadata.get("trust")
+        max_output_bytes: int | None = None
+        if isinstance(trust, dict) and isinstance(trust.get("max_output_bytes"), int):
+            max_output_bytes = int(trust["max_output_bytes"])
+        if max_output_bytes is None:
+            max_output_bytes = effective_server_trust_policy(spec).max_output_bytes
         if max_output_bytes is None:
             return result
         rendered = result.rendered_content()
@@ -620,6 +810,18 @@ class MCPConnector:
         if len(encoded) <= max_output_bytes:
             return result
         truncated = encoded[:max_output_bytes].decode("utf-8", errors="ignore")
+        self._emit(
+            EventTypes.MCP_OUTPUT_TRUNCATED,
+            data={
+                "server": definition.server,
+                "server_label": definition.server,
+                "tool": definition.name,
+                "name": definition.name,
+                "ref": definition.ref,
+                "original_bytes": len(encoded),
+                "max_output_bytes": max_output_bytes,
+            },
+        )
         metadata = {
             **result.metadata,
             "truncated": True,
@@ -631,6 +833,54 @@ class MCPConnector:
             tool=result.tool,
             ref=result.ref,
             content=[{"type": "text", "text": truncated}],
+            structured_content=result.structured_content,
+            is_error=result.is_error,
+            raw=result.raw,
+            metadata=metadata,
+        )
+
+    def _apply_trust_metadata(
+        self,
+        definition: MCPToolDefinition,
+        result: MCPCallResult,
+    ) -> MCPCallResult:
+        trust = definition.metadata.get("trust")
+        trust_info = trust if isinstance(trust, dict) else {}
+        trust_level = str(trust_info.get("trust_level") or "untrusted")
+        spec = self._server_spec(definition.server)
+        taint = default_taint_for_tool(
+            definition,
+            transport=spec.transport,
+            trust_level=(
+                self._server_decisions[definition.server].trust_level
+                if definition.server in self._server_decisions
+                else effective_server_trust_policy(spec).trust_level
+            ),
+        )
+        existing_mcp_metadata = result.metadata.get("mcp")
+        mcp_metadata = (
+            dict(existing_mcp_metadata) if isinstance(existing_mcp_metadata, dict) else {}
+        )
+        metadata = {
+            **result.metadata,
+            "mcp": {
+                **mcp_metadata,
+                "server": definition.server,
+                "tool": definition.name,
+                "ref": definition.ref,
+                "trust_level": trust_level,
+                "route_mode": trust_info.get("route_mode"),
+                "taint": taint.value,
+                "output_truncated": bool(result.metadata.get("truncated")),
+                "redacted": bool(spec.redact),
+                "fingerprint": trust_info.get("fingerprint") or trust_fingerprint(spec),
+            },
+        }
+        return MCPCallResult(
+            server=result.server,
+            tool=result.tool,
+            ref=result.ref,
+            content=result.content,
             structured_content=result.structured_content,
             is_error=result.is_error,
             raw=result.raw,

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agent_runtime.mcp.spec import MCPServerSpec
+from agent_runtime.mcp.trust import trust_fingerprint
 
 
 @dataclass(slots=True)
@@ -48,6 +49,7 @@ def mcp_tool_cache_key(
             "auth_provider_name": spec.auth_provider_name,
             "headers": sorted(spec.headers),
         },
+        "trust_fingerprint": trust_fingerprint(spec),
     }
     if spec.transport == "stdio":
         identity["command"] = {

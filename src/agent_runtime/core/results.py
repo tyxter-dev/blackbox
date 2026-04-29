@@ -287,7 +287,7 @@ def result_summary(result: Any, *, include_output: bool = False) -> dict[str, An
         "provider_native_fallback": metadata.get("provider_native_fallback"),
         "usage": metadata.get("usage"),
     }
-    for key in ("hosted_tools", "mcp", "cost", "cache"):
+    for key in ("hosted_tools", "mcp", "mcp_trust", "cost", "cache"):
         if key in metadata:
             summary[key] = metadata[key]
     payloads = getattr(result, "payloads", None)

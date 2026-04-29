@@ -4,6 +4,12 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from agent_runtime.mcp.trust import (
+    MCPServerRiskProfile,
+    MCPServerTrustPolicy,
+    MCPToolTrustPolicy,
+)
+
 MCPTransport = Literal["stdio", "http", "sse", "streamable_http"]
 MCPApprovalMode = Literal["always", "never", "auto"]
 
@@ -51,6 +57,13 @@ class MCPServerSpec:
     denied_tools: list[str] | None = None
     require_approval: MCPApprovalMode = "auto"
     allow_remote_http: bool = False
+    trust_policy: MCPServerTrustPolicy | None = None
+    tool_policies: dict[str, MCPToolTrustPolicy] = field(default_factory=dict)
+    allow_provider_native: bool = False
+    require_sandbox: bool = True
+    allowed_roots: tuple[str, ...] = ()
+    allowed_egress_domains: tuple[str, ...] = ()
+    redact: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -98,6 +111,11 @@ class MCPServerSpec:
                 "for runtime-owned local dispatch."
             )
 
+    def validate_security(self, *, production: bool = True) -> MCPServerRiskProfile:
+        from agent_runtime.mcp.security import validate_mcp_server_security
+
+        return validate_mcp_server_security(self, production=production)
+
     @property
     def is_http_transport(self) -> bool:
         return self.transport in {"http", "sse", "streamable_http"}
@@ -135,6 +153,20 @@ class MCPServerSpec:
             "denied_tools": list(self.denied_tools) if self.denied_tools is not None else None,
             "require_approval": self.require_approval,
             "allow_remote_http": self.allow_remote_http,
+            "trust_policy": (
+                self.trust_policy.to_redacted_dict()
+                if self.trust_policy is not None
+                else None
+            ),
+            "tool_policies": {
+                key: value.to_redacted_dict()
+                for key, value in sorted(self.tool_policies.items())
+            },
+            "allow_provider_native": self.allow_provider_native,
+            "require_sandbox": self.require_sandbox,
+            "allowed_roots": self.allowed_roots,
+            "allowed_egress_domains": self.allowed_egress_domains,
+            "redact": self.redact,
             "metadata": redact_mapping(self.metadata),
         }
 

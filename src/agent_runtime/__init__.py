@@ -61,7 +61,20 @@ from agent_runtime.core.results import (
 )
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
-from agent_runtime.mcp import MCPServerSpec, MCPToolset
+from agent_runtime.mcp import (
+    MCPApprovalMode,
+    MCPCapabilityRisk,
+    MCPRouteMode,
+    MCPServerRiskProfile,
+    MCPServerSpec,
+    MCPServerTrustPolicy,
+    MCPTaint,
+    MCPToolset,
+    MCPToolTrustPolicy,
+    MCPTrustDecision,
+    MCPTrustLevel,
+    trust_fingerprint,
+)
 from agent_runtime.output.schema import OutputSchema
 from agent_runtime.planning.prompts import (
     CacheSection,
@@ -221,8 +234,17 @@ __all__ = [
     "InMemoryProviderCacheStore",
     "InMemoryWorkspaceAgentRegistry",
     "ItemTypes",
+    "MCPApprovalMode",
+    "MCPCapabilityRisk",
+    "MCPRouteMode",
+    "MCPServerRiskProfile",
     "MCPServerSpec",
+    "MCPServerTrustPolicy",
+    "MCPTaint",
+    "MCPToolTrustPolicy",
     "MCPToolset",
+    "MCPTrustDecision",
+    "MCPTrustLevel",
     "ManagedRealtimeSession",
     "MediaRef",
     "Memory",
@@ -334,6 +356,7 @@ __all__ = [
     "structured_output",
     "temporary_openai_file_search",
     "temporary_openai_vector_store",
+    "trust_fingerprint",
     "workspace_agent_from_dict",
     "workspace_agent_to_dict",
 ]

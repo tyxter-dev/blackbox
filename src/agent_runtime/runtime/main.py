@@ -570,6 +570,7 @@ class AgentRuntime:
             registered_mcp_tools = await connector.register_runtime_tools(
                 effective_tool_session.registry
             )
+            tool_choice_events.extend(connector.drain_events())
             mcp_local_tool_names.extend(tool.name for tool in registered_mcp_tools)
             resolved_mcp_toolsets.append(
                 _resolved_mcp_toolset(
@@ -1233,6 +1234,8 @@ class AgentRuntime:
             mcp_metadata = _mcp_metadata_from_events(events)
             if mcp_metadata:
                 metadata["mcp"] = mcp_metadata
+                if "trust" in mcp_metadata:
+                    metadata["mcp_trust"] = mcp_metadata["trust"]
             hosted_metadata = _hosted_tool_metadata_from_events(events)
             if hosted_metadata:
                 metadata["hosted_tools"] = hosted_metadata

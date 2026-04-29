@@ -7,6 +7,13 @@ from urllib.parse import urlparse
 from agent_runtime.core.capabilities import ModelCapabilityProfile
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.mcp.spec import MCPServerSpec
+from agent_runtime.mcp.trust import (
+    MCPRouteMode as TrustRouteMode,
+)
+from agent_runtime.mcp.trust import (
+    MCPTrustLevel,
+    effective_server_trust_policy,
+)
 from agent_runtime.providers.registry import ProviderRef
 from agent_runtime.tools.hosted.specs import RemoteMCP
 
@@ -58,6 +65,13 @@ def resolve_mcp_route(
     if _is_local_or_private_url(server.url):
         return "local"
     if policy is not None:
+        return "local"
+    trust_policy = effective_server_trust_policy(server)
+    if trust_policy.route_mode == TrustRouteMode.DISABLED:
+        return "local"
+    if trust_policy.trust_level not in {MCPTrustLevel.TRUSTED, MCPTrustLevel.FIRST_PARTY}:
+        return "local"
+    if not server.allow_provider_native:
         return "local"
     if _profile_supports_remote_mcp(profile) and server.transport in {
         "http",
@@ -114,6 +128,22 @@ def _validate_provider_native_route(
     server = toolset.server
     if server.transport == "stdio":
         raise UnsupportedFeatureError("Provider-native MCP cannot use stdio servers.")
+    trust_policy = effective_server_trust_policy(server)
+    if trust_policy.trust_level not in {MCPTrustLevel.TRUSTED, MCPTrustLevel.FIRST_PARTY}:
+        raise UnsupportedFeatureError(
+            "Provider-native MCP requires trusted or first-party MCP trust policy."
+        )
+    if not server.allow_provider_native:
+        raise UnsupportedFeatureError(
+            "Provider-native MCP requires allow_provider_native=True on the server spec."
+        )
+    if trust_policy.route_mode not in {
+        TrustRouteMode.PROVIDER_NATIVE_ALLOWED,
+        TrustRouteMode.PROVIDER_NATIVE_REQUIRED,
+    }:
+        raise UnsupportedFeatureError(
+            "Provider-native MCP requires a provider-native trust route mode."
+        )
     if not _profile_supports_remote_mcp(profile):
         raise UnsupportedFeatureError(
             f"{provider.provider_key} does not support provider-native remote MCP."

@@ -8,7 +8,16 @@ from agent_runtime.core.capabilities import (
     ModelCapabilityProfile,
 )
 from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.mcp import MCPServerSpec, MCPToolset, resolve_mcp_route, to_remote_mcp
+from agent_runtime.mcp import (
+    MCPApprovalMode,
+    MCPRouteMode,
+    MCPServerSpec,
+    MCPServerTrustPolicy,
+    MCPToolset,
+    MCPTrustLevel,
+    resolve_mcp_route,
+    to_remote_mcp,
+)
 from agent_runtime.providers.registry import ProviderRef
 
 
@@ -46,6 +55,13 @@ def test_remote_http_with_capability_routes_provider_native() -> None:
             allowed_tools=["list_issues"],
             authorization="Bearer token",
             require_approval="never",
+            allow_provider_native=True,
+            trust_policy=MCPServerTrustPolicy(
+                server="github",
+                trust_level=MCPTrustLevel.TRUSTED,
+                route_mode=MCPRouteMode.PROVIDER_NATIVE_ALLOWED,
+                approval_mode=MCPApprovalMode.NEVER,
+            ),
         )
     )
 
@@ -104,6 +120,12 @@ def test_remote_http_without_capability_routes_local_in_auto() -> None:
             name="github",
             transport="streamable_http",
             url="https://mcp.example.com/mcp",
+            allow_provider_native=True,
+            trust_policy=MCPServerTrustPolicy(
+                server="github",
+                trust_level=MCPTrustLevel.TRUSTED,
+                route_mode=MCPRouteMode.PROVIDER_NATIVE_ALLOWED,
+            ),
         )
     )
 
@@ -137,6 +159,12 @@ def test_policy_forces_local_route_in_auto() -> None:
             name="github",
             transport="streamable_http",
             url="https://mcp.example.com/mcp",
+            allow_provider_native=True,
+            trust_policy=MCPServerTrustPolicy(
+                server="github",
+                trust_level=MCPTrustLevel.TRUSTED,
+                route_mode=MCPRouteMode.PROVIDER_NATIVE_ALLOWED,
+            ),
         )
     )
 

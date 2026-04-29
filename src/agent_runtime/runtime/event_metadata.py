@@ -17,6 +17,7 @@ def _mcp_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
     tool_lists: list[dict[str, Any]] = []
     calls: list[dict[str, Any]] = []
     approvals: list[dict[str, Any]] = []
+    trust_servers: dict[str, dict[str, Any]] = {}
     for event in events:
         if event.type == EventTypes.MCP_LIST_TOOLS_COMPLETED:
             tools = event.data.get("tools")
@@ -29,16 +30,64 @@ def _mcp_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
                     "item_id": event.item_id,
                 }
             )
+        elif event.type == EventTypes.MCP_TRUST_EVALUATED:
+            server_label = event.data.get("server_label")
+            if isinstance(server_label, str):
+                trust_servers.setdefault(server_label, {}).update(
+                    {
+                        "trust_level": event.data.get("trust_level"),
+                        "route_mode": event.data.get("route_mode"),
+                        "approval_required": event.data.get("approval_required"),
+                        "fingerprint": event.data.get("fingerprint"),
+                        "blocked_count": 0,
+                    }
+                )
+        elif event.type == EventTypes.MCP_TOOLS_FILTERED:
+            server_label = event.data.get("server_label")
+            if isinstance(server_label, str):
+                trust_servers.setdefault(server_label, {}).update(
+                    {
+                        "tools_discovered": event.data.get("discovered_count"),
+                        "tools_exposed": event.data.get("exposed_count"),
+                        "tools_quarantined": event.data.get("quarantined_count"),
+                        "tools_filtered": event.data.get("filtered_count"),
+                        "fingerprint": event.data.get("fingerprint"),
+                    }
+                )
+        elif event.type == EventTypes.MCP_SERVER_BLOCKED:
+            server_label = event.data.get("server_label")
+            if isinstance(server_label, str):
+                existing = trust_servers.setdefault(server_label, {})
+                existing["blocked_count"] = int(existing.get("blocked_count") or 0) + 1
+                existing["fingerprint"] = event.data.get("fingerprint")
         elif event.type == EventTypes.MCP_CALL_COMPLETED:
-            calls.append(
-                {
-                    "server_label": event.data.get("server_label"),
-                    "name": event.data.get("name"),
-                    "item_id": event.item_id,
-                    "failed": event.data.get("error") is not None
-                    or event.data.get("is_error") is True,
-                }
+            event_metadata = event.data.get("metadata")
+            mcp_metadata = (
+                event_metadata.get("mcp") if isinstance(event_metadata, dict) else None
             )
+            call = {
+                "server_label": event.data.get("server_label"),
+                "name": event.data.get("name"),
+                "item_id": event.item_id,
+                "failed": event.data.get("error") is not None
+                or event.data.get("is_error") is True,
+            }
+            if isinstance(mcp_metadata, dict):
+                optional_fields = {
+                    "trust_level": mcp_metadata.get("trust_level"),
+                    "route_mode": mcp_metadata.get("route_mode"),
+                    "taint": mcp_metadata.get("taint"),
+                    "truncated": mcp_metadata.get("output_truncated"),
+                    "redacted": mcp_metadata.get("redacted"),
+                }
+                call.update(
+                    {
+                        key: value
+                        for key, value in optional_fields.items()
+                        if value is not None
+                    }
+                )
+            calls.append(call)
         elif event.type == EventTypes.MCP_APPROVAL_REQUIRED:
             approvals.append(
                 {
@@ -47,19 +96,21 @@ def _mcp_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:
                     "item_id": event.item_id,
                 }
             )
-    if not (tool_lists or calls or approvals):
+    if not (tool_lists or calls or approvals or trust_servers):
         return {}
-    metadata: dict[str, Any] = {
+    result: dict[str, Any] = {
         "tool_lists": tool_lists,
         "calls": calls,
         "approval_requests": approvals,
     }
     if tool_lists:
-        metadata["tool_list_cacheable"] = True
-        metadata["context_item_ids"] = [
+        result["tool_list_cacheable"] = True
+        result["context_item_ids"] = [
             item["item_id"] for item in tool_lists if item.get("item_id") is not None
         ]
-    return metadata
+    if trust_servers:
+        result["trust"] = {"servers": trust_servers}
+    return result
 
 
 def _hosted_tool_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:

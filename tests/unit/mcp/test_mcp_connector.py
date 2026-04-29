@@ -5,7 +5,13 @@ import pytest
 from agent_runtime.core.errors import ApprovalError, MCPError
 from agent_runtime.core.events import EventTypes
 from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.mcp import MCPConnector, MCPServerSpec
+from agent_runtime.mcp import (
+    MCPApprovalMode,
+    MCPConnector,
+    MCPServerSpec,
+    MCPServerTrustPolicy,
+    MCPTrustLevel,
+)
 from agent_runtime.tools.registry import ToolRegistry
 from agent_runtime.tools.runtime import ToolRuntime
 
@@ -80,6 +86,21 @@ class _ScriptedPolicy:
         return self.decision
 
 
+def _trusted_ticket_spec(**overrides: object) -> MCPServerSpec:
+    return MCPServerSpec(
+        name="tickets",
+        transport="stdio",
+        command="fake",
+        trust_policy=MCPServerTrustPolicy(
+            server="tickets",
+            trust_level=MCPTrustLevel.TRUSTED,
+            allowed_tools=frozenset({"lookup"}),
+            approval_mode=MCPApprovalMode.NEVER,
+        ),
+        **overrides,
+    )
+
+
 async def test_mcp_connector_lists_namespaced_tools() -> None:
     connector = MCPConnector([MCPServerSpec(name="tickets", transport="stdio")])
     connector.register_tool("tickets", "lookup", lambda ticket_id: {"id": ticket_id})
@@ -151,7 +172,7 @@ async def test_mcp_connector_surfaces_required_approval() -> None:
 async def test_mcp_connector_discovers_and_calls_managed_transport() -> None:
     transport = _FakeTransport()
     connector = MCPConnector(
-        [MCPServerSpec(name="tickets", transport="stdio", command="fake")],
+        [_trusted_ticket_spec()],
         transports={"tickets": transport},
     )
 
@@ -168,7 +189,11 @@ async def test_mcp_connector_discovers_and_calls_managed_transport() -> None:
     ]
     assert [event.type for event in connector.drain_events()] == [
         EventTypes.MCP_LIST_TOOLS_STARTED,
+        EventTypes.MCP_SERVER_VALIDATED,
+        EventTypes.MCP_TRUST_EVALUATED,
         EventTypes.MCP_TOOLS_CACHE_MISS,
+        EventTypes.MCP_TOOLS_DISCOVERED,
+        EventTypes.MCP_TOOLS_FILTERED,
         EventTypes.MCP_LIST_TOOLS_COMPLETED,
         EventTypes.MCP_TOOLS_CACHE_HIT,
         EventTypes.MCP_CALL_STARTED,
@@ -179,7 +204,7 @@ async def test_mcp_connector_discovers_and_calls_managed_transport() -> None:
 async def test_mcp_connector_refreshes_cache_and_stops_transport() -> None:
     transport = _FakeTransport()
     connector = MCPConnector(
-        [MCPServerSpec(name="tickets", transport="stdio", command="fake")],
+        [_trusted_ticket_spec()],
         transports={"tickets": transport},
     )
 
@@ -195,7 +220,7 @@ async def test_mcp_connector_refreshes_cache_and_stops_transport() -> None:
 async def test_mcp_connector_registers_runtime_tool_bridge() -> None:
     transport = _FakeTransport()
     connector = MCPConnector(
-        [MCPServerSpec(name="tickets", transport="stdio", command="fake")],
+        [_trusted_ticket_spec()],
         transports={"tickets": transport},
     )
     registry = ToolRegistry()
