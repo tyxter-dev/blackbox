@@ -21,6 +21,7 @@ PromptPlacement = Literal[
 ]
 PromptMode = Literal["none", "base", "tool_aware"]
 PromptParityMode = Literal["off", "warn", "error"]
+SectionStyle = Literal["xml", "markdown"]
 
 
 def _frozen(values: Any) -> frozenset[str]:
@@ -131,6 +132,7 @@ class PromptSpec:
     cache_sections: bool = True
     parity: PromptParityMode = "warn"
     include_fragment_metadata: bool = True
+    section_style: SectionStyle | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -368,7 +370,7 @@ class PromptComposer:
             )
         )
 
-        instructions = "\n\n".join(section.content for section in sections)
+        instructions = _render_sections(sections, prompt_spec.section_style)
         cache_sections = [
             CacheSection(id=section.id, content=section.content, cacheable=section.cacheable)
             for section in sections
@@ -405,6 +407,7 @@ class PromptComposer:
         mentioned_tool_ids = _mentioned_tool_ids(instructions, plan.available_tool_ids)
         disabled_tool_mentions = sorted(set(mentioned_tool_ids) - set(plan.effective_tool_ids))
         metadata: dict[str, Any] = {
+            "section_style": prompt_spec.section_style,
             "mode": prompt_spec.mode,
             "channel": prompt_spec.channel or plan.channel,
             "fragment_ids": [item.fragment.id for item in selected],
@@ -595,6 +598,39 @@ def validate_prompt_tool_parity(
                 )
             )
     return issues
+
+
+def _section_tag(section_id: str) -> str:
+    """Derive a concise XML tag or markdown heading from a section ID.
+
+    Strips the common ``fragment.`` or ``base.`` prefix and converts dots to
+    underscores so the result is valid as an XML element name.
+    """
+    tag = section_id
+    for prefix in ("fragment.", "base."):
+        if tag.startswith(prefix):
+            tag = tag[len(prefix):]
+            break
+    return tag.replace(".", "_").replace("-", "_")
+
+
+def _render_section_xml(section: PromptSection) -> str:
+    tag = _section_tag(section.id)
+    return f"<{tag}>\n{section.content}\n</{tag}>"
+
+
+def _render_section_markdown(section: PromptSection) -> str:
+    tag = _section_tag(section.id)
+    heading = tag.replace("_", " ").title()
+    return f"# {heading}\n{section.content}"
+
+
+def _render_sections(sections: list[PromptSection], style: SectionStyle | None) -> str:
+    if style is None or not sections:
+        return "\n\n".join(section.content for section in sections)
+    if style == "xml":
+        return "\n\n".join(_render_section_xml(s) for s in sections)
+    return "\n\n".join(_render_section_markdown(s) for s in sections)
 
 
 def _selector_with_tool(selector: FragmentSelector, tool: str) -> FragmentSelector:

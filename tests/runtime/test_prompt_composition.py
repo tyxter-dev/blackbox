@@ -132,6 +132,107 @@ async def test_plan_run_builds_prompt_without_executing_model() -> None:
     assert plan.prompt.metadata["fragment_ids"] == ["crm.customer.lookup"]
 
 
+async def test_section_style_xml_wraps_sections_in_tags() -> None:
+    runtime, scripted = _runtime()
+    runtime.tools.register(
+        lambda: ToolResult(content="ok"),
+        name="search_docs",
+        description="Search documents.",
+        prompt_fragments=[
+            PromptFragment(
+                id="tool.search_docs.guidance",
+                text="Always cite sources when using search_docs.",
+                source="tool:search_docs",
+                priority=50,
+            )
+        ],
+    )
+    scripted.queue(text_only_turn("done"))
+
+    result = await runtime.run(
+        provider="scripted:test",
+        input="Find something.",
+        instructions="You are a research assistant.",
+        tools=["search_docs"],
+        prompt=PromptSpec(mode="tool_aware", section_style="xml"),
+    )
+
+    instructions = scripted.calls[0].controls.instructions or ""
+    assert "<instructions>" in instructions
+    assert "</instructions>" in instructions
+    assert "<tool_search_docs_guidance>" in instructions
+    assert "</tool_search_docs_guidance>" in instructions
+    assert "You are a research assistant." in instructions
+    assert "Always cite sources" in instructions
+    assert result.metadata["prompt"]["section_style"] == "xml"
+
+
+async def test_section_style_markdown_wraps_sections_in_headers() -> None:
+    runtime, scripted = _runtime()
+    runtime.tools.register(
+        lambda: ToolResult(content="ok"),
+        name="search_docs",
+        description="Search documents.",
+        prompt_fragments=[
+            PromptFragment(
+                id="tool.search_docs.guidance",
+                text="Always cite sources when using search_docs.",
+                source="tool:search_docs",
+                priority=50,
+            )
+        ],
+    )
+    scripted.queue(text_only_turn("done"))
+
+    result = await runtime.run(
+        provider="scripted:test",
+        input="Find something.",
+        instructions="You are a research assistant.",
+        tools=["search_docs"],
+        prompt=PromptSpec(mode="tool_aware", section_style="markdown"),
+    )
+
+    instructions = scripted.calls[0].controls.instructions or ""
+    assert "# Instructions" in instructions
+    assert "# Tool Search Docs Guidance" in instructions
+    assert "You are a research assistant." in instructions
+    assert "Always cite sources" in instructions
+    assert result.metadata["prompt"]["section_style"] == "markdown"
+
+
+async def test_section_style_none_preserves_raw_content() -> None:
+    runtime, scripted = _runtime()
+    runtime.tools.register(
+        lambda: ToolResult(content="ok"),
+        name="search_docs",
+        description="Search documents.",
+        prompt_fragments=[
+            PromptFragment(
+                id="tool.search_docs.guidance",
+                text="Always cite sources when using search_docs.",
+                source="tool:search_docs",
+                priority=50,
+            )
+        ],
+    )
+    scripted.queue(text_only_turn("done"))
+
+    result = await runtime.run(
+        provider="scripted:test",
+        input="Find something.",
+        instructions="You are a research assistant.",
+        tools=["search_docs"],
+        prompt=PromptSpec(mode="tool_aware", section_style=None),
+    )
+
+    instructions = scripted.calls[0].controls.instructions or ""
+    assert "<" not in instructions
+    assert "# " not in instructions
+    assert "You are a research assistant." in instructions
+    assert "Always cite sources" in instructions
+    assert result.metadata["prompt"]["section_style"] is None
+
+
 async def test_prompts_facade_returns_the_dry_run_bundle() -> None:
     runtime, _ = _runtime()
     bundle = await runtime.prompts.build(
