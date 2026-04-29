@@ -26,6 +26,8 @@ class TraceReplay:
     def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
+            "trace_id": self.trace.id,
+            "trace_link": _trace_link(self.trace.id),
             "trace": self.trace.to_dict(),
             "timeline": self.timeline(),
         }
@@ -57,6 +59,23 @@ class RunDiff:
             or self.duration_changes
             or self.cost_delta not in {None, 0}
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "left_trace_id": self.left_trace_id,
+            "right_trace_id": self.right_trace_id,
+            "trace_links": {
+                "left": _trace_link(self.left_trace_id),
+                "right": _trace_link(self.right_trace_id),
+            },
+            "added_spans": list(self.added_spans),
+            "removed_spans": list(self.removed_spans),
+            "status_changes": [_span_diff_to_dict(diff) for diff in self.status_changes],
+            "duration_changes": [
+                _span_diff_to_dict(diff) for diff in self.duration_changes
+            ],
+            "cost_delta": self.cost_delta,
+        }
 
 
 async def replay_run(
@@ -152,3 +171,16 @@ def _trace_cost(trace: Trace) -> float | None:
         return None
     value = cost.get("total")
     return float(value) if isinstance(value, int | float) else None
+
+
+def _trace_link(trace_id: str) -> str:
+    return f"trace://{trace_id}"
+
+
+def _span_diff_to_dict(diff: SpanDiff) -> dict[str, Any]:
+    return {
+        "key": diff.key,
+        "left_status": diff.left_status,
+        "right_status": diff.right_status,
+        "duration_ms_delta": diff.duration_ms_delta,
+    }

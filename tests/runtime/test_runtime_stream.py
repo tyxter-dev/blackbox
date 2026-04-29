@@ -126,6 +126,6 @@ async def test_result_metadata_includes_workflow_trace_tree() -> None:
 
     trace = result.metadata["trace"]
     assert trace["trace_id"] == result.events[0].run_id
-    assert trace["root_span"]["name"] == "workflow.run"
+    assert trace["root_span"]["name"] == "agent.run"
     span_names = {span["name"] for span in trace["spans"]}
     assert {"model.turn", "tool.call"}.issubset(span_names)

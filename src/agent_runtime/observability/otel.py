@@ -57,6 +57,12 @@ class OpenTelemetryTraceExporter:
             otel_span.set_status(status_cls(status_code_cls.ERROR))
         elif span.status in {"denied", "cancelled"}:
             otel_span.set_attribute("agent_runtime.status_detail", span.status)
+        for event in span.events:
+            otel_span.add_event(
+                str(event.get("name") or event.get("type") or "agent_runtime.event"),
+                attributes=_span_event_attributes(event),
+                timestamp=_event_timestamp_ns(event),
+            )
         with otel_trace.use_span(otel_span, end_on_exit=False):
             for child in children.get(span.span_id, []):
                 self._export_span(tracer, child, children)
@@ -117,6 +123,27 @@ def _to_unix_ns(value: datetime | None) -> int | None:
     if value is None:
         return None
     return int(value.timestamp() * 1_000_000_000)
+
+
+def _event_timestamp_ns(event: dict[str, Any]) -> int | None:
+    timestamp = event.get("timestamp")
+    if not isinstance(timestamp, str):
+        return None
+    try:
+        return _to_unix_ns(datetime.fromisoformat(timestamp))
+    except ValueError:
+        return None
+
+
+def _span_event_attributes(event: dict[str, Any]) -> dict[str, OTelAttribute]:
+    attrs: dict[str, OTelAttribute] = {}
+    for key, value in event.items():
+        if key in {"name", "timestamp"}:
+            continue
+        flattened = _flatten_attribute(value)
+        if flattened is not None:
+            attrs[f"agent_runtime.event.{key}"] = flattened
+    return attrs
 
 
 def _flatten_attribute(value: Any) -> OTelAttribute | None:

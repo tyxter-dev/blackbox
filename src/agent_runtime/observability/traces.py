@@ -32,6 +32,7 @@ class SpanKinds:
     HANDOFF = "handoff"
     GUARDRAIL = "guardrail"
     ARTIFACT = "artifact"
+    CACHE = "cache"
     RETRY = "retry"
     EVAL = "eval"
     CUSTOM = "custom"
@@ -74,6 +75,7 @@ class TraceSpan:
     ended_at: datetime | None = None
     duration_ms: float | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
+    events: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -91,6 +93,7 @@ class TraceSpan:
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
             "duration_ms": self.duration_ms,
             "attributes": dict(self.attributes),
+            "events": [dict(event) for event in self.events],
         }
 
 
@@ -206,6 +209,10 @@ def infer_span_kind(event_type: str) -> str:
         return SpanKinds.TOOL_SEARCH
     if event_type.startswith("hosted_tool."):
         return SpanKinds.HOSTED_TOOL
+    if event_type.startswith("mcp.tools.cache.") or event_type.startswith(
+        "prompt.cache_section."
+    ):
+        return SpanKinds.CACHE
     if event_type.startswith("mcp."):
         return SpanKinds.MCP
     if event_type.startswith("cloud_agent."):
@@ -356,6 +363,7 @@ def model_turn_span_from_events(
         ended_at=completed.timestamp,
         duration_ms=duration_ms,
         attributes=attributes,
+        events=_span_event_refs(events),
     )
 
 
@@ -393,11 +401,12 @@ def _root_span(
         "event_count": len(events),
         "event_types": sorted({event.type for event in events}),
     }
+    _attach_correlation_attributes(attributes, events)
     for key in ("usage", "cost"):
         if key in metadata:
             attributes[key] = metadata[key]
     return TraceSpan(
-        name="workflow.run",
+        name="agent.run",
         kind=SpanKinds.WORKFLOW,
         span_id=span_id,
         trace_id=trace_id,
@@ -408,6 +417,7 @@ def _root_span(
         ended_at=last.timestamp,
         duration_ms=_duration_ms(first.timestamp, last.timestamp),
         attributes=attributes,
+        events=_span_event_refs([event for event in events if event.span_id == span_id]),
     )
 
 
@@ -444,6 +454,7 @@ def _span_from_group(
         ended_at=last.timestamp,
         duration_ms=_duration_ms(first.timestamp, last.timestamp),
         attributes=attributes,
+        events=_span_event_refs(events),
     )
 
 
@@ -454,8 +465,7 @@ def _attributes_from_events(events: list[AgentEvent]) -> dict[str, Any]:
         "event_ids": [event.id for event in events],
         "event_types": [event.type for event in events],
     }
-    if first.session_id is not None:
-        attrs["session_id"] = first.session_id
+    _attach_correlation_attributes(attrs, events)
     for key in (
         "call_id",
         "name",
@@ -469,12 +479,6 @@ def _attributes_from_events(events: list[AgentEvent]) -> dict[str, Any]:
         value = _first_str(first.data, key)
         if value is not None:
             attrs[key] = value
-    if first.provider_trace_id is not None:
-        attrs["provider_trace_id"] = first.provider_trace_id
-    if first.provider_span_id is not None:
-        attrs["provider_span_id"] = first.provider_span_id
-    if first.provider_request_id is not None:
-        attrs["provider_request_id"] = first.provider_request_id
     return attrs
 
 
@@ -499,7 +503,11 @@ def _span_name(kind: str, event: AgentEvent) -> str:
     if kind == SpanKinds.HOSTED_TOOL:
         return "hosted_tool.call"
     if kind == SpanKinds.MCP:
-        return "mcp.call"
+        if event.type.startswith("mcp.list_tools."):
+            return "mcp.list_tools"
+        if event.type.startswith("mcp.call."):
+            return "mcp.call_tool"
+        return "mcp"
     if kind == SpanKinds.CLOUD_AGENT:
         return "cloud_agent"
     if kind == SpanKinds.WORKSPACE_COMMAND:
@@ -509,13 +517,17 @@ def _span_name(kind: str, event: AgentEvent) -> str:
     if kind == SpanKinds.WORKSPACE_PATCH:
         return "workspace.patch"
     if kind == SpanKinds.APPROVAL:
-        return "approval"
+        return "approval.wait"
     if kind == SpanKinds.HANDOFF:
         return "handoff"
     if kind == SpanKinds.GUARDRAIL:
         return "guardrail"
     if kind == SpanKinds.ARTIFACT:
-        return "artifact"
+        return "artifact.write"
+    if kind == SpanKinds.CACHE:
+        if event.type.endswith(".created"):
+            return "cache.create"
+        return "cache.lookup"
     if kind == SpanKinds.RETRY:
         return "retry"
     if kind == SpanKinds.EVAL:
@@ -581,8 +593,9 @@ def _duration_ms(started_at: datetime | None, ended_at: datetime | None) -> floa
 
 
 def _event_ref(event: AgentEvent) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "id": event.id,
+        "name": _span_event_name(event),
         "type": event.type,
         "run_id": event.run_id,
         "sequence": event.sequence,
@@ -592,6 +605,71 @@ def _event_ref(event: AgentEvent) -> dict[str, Any]:
         "span_kind": event.span_kind,
         "timestamp": event.timestamp.isoformat(),
     }
+    if event.session_id is not None:
+        payload["session_id"] = event.session_id
+    if event.provider_request_id is not None:
+        payload["provider_request_id"] = event.provider_request_id
+    return payload
+
+
+def _span_event_refs(events: list[AgentEvent]) -> list[dict[str, Any]]:
+    return [_event_ref(event) for event in events]
+
+
+def _span_event_name(event: AgentEvent) -> str:
+    if event.type == EventTypes.MODEL_TEXT_DELTA:
+        return "model.stream"
+    if event.type.startswith("mcp.list_tools."):
+        return "mcp.list_tools"
+    if event.type.startswith("mcp.call."):
+        return "mcp.call_tool"
+    if event.type.startswith("workspace.command."):
+        return "workspace.command"
+    if event.type.startswith("workspace.patch."):
+        return "workspace.patch"
+    if event.type.startswith("approval."):
+        return "approval.wait"
+    if event.type.startswith("artifact."):
+        return "artifact.write"
+    if event.type.startswith("mcp.tools.cache.") or event.type.startswith(
+        "prompt.cache_section."
+    ):
+        return "cache.create" if event.type.endswith(".created") else "cache.lookup"
+    return event.type
+
+
+def _attach_correlation_attributes(
+    attrs: dict[str, Any],
+    events: list[AgentEvent],
+) -> None:
+    sessions = _unique_not_none(event.session_id for event in events)
+    provider_trace_ids = _unique_not_none(event.provider_trace_id for event in events)
+    provider_span_ids = _unique_not_none(event.provider_span_id for event in events)
+    provider_request_ids = _unique_not_none(event.provider_request_id for event in events)
+
+    if sessions:
+        attrs["session_id"] = sessions[0]
+        attrs["session_ids"] = sessions
+    if provider_trace_ids:
+        attrs["provider_trace_id"] = provider_trace_ids[0]
+        attrs["provider_trace_ids"] = provider_trace_ids
+    if provider_span_ids:
+        attrs["provider_span_id"] = provider_span_ids[0]
+        attrs["provider_span_ids"] = provider_span_ids
+    if provider_request_ids:
+        attrs["provider_request_id"] = provider_request_ids[0]
+        attrs["provider_request_ids"] = provider_request_ids
+
+
+def _unique_not_none(values: Iterable[str | None]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value is None or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def _first_str(data: dict[str, Any], *keys: str) -> str | None:
