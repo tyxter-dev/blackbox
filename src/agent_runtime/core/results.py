@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from dataclasses import dataclass, field
 from typing import Any, Generic, Literal, TypeVar
 
@@ -21,6 +22,7 @@ OutputStrategy = Literal[
     "posthoc_parse_with_retry",
 ]
 OutputFallback = Literal["error", "finalizer_tool", "posthoc_parse"]
+AgentResponseMode = Literal["single", "conversational"]
 AgentSessionResultStatus = Literal[
     "completed",
     "failed",
@@ -28,6 +30,120 @@ AgentSessionResultStatus = Literal[
     "waiting_for_approval",
     "timeout",
 ]
+
+
+@dataclass(slots=True, frozen=True)
+class AgentMessage:
+    """One assistant-facing message produced by an agent turn.
+
+    Agent providers remain event/session based internally. This is an output
+    projection for UIs that want chat-bubble style responses without forcing
+    callers to model a list of messages as structured output.
+    """
+
+    content: str
+    role: Literal["assistant"] = "assistant"
+    index: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True, frozen=True)
+class AgentResponseSpec:
+    """Configure how a provider-managed agent should project final replies."""
+
+    mode: AgentResponseMode = "single"
+    min_messages: int = 1
+    max_messages: int | None = None
+    max_chars_per_message: int | None = None
+    separator: str = "\n\n"
+    instruction: str | None = None
+
+
+def conversational_response(
+    *,
+    min_messages: int = 2,
+    max_messages: int | None = 3,
+    max_chars_per_message: int | None = 240,
+    instruction: str | None = None,
+) -> AgentResponseSpec:
+    """Return the common multi-message response profile for chat UIs."""
+
+    if min_messages < 1:
+        raise ValueError("min_messages must be at least 1.")
+    if max_messages is not None and max_messages < 1:
+        raise ValueError("max_messages must be at least 1 when provided.")
+    if max_messages is not None and min_messages > max_messages:
+        raise ValueError("min_messages cannot exceed max_messages.")
+    if max_chars_per_message is not None and max_chars_per_message < 40:
+        raise ValueError("max_chars_per_message must be at least 40 when provided.")
+    return AgentResponseSpec(
+        mode="conversational",
+        min_messages=min_messages,
+        max_messages=max_messages,
+        max_chars_per_message=max_chars_per_message,
+        instruction=instruction,
+    )
+
+
+def agent_response_instructions(spec: AgentResponseSpec | None) -> str | None:
+    """Return provider instructions for a configured agent response style."""
+
+    if spec is None or spec.mode == "single":
+        return None
+    if spec.instruction is not None:
+        return spec.instruction
+    if spec.max_messages is None:
+        count = f"at least {spec.min_messages}"
+    elif spec.min_messages == spec.max_messages:
+        count = str(spec.min_messages)
+    else:
+        count = f"{spec.min_messages}-{spec.max_messages}"
+    length = (
+        f" Keep each message under about {spec.max_chars_per_message} characters."
+        if spec.max_chars_per_message is not None
+        else ""
+    )
+    return (
+        f"Respond as {count} short assistant messages for a chat UI. "
+        "Separate messages with a blank line. Do not number the messages and "
+        f"do not return JSON.{length}"
+    )
+
+
+def agent_response_messages(
+    text: str,
+    spec: AgentResponseSpec | None = None,
+) -> list[AgentMessage]:
+    """Project final agent text into UI-ready assistant messages."""
+
+    response_spec = spec or AgentResponseSpec()
+    content = text.strip()
+    if not content:
+        return []
+    if response_spec.mode == "single":
+        return [AgentMessage(content=content)]
+
+    segments = _split_paragraphs(content)
+    segments = _split_long_segments(segments, response_spec.max_chars_per_message)
+    target_min = response_spec.min_messages
+    if response_spec.max_messages is not None:
+        target_min = min(target_min, response_spec.max_messages)
+    segments = _ensure_min_segments(
+        segments,
+        min_messages=target_min,
+        max_chars=response_spec.max_chars_per_message,
+    )
+    if response_spec.max_messages is not None:
+        segments = _merge_to_limit(
+            segments,
+            max_messages=response_spec.max_messages,
+            separator=response_spec.separator,
+        )
+    return [
+        AgentMessage(content=segment, index=index)
+        for index, segment in enumerate(segments)
+        if segment
+    ]
 
 
 @dataclass(slots=True)
@@ -141,6 +257,7 @@ class AgentSessionResult(Generic[T]):
     session_ref: SessionRef
     status: AgentSessionResultStatus = "completed"
     events: list[AgentEvent] = field(default_factory=list)
+    messages: list[AgentMessage] = field(default_factory=list)
     artifacts: list[Artifact] = field(default_factory=list)
     provider_state: ProviderState | None = None
     usage: ModelUsage | None = None
@@ -176,6 +293,10 @@ def result_summary(result: Any, *, include_output: bool = False) -> dict[str, An
     payloads = getattr(result, "payloads", None)
     if payloads:
         summary["payloads"] = [_payload_summary(payload) for payload in payloads]
+    messages = getattr(result, "messages", None)
+    if messages:
+        summary["message_count"] = len(messages)
+        summary["messages"] = [_message_summary(message) for message in messages]
     artifacts = getattr(result, "artifacts", None)
     if artifacts:
         summary["artifacts"] = [_artifact_summary(artifact) for artifact in artifacts]
@@ -192,6 +313,16 @@ def _payload_summary(payload: Any) -> dict[str, Any]:
         "tool_name": getattr(payload, "tool_name", None),
         "call_id": getattr(payload, "call_id", None),
         "payload": _jsonable(getattr(payload, "payload", None)),
+    }
+
+
+def _message_summary(message: Any) -> dict[str, Any]:
+    content = getattr(message, "content", "")
+    return {
+        "role": getattr(message, "role", None),
+        "index": getattr(message, "index", None),
+        "chars": len(content) if isinstance(content, str) else None,
+        "metadata": _jsonable(getattr(message, "metadata", {})),
     }
 
 
@@ -223,3 +354,100 @@ def _jsonable(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return _jsonable(dataclasses.asdict(value))
     return str(value)
+
+
+def _split_paragraphs(text: str) -> list[str]:
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", text) if part.strip()]
+    return paragraphs or [text.strip()]
+
+
+def _split_long_segments(
+    segments: list[str],
+    max_chars: int | None,
+) -> list[str]:
+    if max_chars is None:
+        return segments
+    split: list[str] = []
+    for segment in segments:
+        if len(segment) <= max_chars:
+            split.append(segment)
+            continue
+        split.extend(_pack_sentences(segment, max_chars=max_chars))
+    return split
+
+
+def _ensure_min_segments(
+    segments: list[str],
+    *,
+    min_messages: int,
+    max_chars: int | None,
+) -> list[str]:
+    result = list(segments)
+    while len(result) < min_messages:
+        index = max(range(len(result)), key=lambda item: len(result[item]))
+        pieces = _split_once(result[index], max_chars=max_chars)
+        if len(pieces) < 2:
+            break
+        result[index : index + 1] = pieces
+    return result
+
+
+def _merge_to_limit(
+    segments: list[str],
+    *,
+    max_messages: int,
+    separator: str,
+) -> list[str]:
+    if len(segments) <= max_messages:
+        return segments
+    head = segments[: max_messages - 1]
+    tail = separator.join(segments[max_messages - 1 :])
+    return [*head, tail]
+
+
+def _split_once(segment: str, *, max_chars: int | None) -> list[str]:
+    packed = _pack_sentences(segment, max_chars=max_chars or max(len(segment) // 2, 80))
+    if len(packed) > 1:
+        return packed[:2]
+    midpoint = len(segment) // 2
+    split_at = segment.rfind(" ", 0, midpoint)
+    if split_at <= 0:
+        split_at = segment.find(" ", midpoint)
+    if split_at <= 0:
+        return [segment]
+    return [segment[:split_at].strip(), segment[split_at:].strip()]
+
+
+def _pack_sentences(segment: str, *, max_chars: int) -> list[str]:
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", segment) if part.strip()]
+    if len(sentences) <= 1:
+        return _split_by_words(segment, max_chars=max_chars)
+    packed: list[str] = []
+    current = ""
+    for sentence in sentences:
+        if not current:
+            current = sentence
+        elif len(f"{current} {sentence}") <= max_chars:
+            current = f"{current} {sentence}"
+        else:
+            packed.extend(_split_by_words(current, max_chars=max_chars))
+            current = sentence
+    if current:
+        packed.extend(_split_by_words(current, max_chars=max_chars))
+    return packed
+
+
+def _split_by_words(segment: str, *, max_chars: int) -> list[str]:
+    words = segment.split()
+    if not words:
+        return []
+    chunks: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        if len(f"{current} {word}") <= max_chars:
+            current = f"{current} {word}"
+            continue
+        chunks.append(current)
+        current = word
+    chunks.append(current)
+    return chunks

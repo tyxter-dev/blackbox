@@ -11,6 +11,7 @@ loop, SDK, or cloud agent surface.
 - Cloud or SDK-backed coding-agent providers.
 - Agent-session lifecycle mapping.
 - Provider-native session, approval, artifact, and continuation state.
+- Agent response projection events such as multi-message conversational replies.
 
 ## Does Not Belong Here
 

@@ -104,6 +104,7 @@ class WorkspaceAgentSpec:
             instructions=self.instructions,
             model=self.model,
             tools=list(self.tools),
+            hosted_tools=list(self.hosted_tools),
             mcp_servers=mcp_servers,
             permissions={
                 "connectors": [connector.name for connector in self.connectors],

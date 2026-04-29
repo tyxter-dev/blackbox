@@ -8,7 +8,7 @@ from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage, ArtifactRef
 from agent_runtime.core.capabilities import AgentCapabilities, ModelCapabilities, StateMode
 from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.results import OutputStrategy
+from agent_runtime.core.results import AgentResponseSpec, OutputStrategy
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState
 from agent_runtime.output.schema import OutputSchema
@@ -123,9 +123,11 @@ class AgentSpec:
     instructions: str = ""
     model: str | None = None
     tools: list[str] = field(default_factory=list)
+    hosted_tools: list[HostedToolSpec] = field(default_factory=list)
     mcp_servers: list[Any] = field(default_factory=list)
     environment: dict[str, Any] = field(default_factory=dict)
     permissions: dict[str, Any] = field(default_factory=dict)
+    response: AgentResponseSpec = field(default_factory=AgentResponseSpec)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -137,6 +139,8 @@ class TaskSpec:
     model: str | None = None
     workspace: Any | None = None
     inputs: list[ArtifactRef] = field(default_factory=list)
+    hosted_tools: list[HostedToolSpec] = field(default_factory=list)
+    response: AgentResponseSpec | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -149,14 +153,11 @@ class ModelProvider(Protocol):
     """
 
     @property
-    def provider_id(self) -> str:
-        ...
+    def provider_id(self) -> str: ...
 
-    def capabilities(self, model: str | None = None) -> ModelCapabilities:
-        ...
+    def capabilities(self, model: str | None = None) -> ModelCapabilities: ...
 
-    def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
-        ...
+    def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]: ...
 
 
 @runtime_checkable
@@ -168,14 +169,11 @@ class AgentProvider(Protocol):
     """
 
     @property
-    def provider_id(self) -> str:
-        ...
+    def provider_id(self) -> str: ...
 
-    def capabilities(self) -> AgentCapabilities:
-        ...
+    def capabilities(self) -> AgentCapabilities: ...
 
-    async def create_agent(self, spec: AgentSpec) -> AgentRef:
-        ...
+    async def create_agent(self, spec: AgentSpec) -> AgentRef: ...
 
     async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> AgentSession:
         """Start a provider-backed session for an agent and task."""
@@ -190,9 +188,7 @@ class AgentProvider(Protocol):
         """Stream normalized events for a session, optionally resuming after an event."""
         ...
 
-    async def send_message(
-        self, session: SessionRef | AgentSession, message: str
-    ) -> InvocationRef:
+    async def send_message(self, session: SessionRef | AgentSession, message: str) -> InvocationRef:
         """Send a follow-up user message into an existing session."""
         ...
 
@@ -200,8 +196,7 @@ class AgentProvider(Protocol):
         """Resolve a pending provider approval request."""
         ...
 
-    async def cancel(self, session: SessionRef | AgentSession) -> None:
-        ...
+    async def cancel(self, session: SessionRef | AgentSession) -> None: ...
 
     async def list_artifacts(
         self,

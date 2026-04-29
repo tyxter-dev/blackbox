@@ -168,6 +168,8 @@ class EventTypes:
     CLOUD_AGENT_LOG = "cloud_agent.log"
     CLOUD_AGENT_CHECKPOINT_CREATED = "cloud_agent.checkpoint.created"
 
+    AGENT_RESPONSE_MESSAGE_CREATED = "agent.response.message.created"
+
     WORKSPACE_FILE_READ = "workspace.file.read"
     WORKSPACE_FILE_CHANGED = "workspace.file.changed"
     WORKSPACE_OPENED = "workspace.opened"

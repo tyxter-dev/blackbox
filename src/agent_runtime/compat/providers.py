@@ -14,6 +14,7 @@ from agent_runtime.providers.registry import ProviderRegistry
 
 ProviderKey = Literal["openai", "anthropic", "google", "xai"]
 ProviderAlias = Literal["openai", "anthropic", "google", "gemini", "xai"]
+AgentProviderAlias = Literal["local"]
 
 _EXPLICIT_PREFIXES: dict[str, ProviderKey] = {
     "openai/": "openai",
@@ -63,7 +64,7 @@ def resolve_model_route(model: str) -> ModelRoute:
     lower = model.lower()
     for prefix, provider in _EXPLICIT_PREFIXES.items():
         if lower.startswith(prefix):
-            return ModelRoute(provider=provider, model=model[len(prefix):])
+            return ModelRoute(provider=provider, model=model[len(prefix) :])
     for prefix, provider in _BARE_PREFIXES.items():
         if lower.startswith(prefix):
             return ModelRoute(provider=provider, model=model)
@@ -95,7 +96,13 @@ def register_default_model_providers(
     environment variable, so this helper is safe to call in offline tests and
     apps that only use a subset of providers.
     """
-    registry = ProviderRegistry() if target is None else target.registry if hasattr(target, "registry") else target
+    registry = (
+        ProviderRegistry()
+        if target is None
+        else target.registry
+        if hasattr(target, "registry")
+        else target
+    )
     if not isinstance(registry, ProviderRegistry):
         raise TypeError("target must be a ProviderRegistry or expose a .registry")
 
@@ -136,14 +143,36 @@ def register_default_model_providers(
     return registry
 
 
+def register_default_agent_providers(
+    target: Any,
+    *,
+    include: Iterable[AgentProviderAlias | str] | None = None,
+) -> ProviderRegistry:
+    """Register built-in AgentProvider adapters on an AgentRuntime instance."""
+
+    if not hasattr(target, "registry") or not hasattr(target, "models"):
+        raise TypeError("target must be an AgentRuntime-like object with registry and models.")
+    registry = target.registry
+    if not isinstance(registry, ProviderRegistry):
+        raise TypeError("target.registry must be a ProviderRegistry.")
+    selected = _normalize_agent_include(include)
+    if "local" in selected:
+        from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
+
+        tools = getattr(getattr(target, "tools", None), "default_runtime", None)
+        registry.register_agent(LocalAgentProvider(target.models, tools=tools))
+    return registry
+
+
 def create_runtime_with_default_providers(
     *,
     include: Iterable[ProviderAlias | str] | None = None,
+    agent_providers: Iterable[AgentProviderAlias | str] | None = None,
     timeout: float | None = None,
     max_retries: int = 2,
     retry_min_delay: float = 0.5,
 ) -> Any:
-    """Create an AgentRuntime preloaded with the built-in model providers."""
+    """Create an AgentRuntime preloaded with selected built-in providers."""
     from agent_runtime.runtime import AgentRuntime
 
     runtime = AgentRuntime()
@@ -154,6 +183,8 @@ def create_runtime_with_default_providers(
         max_retries=max_retries,
         retry_min_delay=retry_min_delay,
     )
+    if agent_providers is not None:
+        register_default_agent_providers(runtime, include=agent_providers)
     return runtime
 
 
@@ -171,4 +202,18 @@ def _normalize_include(include: Iterable[ProviderAlias | str] | None) -> set[Pro
                 f"Unknown provider '{value}'. Expected one of: openai, anthropic, google, "
                 "gemini, xai."
             )
+    return selected
+
+
+def _normalize_agent_include(
+    include: Iterable[AgentProviderAlias | str] | None,
+) -> set[AgentProviderAlias]:
+    if include is None:
+        return {"local"}
+    selected: set[AgentProviderAlias] = set()
+    for value in include:
+        if value == "local":
+            selected.add("local")
+        else:
+            raise ValueError(f"Unknown agent provider '{value}'. Expected: local.")
     return selected

@@ -267,9 +267,10 @@ class AgentProvider(Protocol):
 ```
 
 `AgentSpec` defines local or hosted agents with name, instructions, model,
-tools, MCP servers, environment, permissions, and metadata. `TaskSpec` defines
-prompt, optional model, workspace, input artifacts, metadata, and provider
-specific `extra`.
+local tools, hosted tools, MCP servers, environment, permissions, response
+projection, and metadata. `TaskSpec` defines prompt, optional model, workspace,
+input artifacts, task-scoped hosted tools, response override, metadata, and
+provider specific `extra`.
 
 ## 8. Event Taxonomy
 
@@ -285,6 +286,7 @@ session.cancelled
 cloud_agent.status.changed
 cloud_agent.log
 cloud_agent.checkpoint.created
+agent.response.message.created
 model.request.started
 model.item.created
 model.text.delta

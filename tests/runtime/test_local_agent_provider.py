@@ -5,13 +5,14 @@ test_local_agent_tools.py (tool/approval flow) into one provider-focused
 suite. Tests for the high-level runtime.run/.stream surface live in
 test_runtime_run.py / test_runtime_stream.py.
 """
+
 from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
-from agent_runtime import AgentRuntime, AgentSpec, EventTypes
+from agent_runtime import AgentRuntime, AgentSpec, EventTypes, WebSearch, conversational_response
 from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.sessions import AgentSession
@@ -49,12 +50,16 @@ async def _drive_session(
 ) -> tuple[list[AgentEvent], AgentSession]:
     await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="default"))
     session = await runtime.agents.create_session(
-        provider="local", agent="default", task="go", model=model,
+        provider="local",
+        agent="default",
+        task="go",
+        model=model,
     )
     return [event async for event in runtime.agents.stream(session)], session
 
 
 # --- basic streaming through the agent facade -------------------------------
+
 
 async def test_local_agent_streams_model_events_inside_session() -> None:
     runtime = AgentRuntime()
@@ -105,6 +110,7 @@ async def test_send_message_updates_session_and_returns_invocation_ref() -> None
 
 
 # --- tool dispatch loop -----------------------------------------------------
+
 
 async def test_tool_call_loop_dispatches_and_feeds_results_back() -> None:
     registry = ToolRegistry()
@@ -166,13 +172,44 @@ async def test_agent_spec_tools_and_instructions_reach_model_turn() -> None:
     assert [tool["name"] for tool in scripted.calls[0].tools] == ["allowed"]
 
 
+async def test_agent_spec_hosted_tools_and_response_messages_reach_session_result() -> None:
+    runtime, scripted, _ = _build_runtime()
+    scripted.queue(text_only_turn("Yes, we can help with that.\n\nNext step: book kickoff."))
+
+    agent = await runtime.agents.create_agent(
+        provider="local",
+        spec=AgentSpec(
+            name="support",
+            instructions="Use support policy before answering.",
+            model="scripted/test",
+            hosted_tools=[WebSearch()],
+            response=conversational_response(min_messages=2, max_messages=3),
+        ),
+    )
+
+    result = await runtime.agents.run(provider="local", agent=agent, task="go")
+
+    assert [message.content for message in result.messages] == [
+        "Yes, we can help with that.",
+        "Next step: book kickoff.",
+    ]
+    assert any(event.type == EventTypes.AGENT_RESPONSE_MESSAGE_CREATED for event in result.events)
+    assert result.metadata["message_count"] == 2
+    assert len(scripted.calls[0].hosted_tools) == 1
+    assert scripted.calls[0].controls.instructions is not None
+    assert "short assistant messages" in scripted.calls[0].controls.instructions
+
+
 async def test_tool_call_without_tool_runtime_raises() -> None:
     runtime, scripted, _ = _build_runtime()
     scripted.queue(tool_call_turn(call_id="c1", name="missing", arguments={}))
 
     await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="default"))
     session = await runtime.agents.create_session(
-        provider="local", agent="default", task="go", model="scripted/test",
+        provider="local",
+        agent="default",
+        task="go",
+        model="scripted/test",
     )
     try:
         async for _ in runtime.agents.stream(session):
@@ -184,6 +221,7 @@ async def test_tool_call_without_tool_runtime_raises() -> None:
 
 
 # --- approval pause / resume ------------------------------------------------
+
 
 async def test_approval_pause_and_approve() -> None:
     registry = ToolRegistry()
@@ -199,7 +237,10 @@ async def test_approval_pause_and_approve() -> None:
 
     await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="d"))
     session = await runtime.agents.create_session(
-        provider="local", agent="d", task="go", model="scripted/test",
+        provider="local",
+        agent="d",
+        task="go",
+        model="scripted/test",
     )
 
     events: list[AgentEvent] = []
@@ -246,7 +287,10 @@ async def test_approval_denial_skips_tool_and_records_failure() -> None:
 
     await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="d"))
     session = await runtime.agents.create_session(
-        provider="local", agent="d", task="go", model="scripted/test",
+        provider="local",
+        agent="d",
+        task="go",
+        model="scripted/test",
     )
 
     events: list[AgentEvent] = []
@@ -276,6 +320,7 @@ async def test_approval_denial_skips_tool_and_records_failure() -> None:
 
 # --- safety nets ------------------------------------------------------------
 
+
 async def test_max_iterations_fails_session() -> None:
     registry = ToolRegistry()
     registry.register(lambda: ToolResult(content="loop"), name="loop", description="l")
@@ -302,7 +347,10 @@ async def test_cancel_between_turns() -> None:
 
     await runtime.agents.create_agent(provider="local", spec=AgentSpec(name="d"))
     session = await runtime.agents.create_session(
-        provider="local", agent="d", task="go", model="scripted/test",
+        provider="local",
+        agent="d",
+        task="go",
+        model="scripted/test",
     )
 
     events: list[AgentEvent] = []
@@ -316,8 +364,6 @@ async def test_cancel_between_turns() -> None:
     assert types[-1] == EventTypes.SESSION_CANCELLED
 
 
-async def _collect(
-    stream: AsyncIterator[AgentEvent], sink: list[AgentEvent]
-) -> None:
+async def _collect(stream: AsyncIterator[AgentEvent], sink: list[AgentEvent]) -> None:
     async for event in stream:
         sink.append(event)

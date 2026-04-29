@@ -5,7 +5,7 @@ from typing import Any
 
 from agent_runtime.core.artifacts import Artifact, ArtifactRef
 from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.results import AgentSessionResultStatus
+from agent_runtime.core.results import AgentMessage, AgentResponseSpec, AgentSessionResultStatus
 from agent_runtime.core.sessions import AgentSession
 from agent_runtime.core.state import ProviderState
 from agent_runtime.providers.base import TaskSpec
@@ -17,8 +17,10 @@ def _agent_task_spec(
     model: str | None,
     workspace: Any | None,
     inputs: list[ArtifactRef] | None,
-    metadata: dict[str, Any] | None,
-    extra: dict[str, Any] | None,
+    hosted_tools: list[Any] | None = None,
+    response: AgentResponseSpec | None = None,
+    metadata: dict[str, Any] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> TaskSpec:
     if isinstance(task, TaskSpec):
         return replace(
@@ -26,6 +28,10 @@ def _agent_task_spec(
             model=model if model is not None else task.model,
             workspace=workspace if workspace is not None else task.workspace,
             inputs=list(inputs) if inputs is not None else list(task.inputs),
+            hosted_tools=list(hosted_tools)
+            if hosted_tools is not None
+            else list(task.hosted_tools),
+            response=response if response is not None else task.response,
             metadata={**task.metadata, **dict(metadata or {})},
             extra={**task.extra, **dict(extra or {})},
         )
@@ -34,6 +40,8 @@ def _agent_task_spec(
         model=model,
         workspace=workspace,
         inputs=list(inputs or []),
+        hosted_tools=list(hosted_tools or []),
+        response=response,
         metadata=dict(metadata or {}),
         extra=dict(extra or {}),
     )
@@ -47,6 +55,32 @@ def _agent_event_text_delta(event: AgentEvent) -> str | None:
 
 def _agent_event_text(event: AgentEvent) -> str | None:
     return _first_text(event.data, "output", "message", "text", "result")
+
+
+def _agent_message_from_event(event: AgentEvent) -> AgentMessage | None:
+    if event.type != EventTypes.AGENT_RESPONSE_MESSAGE_CREATED:
+        return None
+    message = event.data.get("message")
+    if isinstance(message, AgentMessage):
+        return message
+    if isinstance(message, dict):
+        content = message.get("content")
+        if isinstance(content, str):
+            index = message.get("index", 0)
+            metadata = message.get("metadata")
+            return AgentMessage(
+                content=content,
+                index=index if isinstance(index, int) else 0,
+                metadata=dict(metadata) if isinstance(metadata, dict) else {},
+            )
+    content = _first_text(event.data, "content", "text")
+    if content is None:
+        return None
+    index_value = event.data.get("index")
+    return AgentMessage(
+        content=content,
+        index=index_value if isinstance(index_value, int) else 0,
+    )
 
 
 def _first_text(data: dict[str, Any], *keys: str) -> str | None:
@@ -70,10 +104,7 @@ def _artifact_from_event(event: AgentEvent) -> Artifact | None:
     artifact_kwargs: dict[str, Any] = {
         "type": str(artifact.get("type", "provider_ref")),
         "name": str(
-            artifact.get("name")
-            or artifact.get("path")
-            or artifact.get("id")
-            or "artifact"
+            artifact.get("name") or artifact.get("path") or artifact.get("id") or "artifact"
         ),
         "data": artifact.get("data"),
         "uri": artifact.get("uri"),

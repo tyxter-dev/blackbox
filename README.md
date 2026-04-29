@@ -252,6 +252,10 @@ Runnable AgentProvider examples live in `examples/`:
   session, streams events, sends a follow-up message, and streams again.
 - `examples/local_agent_with_tool.py` shows the local provider driving a tool
   call loop through `ToolRuntime`.
+- `examples/agent_provider_support_conversation.py` shows a conversational
+  local AgentProvider support agent using an OpenAI vector store and returning
+  multiple assistant messages in one turn. It loads `examples/.env` when
+  present.
 - `examples/agent_provider_openai_agents.py` shows an OpenAI Agents
   SDK-backed provider session, event streaming, artifact listing, and saving
   returned artifacts under `examples/artifacts/openai/`.

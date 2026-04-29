@@ -15,7 +15,12 @@ from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import Artifact, ArtifactPage, ArtifactRef
 from agent_runtime.core.errors import ApprovalError, ConfigurationError
 from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.results import AgentSessionResult, OutputSpec
+from agent_runtime.core.results import (
+    AgentMessage,
+    AgentResponseSpec,
+    AgentSessionResult,
+    OutputSpec,
+)
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.core.stores import EventStore, RunStore
@@ -25,12 +30,15 @@ from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.runtime.event_metadata import (
     _attach_accounting_metadata,
     _event_usage,
+    _hosted_tool_metadata_from_events,
+    _mcp_metadata_from_events,
     _tool_usage_from_events,
 )
 from agent_runtime.runtime.output import _resolve_output_spec, _validate_output
 from agent_runtime.runtime.session_results import (
     _agent_event_text,
     _agent_event_text_delta,
+    _agent_message_from_event,
     _agent_session_result_status,
     _agent_task_spec,
     _append_artifact_unique,
@@ -44,6 +52,7 @@ from agent_runtime.runtime.workspace_results import (
     _workspace_ref_metadata,
 )
 from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
+from agent_runtime.tools.hosted.specs import HostedToolSpec
 
 T = TypeVar("T")
 
@@ -75,6 +84,8 @@ class AgentRuntimeFacade:
         workspace_policy: Any = None,
         workspace_preserve: bool = False,
         inputs: list[ArtifactRef] | None = None,
+        hosted_tools: list[HostedToolSpec] | None = None,
+        response: AgentResponseSpec | None = None,
         metadata: dict[str, Any] | None = None,
         extra: dict[str, Any] | None = None,
     ) -> AgentSession:
@@ -86,6 +97,8 @@ class AgentRuntimeFacade:
             model=model,
             workspace=workspace,
             inputs=inputs,
+            hosted_tools=hosted_tools,
+            response=response,
             metadata=metadata,
             extra=extra,
         )
@@ -112,7 +125,9 @@ class AgentRuntimeFacade:
             provider_obj, workspace_ref, should_close = resolved_workspace
             self._session_workspaces[session.id] = (provider_obj, workspace_ref, should_close)
             session.metadata.setdefault("workspace", _workspace_ref_metadata(workspace_ref))
-            session.metadata.setdefault("workspace_provider", getattr(provider_obj, "provider_id", None))
+            session.metadata.setdefault(
+                "workspace_provider", getattr(provider_obj, "provider_id", None)
+            )
         self._sessions[session.id] = session
         return session
 
@@ -190,6 +205,8 @@ class AgentRuntimeFacade:
         workspace_policy: Any = None,
         workspace_preserve: bool = False,
         inputs: list[ArtifactRef] | None = None,
+        hosted_tools: list[HostedToolSpec] | None = None,
+        response: AgentResponseSpec | None = None,
         metadata: dict[str, Any] | None = None,
         extra: dict[str, Any] | None = None,
         output_type: type[T] | None = None,
@@ -210,11 +227,14 @@ class AgentRuntimeFacade:
             workspace_policy=workspace_policy,
             workspace_preserve=workspace_preserve,
             inputs=inputs,
+            hosted_tools=hosted_tools,
+            response=response,
             metadata=metadata,
             extra=extra,
         )
         events: list[AgentEvent] = []
         text_parts: list[str] = []
+        messages: list[AgentMessage] = []
         terminal_text: str | None = None
         artifacts: list[Artifact] = []
         artifact_ids: set[str] = set()
@@ -226,12 +246,13 @@ class AgentRuntimeFacade:
             delta = _agent_event_text_delta(event)
             if delta is not None:
                 text_parts.append(delta)
+            message = _agent_message_from_event(event)
+            if message is not None:
+                messages.append(message)
             if event.type == EventTypes.SESSION_COMPLETED:
                 terminal_text = _agent_event_text(event) or terminal_text
             artifact = _artifact_from_event(event)
-            if artifact is not None and (
-                artifact_type is None or artifact.type == artifact_type
-            ):
+            if artifact is not None and (artifact_type is None or artifact.type == artifact_type):
                 _append_artifact_unique(artifacts, artifact_ids, artifact)
             maybe_state = event.data.get("provider_state")
             if isinstance(maybe_state, ProviderState):
@@ -253,7 +274,9 @@ class AgentRuntimeFacade:
         result_status = _agent_session_result_status(session, events)
         provider_state = captured_state or _provider_state_from_session(session, events=events)
         usage_dict = usage_to_dict(usage)
-        trace = trace_metadata_from_events(events, metadata={"usage": usage_dict} if usage_dict else {})
+        trace = trace_metadata_from_events(
+            events, metadata={"usage": usage_dict} if usage_dict else {}
+        )
         session_ref = session.ref
         result_metadata: dict[str, Any] = {
             "status": result_status,
@@ -272,6 +295,14 @@ class AgentRuntimeFacade:
         provider_usage = usage_provider_details(usage)
         if provider_usage is not None:
             result_metadata["usage_provider_details"] = provider_usage
+        if messages:
+            result_metadata["message_count"] = len(messages)
+        hosted_metadata = _hosted_tool_metadata_from_events(events)
+        if hosted_metadata:
+            result_metadata["hosted_tools"] = hosted_metadata
+        mcp_metadata = _mcp_metadata_from_events(events)
+        if mcp_metadata:
+            result_metadata["mcp"] = mcp_metadata
         if trace["spans"]:
             result_metadata["trace"] = trace
         workspace_metadata = _workspace_metadata_from_events(events)
@@ -302,6 +333,7 @@ class AgentRuntimeFacade:
             session_ref=session_ref,
             status=result_status,
             events=events,
+            messages=messages,
             artifacts=artifacts,
             provider_state=provider_state,
             usage=usage,
@@ -339,9 +371,7 @@ class AgentRuntimeFacade:
             after = next_after
         return collected
 
-    async def send_message(
-        self, session: SessionRef | AgentSession, message: str
-    ) -> InvocationRef:
+    async def send_message(self, session: SessionRef | AgentSession, message: str) -> InvocationRef:
         adapter = self.registry.get_agent(session.provider)
         return await adapter.send_message(session, message)
 
@@ -376,5 +406,8 @@ class AgentRuntimeFacade:
     ) -> ArtifactPage:
         adapter = self.registry.get_agent(session.provider)
         return await adapter.list_artifacts(
-            session, type=type, after=after, limit=limit,
+            session,
+            type=type,
+            after=after,
+            limit=limit,
         )

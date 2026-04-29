@@ -3,9 +3,11 @@ from typing import Any
 
 from agent_runtime.compat.chat import ChatMessage
 from agent_runtime.compat.providers import (
+    AgentProviderAlias,
     ModelRoute,
     create_runtime_with_default_providers,
     provider_ref_for_model,
+    register_default_agent_providers,
     register_default_model_providers,
     resolve_model_route,
 )
@@ -44,11 +46,16 @@ from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.media import MediaRef
 from agent_runtime.core.realtime import ToolMode, TransportKind
 from agent_runtime.core.results import (
+    AgentMessage,
+    AgentResponseMode,
+    AgentResponseSpec,
     AgentResult,
     AgentSessionResult,
     AgentSessionResultStatus,
     OutputSpec,
     ToolPayload,
+    agent_response_messages,
+    conversational_response,
     result_summary,
     structured_output,
 )
@@ -164,8 +171,12 @@ from agent_runtime.workspace_agents import (
 __all__ = [
     "AgentCapabilities",
     "AgentEvent",
+    "AgentMessage",
     "AgentProvider",
+    "AgentProviderAlias",
     "AgentRef",
+    "AgentResponseMode",
+    "AgentResponseSpec",
     "AgentResult",
     "AgentRuntime",
     "AgentRuntimeFacade",
@@ -302,7 +313,9 @@ __all__ = [
     "WorkspaceAgentSpec",
     "WorkspaceAgentVersion",
     "WorkspaceRuntimeFacade",
+    "agent_response_messages",
     "assert_prompt_tool_parity",
+    "conversational_response",
     "create_openai_vector_store",
     "create_runtime_with_default_providers",
     "dataclass_from_dict",
@@ -312,6 +325,7 @@ __all__ = [
     "google_maps_mcp_toolset",
     "prepare_agent_spec",
     "provider_ref_for_model",
+    "register_default_agent_providers",
     "register_default_model_providers",
     "register_default_realtime_providers",
     "resolve_model_route",

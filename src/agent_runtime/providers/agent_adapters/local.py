@@ -9,6 +9,11 @@ from agent_runtime.core.approvals import ApprovalDecision
 from agent_runtime.core.artifacts import ArtifactPage
 from agent_runtime.core.capabilities import AgentCapabilities, ControlName
 from agent_runtime.core.events import AgentEvent, EventTypes
+from agent_runtime.core.results import (
+    AgentResponseSpec,
+    agent_response_instructions,
+    agent_response_messages,
+)
 from agent_runtime.core.sessions import (
     AgentRef,
     AgentSession,
@@ -38,6 +43,7 @@ class LocalAgentProvider:
     provider_id: str = "local"
     _agents: dict[str, AgentSpec] = field(default_factory=dict)
     _sessions: dict[str, AgentSession] = field(default_factory=dict)
+    _session_tasks: dict[str, TaskSpec] = field(default_factory=dict)
     _loops: dict[str, AgentLoop] = field(default_factory=dict)
 
     def capabilities(self) -> AgentCapabilities:
@@ -68,6 +74,7 @@ class LocalAgentProvider:
             metadata=task.metadata,
         )
         self._sessions[session.id] = session
+        self._session_tasks[session.id] = task
         return session
 
     async def stream_events(
@@ -86,10 +93,17 @@ class LocalAgentProvider:
             data={"agent_id": session_obj.agent_id},
         )
 
-        model_ref = session_obj.model or "echo/echo-mini"
         agent_spec = self._agents.get(session_obj.agent_id or "")
+        task_spec = self._session_tasks.get(session_obj.id)
+        model_ref = (
+            session_obj.model
+            or (agent_spec.model if agent_spec is not None else None)
+            or (task_spec.model if task_spec is not None else None)
+            or "echo/echo-mini"
+        )
+        response_spec = _response_spec(agent_spec, task_spec)
         instructions = (
-            agent_spec.instructions
+            _instructions(agent_spec, response_spec)
             if agent_spec is not None
             and _supports_model_control(self.models, model_ref, "instructions")
             else None
@@ -100,6 +114,10 @@ class LocalAgentProvider:
             if agent_spec is not None and _supports_function_tools(self.models, model_ref)
             else [],
         )
+        hosted_tools = [
+            *(agent_spec.hosted_tools if agent_spec is not None else []),
+            *(task_spec.hosted_tools if task_spec is not None else []),
+        ]
 
         async def stream_factory(
             *, input: str | list[Any], provider_state: Any
@@ -109,6 +127,7 @@ class LocalAgentProvider:
                 input=input,
                 provider_state=provider_state,
                 tools=tool_definitions,
+                hosted_tools=hosted_tools,
                 instructions=instructions,
             ):
                 yield event
@@ -116,17 +135,23 @@ class LocalAgentProvider:
         loop = AgentLoop(
             stream_factory=stream_factory,
             tools=self.tools,
+            hosted_tools=hosted_tools,
             approval_policy=self.approval_policy,
             max_iterations=self.max_iterations,
         )
         self._loops[session_obj.id] = loop
 
         terminal_seen: str | None = None
+        text_parts: list[str] = []
         async for event in loop.run(
             input=session_obj.task,
             session_id=session_obj.id,
             provider_id=self.provider_id,
         ):
+            if event.type == EventTypes.MODEL_TEXT_DELTA:
+                delta = event.data.get("delta")
+                if isinstance(delta, str):
+                    text_parts.append(delta)
             if event.type == EventTypes.APPROVAL_REQUESTED:
                 session_obj.status = "waiting"
             elif event.type in {EventTypes.APPROVAL_APPROVED, EventTypes.APPROVAL_DENIED}:
@@ -145,17 +170,31 @@ class LocalAgentProvider:
             session_obj.status = "failed"
             return
 
+        messages = agent_response_messages("".join(text_parts), response_spec)
+        if response_spec.mode == "conversational":
+            for message in messages:
+                yield AgentEvent(
+                    type=EventTypes.AGENT_RESPONSE_MESSAGE_CREATED,
+                    provider=self.provider_id,
+                    session_id=session_obj.id,
+                    item_id=f"{session_obj.id}_message_{message.index}",
+                    data={
+                        "message": message,
+                        "index": message.index,
+                        "role": message.role,
+                        "content": message.content,
+                    },
+                )
+
         session_obj.status = "completed"
         yield AgentEvent(
             type=EventTypes.SESSION_COMPLETED,
             provider=self.provider_id,
             session_id=session_obj.id,
-            data={"agent_id": session_obj.agent_id},
+            data={"agent_id": session_obj.agent_id, "message_count": len(messages)},
         )
 
-    async def send_message(
-        self, session: SessionRef | AgentSession, message: str
-    ) -> InvocationRef:
+    async def send_message(self, session: SessionRef | AgentSession, message: str) -> InvocationRef:
         session_obj = self._session(session)
         session_obj.task = f"{session_obj.task}\n\nUser: {message}"
         return InvocationRef(
@@ -170,6 +209,7 @@ class LocalAgentProvider:
                 await loop.approve(approval_id, decision)
                 return
         from agent_runtime.core.errors import ApprovalError
+
         raise ApprovalError(f"No pending approval with id '{approval_id}'.")
 
     async def cancel(self, session: SessionRef | AgentSession) -> None:
@@ -208,21 +248,38 @@ def _tool_payload(runtime: ToolRuntime | None, names: list[str]) -> list[dict[st
     if runtime is None or not names:
         return []
     wanted = set(names)
-    return [
-        tool
-        for tool in runtime.registry.to_provider_tools()
-        if tool.get("name") in wanted
-    ]
+    return [tool for tool in runtime.registry.to_provider_tools() if tool.get("name") in wanted]
 
 
-def _supports_model_control(
-    models: ModelRuntime, model_ref: str, control: ControlName
-) -> bool:
+def _supports_model_control(models: ModelRuntime, model_ref: str, control: ControlName) -> bool:
     try:
         detail = models.capabilities(model_ref).controls.get(control)
     except Exception:
         return False
     return detail is not None and detail.status != "unsupported"
+
+
+def _response_spec(
+    agent_spec: AgentSpec | None,
+    task_spec: TaskSpec | None,
+) -> AgentResponseSpec:
+    if task_spec is not None and task_spec.response is not None:
+        return task_spec.response
+    if agent_spec is not None:
+        return agent_spec.response
+    return AgentResponseSpec()
+
+
+def _instructions(
+    agent_spec: AgentSpec,
+    response_spec: AgentResponseSpec,
+) -> str:
+    response_instructions = agent_response_instructions(response_spec)
+    if response_instructions is None:
+        return agent_spec.instructions
+    if not agent_spec.instructions:
+        return response_instructions
+    return f"{agent_spec.instructions}\n\n{response_instructions}"
 
 
 def _supports_function_tools(models: ModelRuntime, model_ref: str) -> bool:
