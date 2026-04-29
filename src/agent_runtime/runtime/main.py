@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from typing import Any, TypeVar, cast
 from uuid import uuid4
 
@@ -57,6 +57,7 @@ from agent_runtime.providers.registry import ProviderRef, ProviderRegistry
 from agent_runtime.runtime.agents import AgentRuntimeFacade
 from agent_runtime.runtime.caches import ProviderCacheRuntime
 from agent_runtime.runtime.chat import ChatRuntimeFacade
+from agent_runtime.runtime.config import RuntimeConfig, workflow_policy
 from agent_runtime.runtime.event_metadata import (
     _attach_accounting_metadata,
     _event_usage,
@@ -69,7 +70,16 @@ from agent_runtime.runtime.event_metadata import (
     _tool_routing_metadata_from_events,
     _tool_usage_from_events,
 )
-from agent_runtime.runtime.model import ModelRuntime
+from agent_runtime.runtime.model import (
+    ModelRuntime,
+    _coerce_cache,
+    _coerce_compaction,
+    _coerce_output_schema,
+    _coerce_output_spec,
+    _coerce_str_list,
+    _coerce_tool_search,
+    _consume_config_value,
+)
 from agent_runtime.runtime.output import (
     _FINALIZER_TOOL_NAME,
     _build_repair_prompt,
@@ -99,7 +109,14 @@ from agent_runtime.runtime.workspaces import WorkspaceRuntimeFacade
 from agent_runtime.tools.catalog import ToolCatalog
 from agent_runtime.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
 from agent_runtime.tools.registry import ToolDefinition
-from agent_runtime.tools.routing import ResolvedToolPlan, ToolCandidate, ToolRoutingSpec
+from agent_runtime.tools.routing import (
+    ResolvedToolPlan,
+    ToolCandidate,
+    ToolRoutingSpec,
+)
+from agent_runtime.tools.routing import (
+    ToolBudget as RoutingToolBudget,
+)
 from agent_runtime.tools.runtime import ToolRuntime
 from agent_runtime.tools.session import ToolSession
 from agent_runtime.tools.toolsets import (
@@ -108,6 +125,7 @@ from agent_runtime.tools.toolsets import (
     ToolSelection,
     Toolset,
 )
+from agent_runtime.workspaces.spec import WorkspaceSpec
 
 T = TypeVar("T")
 
@@ -203,9 +221,10 @@ class AgentRuntime:
     async def plan_run(
         self,
         *,
-        provider: str,
+        provider: str | None = None,
         input: str,
         model: str | None = None,
+        config: RuntimeConfig | None = None,
         tools: list[str] | str | None = None,
         tool_routing: ToolRoutingSpec | None = None,
         tool_session: ToolSession | None = None,
@@ -232,6 +251,92 @@ class AgentRuntime:
         policy: Any = None,
     ) -> ResolvedRunSpec:
         """Resolve a run without executing it and return the prompt/tool plan."""
+        config_values = config.to_kwargs(surface="runtime") if config is not None else {}
+        provider = cast(
+            str | None,
+            _consume_config_value(config_values, "provider", provider),
+        )
+        model = cast(str | None, _consume_config_value(config_values, "model", model))
+        tools = cast(
+            list[str] | str | None,
+            _consume_config_value(config_values, "tools", tools),
+        )
+        tool_routing = _coerce_tool_routing(
+            _consume_config_value(config_values, "tool_routing", tool_routing)
+        )
+        tool_session = cast(
+            ToolSession | None,
+            _consume_config_value(config_values, "tool_session", tool_session),
+        )
+        instructions = cast(
+            str | None,
+            _consume_config_value(config_values, "instructions", instructions),
+        )
+        prompt = cast(
+            PromptSpec | None,
+            _consume_config_value(config_values, "prompt", prompt),
+        )
+        prompt_mode = cast(
+            PromptMode | None,
+            _consume_config_value(config_values, "prompt_mode", prompt_mode),
+        )
+        channel = cast(str | None, _consume_config_value(config_values, "channel", channel))
+        output_schema = _coerce_output_schema(
+            _consume_config_value(config_values, "output_schema", output_schema)
+        )
+        output_strategy = cast(
+            OutputStrategy | None,
+            _consume_config_value(config_values, "output_strategy", output_strategy),
+        )
+        output_spec = _coerce_output_spec(
+            _consume_config_value(config_values, "output_spec", output_spec)
+        )
+        hosted_tools = cast(
+            list[HostedToolSpec] | None,
+            _consume_config_value(config_values, "hosted_tools", hosted_tools),
+        )
+        toolsets = cast(
+            list[Any] | None,
+            _consume_config_value(config_values, "toolsets", toolsets),
+        )
+        tool_selection = cast(
+            ToolSelection,
+            _consume_config_value(config_values, "tool_selection", tool_selection),
+        )
+        tool_budget = _coerce_tool_budget(
+            _consume_config_value(config_values, "tool_budget", tool_budget)
+        )
+        cache = _coerce_cache(_consume_config_value(config_values, "cache", cache))
+        tool_search = _coerce_tool_search(
+            _consume_config_value(config_values, "tool_search", tool_search)
+        )
+        dynamic_loading = cast(
+            DynamicToolLoadingSpec | None,
+            _consume_config_value(config_values, "dynamic_loading", dynamic_loading),
+        )
+        data_sources = cast(
+            list[DataSourceRef] | None,
+            _consume_config_value(config_values, "data_sources", data_sources),
+        )
+        context_flags = _coerce_str_list(
+            _consume_config_value(config_values, "context_flags", context_flags)
+        )
+        workspace = _coerce_workspace(
+            _consume_config_value(config_values, "workspace", workspace)
+        )
+        workspace_provider = _consume_config_value(
+            config_values, "workspace_provider", workspace_provider
+        )
+        workspace_policy = workflow_policy(
+            _consume_config_value(config_values, "workspace_policy", workspace_policy)
+        )
+        workspace_prefix = cast(
+            str,
+            _consume_config_value(config_values, "workspace_prefix", workspace_prefix),
+        )
+        policy = workflow_policy(_consume_config_value(config_values, "policy", policy))
+        if provider is None:
+            raise ValueError("provider must be provided explicitly or through config.")
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource
         if not model_name:
@@ -454,9 +559,10 @@ class AgentRuntime:
     async def stream(
         self,
         *,
-        provider: str,
+        provider: str | None = None,
         input: str,
         model: str | None = None,
+        config: RuntimeConfig | None = None,
         tools: list[str] | str | None = None,
         tool_routing: ToolRoutingSpec | None = None,
         tool_session: ToolSession | None = None,
@@ -504,6 +610,148 @@ class AgentRuntime:
         """
         from agent_runtime.runtime.agent_loop import AgentLoop
 
+        config_values = config.to_kwargs(surface="runtime") if config is not None else {}
+        provider = cast(
+            str | None,
+            _consume_config_value(config_values, "provider", provider),
+        )
+        model = cast(str | None, _consume_config_value(config_values, "model", model))
+        tools = cast(
+            list[str] | str | None,
+            _consume_config_value(config_values, "tools", tools),
+        )
+        tool_routing = _coerce_tool_routing(
+            _consume_config_value(config_values, "tool_routing", tool_routing)
+        )
+        tool_session = cast(
+            ToolSession | None,
+            _consume_config_value(config_values, "tool_session", tool_session),
+        )
+        tool_execution_context = cast(
+            dict[str, Any] | None,
+            _consume_config_value(
+                config_values, "tool_execution_context", tool_execution_context
+            ),
+        )
+        tool_max_concurrent = cast(
+            int | None,
+            _consume_config_value(
+                config_values, "tool_max_concurrent", tool_max_concurrent
+            ),
+        )
+        tool_timeout = cast(
+            float | None,
+            _consume_config_value(config_values, "tool_timeout", tool_timeout),
+        )
+        approval_policy = _consume_config_value(
+            config_values, "approval_policy", approval_policy
+        )
+        policy = workflow_policy(_consume_config_value(config_values, "policy", policy))
+        if isinstance(approval_policy, str):
+            if policy is None:
+                policy = workflow_policy(approval_policy)
+            approval_policy = None
+        max_iterations = cast(
+            int,
+            _consume_config_value(config_values, "max_iterations", max_iterations),
+        )
+        mock_tools = cast(
+            bool,
+            _consume_config_value(config_values, "mock_tools", mock_tools),
+        )
+        provider_state = cast(
+            ProviderState | None,
+            _consume_config_value(config_values, "provider_state", provider_state),
+        )
+        instructions = cast(
+            str | None,
+            _consume_config_value(config_values, "instructions", instructions),
+        )
+        prompt = cast(
+            PromptSpec | None,
+            _consume_config_value(config_values, "prompt", prompt),
+        )
+        prompt_mode = cast(
+            PromptMode | None,
+            _consume_config_value(config_values, "prompt_mode", prompt_mode),
+        )
+        channel = cast(str | None, _consume_config_value(config_values, "channel", channel))
+        output_schema = _coerce_output_schema(
+            _consume_config_value(config_values, "output_schema", output_schema)
+        )
+        output_strategy = cast(
+            OutputStrategy | None,
+            _consume_config_value(config_values, "output_strategy", output_strategy),
+        )
+        output_spec = _coerce_output_spec(config_values.pop("output_spec", None))
+        if output_schema is None and output_spec is not None:
+            output_schema = build_output_schema(output_spec)
+            if output_strategy is None:
+                output_strategy = output_spec.strategy
+        hosted_tools = cast(
+            list[HostedToolSpec] | None,
+            _consume_config_value(config_values, "hosted_tools", hosted_tools),
+        )
+        toolsets = cast(
+            list[Any] | None,
+            _consume_config_value(config_values, "toolsets", toolsets),
+        )
+        tool_selection = cast(
+            ToolSelection,
+            _consume_config_value(config_values, "tool_selection", tool_selection),
+        )
+        tool_budget = _coerce_tool_budget(
+            _consume_config_value(config_values, "tool_budget", tool_budget)
+        )
+        hosted_tool_handlers = cast(
+            HostedToolHandlers | None,
+            _consume_config_value(
+                config_values, "hosted_tool_handlers", hosted_tool_handlers
+            ),
+        )
+        cache = _coerce_cache(_consume_config_value(config_values, "cache", cache))
+        tool_search = _coerce_tool_search(
+            _consume_config_value(config_values, "tool_search", tool_search)
+        )
+        dynamic_loading = cast(
+            DynamicToolLoadingSpec | None,
+            _consume_config_value(config_values, "dynamic_loading", dynamic_loading),
+        )
+        compaction = _coerce_compaction(
+            _consume_config_value(config_values, "compaction", compaction)
+        )
+        modalities = _coerce_str_list(
+            _consume_config_value(config_values, "modalities", modalities)
+        )
+        data_sources = cast(
+            list[DataSourceRef] | None,
+            _consume_config_value(config_values, "data_sources", data_sources),
+        )
+        context_flags = _coerce_str_list(
+            _consume_config_value(config_values, "context_flags", context_flags)
+        )
+        workspace = _coerce_workspace(
+            _consume_config_value(config_values, "workspace", workspace)
+        )
+        workspace_provider = _consume_config_value(
+            config_values, "workspace_provider", workspace_provider
+        )
+        workspace_policy = workflow_policy(
+            _consume_config_value(config_values, "workspace_policy", workspace_policy)
+        )
+        workspace_prefix = cast(
+            str,
+            _consume_config_value(config_values, "workspace_prefix", workspace_prefix),
+        )
+        workspace_preserve = cast(
+            bool,
+            _consume_config_value(
+                config_values, "workspace_preserve", workspace_preserve
+            ),
+        )
+        kwargs = {**config_values, **kwargs}
+        if provider is None:
+            raise ValueError("provider must be provided explicitly or through config.")
         provider_ref = ProviderRef.parse(provider)
         model_name = model or provider_ref.resource
         if not model_name:
@@ -1001,9 +1249,10 @@ class AgentRuntime:
     async def run(
         self,
         *,
-        provider: str,
+        provider: str | None = None,
         input: str,
         model: str | None = None,
+        config: RuntimeConfig | None = None,
         tools: list[str] | str | None = None,
         tool_routing: ToolRoutingSpec | None = None,
         tool_session: ToolSession | None = None,
@@ -1052,6 +1301,158 @@ class AgentRuntime:
         the runtime to feed validation errors back to the model and retry up to
         ``N`` times before failing.
         """
+        config_values = config.to_kwargs(surface="runtime") if config is not None else {}
+        provider = cast(
+            str | None,
+            _consume_config_value(config_values, "provider", provider),
+        )
+        model = cast(str | None, _consume_config_value(config_values, "model", model))
+        tools = cast(
+            list[str] | str | None,
+            _consume_config_value(config_values, "tools", tools),
+        )
+        tool_routing = _coerce_tool_routing(
+            _consume_config_value(config_values, "tool_routing", tool_routing)
+        )
+        tool_session = cast(
+            ToolSession | None,
+            _consume_config_value(config_values, "tool_session", tool_session),
+        )
+        tool_execution_context = cast(
+            dict[str, Any] | None,
+            _consume_config_value(
+                config_values, "tool_execution_context", tool_execution_context
+            ),
+        )
+        tool_max_concurrent = cast(
+            int | None,
+            _consume_config_value(
+                config_values, "tool_max_concurrent", tool_max_concurrent
+            ),
+        )
+        tool_timeout = cast(
+            float | None,
+            _consume_config_value(config_values, "tool_timeout", tool_timeout),
+        )
+        approval_policy = _consume_config_value(
+            config_values, "approval_policy", approval_policy
+        )
+        policy = workflow_policy(_consume_config_value(config_values, "policy", policy))
+        if isinstance(approval_policy, str):
+            if policy is None:
+                policy = workflow_policy(approval_policy)
+            approval_policy = None
+        max_iterations = cast(
+            int,
+            _consume_config_value(config_values, "max_iterations", max_iterations),
+        )
+        mock_tools = cast(
+            bool,
+            _consume_config_value(config_values, "mock_tools", mock_tools),
+        )
+        output_type = cast(
+            type[T] | None,
+            _consume_config_value(config_values, "output_type", output_type),
+        )
+        output_spec = _coerce_output_spec(
+            _consume_config_value(config_values, "output_spec", output_spec)
+        )
+        configured_output_schema = _coerce_output_schema(
+            config_values.pop("output_schema", None)
+        )
+        configured_output_strategy = cast(
+            OutputStrategy | None,
+            config_values.pop("output_strategy", None),
+        )
+        if output_spec is None and configured_output_schema is not None:
+            output_spec = OutputSpec(
+                schema=configured_output_schema.schema,
+                strategy=configured_output_strategy or "provider_native",
+                name=configured_output_schema.name,
+                description=configured_output_schema.description,
+                strict=configured_output_schema.strict,
+            )
+        provider_state = cast(
+            ProviderState | None,
+            _consume_config_value(config_values, "provider_state", provider_state),
+        )
+        instructions = cast(
+            str | None,
+            _consume_config_value(config_values, "instructions", instructions),
+        )
+        prompt = cast(
+            PromptSpec | None,
+            _consume_config_value(config_values, "prompt", prompt),
+        )
+        prompt_mode = cast(
+            PromptMode | None,
+            _consume_config_value(config_values, "prompt_mode", prompt_mode),
+        )
+        channel = cast(str | None, _consume_config_value(config_values, "channel", channel))
+        hosted_tools = cast(
+            list[HostedToolSpec] | None,
+            _consume_config_value(config_values, "hosted_tools", hosted_tools),
+        )
+        toolsets = cast(
+            list[Any] | None,
+            _consume_config_value(config_values, "toolsets", toolsets),
+        )
+        tool_selection = cast(
+            ToolSelection,
+            _consume_config_value(config_values, "tool_selection", tool_selection),
+        )
+        tool_budget = _coerce_tool_budget(
+            _consume_config_value(config_values, "tool_budget", tool_budget)
+        )
+        hosted_tool_handlers = cast(
+            HostedToolHandlers | None,
+            _consume_config_value(
+                config_values, "hosted_tool_handlers", hosted_tool_handlers
+            ),
+        )
+        cache = _coerce_cache(_consume_config_value(config_values, "cache", cache))
+        tool_search = _coerce_tool_search(
+            _consume_config_value(config_values, "tool_search", tool_search)
+        )
+        dynamic_loading = cast(
+            DynamicToolLoadingSpec | None,
+            _consume_config_value(config_values, "dynamic_loading", dynamic_loading),
+        )
+        compaction = _coerce_compaction(
+            _consume_config_value(config_values, "compaction", compaction)
+        )
+        modalities = _coerce_str_list(
+            _consume_config_value(config_values, "modalities", modalities)
+        )
+        data_sources = cast(
+            list[DataSourceRef] | None,
+            _consume_config_value(config_values, "data_sources", data_sources),
+        )
+        context_flags = _coerce_str_list(
+            _consume_config_value(config_values, "context_flags", context_flags)
+        )
+        workspace = _coerce_workspace(
+            _consume_config_value(config_values, "workspace", workspace)
+        )
+        workspace_provider = _consume_config_value(
+            config_values, "workspace_provider", workspace_provider
+        )
+        workspace_policy = workflow_policy(
+            _consume_config_value(config_values, "workspace_policy", workspace_policy)
+        )
+        workspace_prefix = cast(
+            str,
+            _consume_config_value(config_values, "workspace_prefix", workspace_prefix),
+        )
+        workspace_preserve = cast(
+            bool,
+            _consume_config_value(
+                config_values, "workspace_preserve", workspace_preserve
+            ),
+        )
+        kwargs = {**config_values, **kwargs}
+        if provider is None:
+            raise ValueError("provider must be provided explicitly or through config.")
         spec = _resolve_output_spec(output_type, output_spec)
         output_schema = build_output_schema(spec)
         provider_ref = ProviderRef.parse(provider)
@@ -1584,6 +1985,34 @@ def _normalize_tools_argument(
     if isinstance(tools, str):
         return [tools], tool_routing
     return list(tools or []), tool_routing
+
+
+def _coerce_tool_budget(value: Any) -> ToolBudget | None:
+    if value is None or isinstance(value, ToolBudget):
+        return value
+    if isinstance(value, Mapping):
+        return ToolBudget(**dict(value))
+    raise ConfigurationError(f"Invalid tool_budget config: {value!r}.")
+
+
+def _coerce_tool_routing(value: Any) -> ToolRoutingSpec | None:
+    if value is None or isinstance(value, ToolRoutingSpec):
+        return value
+    if isinstance(value, Mapping):
+        data = dict(value)
+        budget = data.get("budget")
+        if isinstance(budget, Mapping):
+            data["budget"] = RoutingToolBudget(**dict(budget))
+        return ToolRoutingSpec(**data)
+    raise ConfigurationError(f"Invalid tool_routing config: {value!r}.")
+
+
+def _coerce_workspace(value: Any) -> Any | None:
+    if value is None or isinstance(value, WorkspaceSpec):
+        return value
+    if isinstance(value, Mapping):
+        return WorkspaceSpec(**dict(value))
+    return value
 
 
 def _routing_enabled(tool_routing: ToolRoutingSpec | None) -> bool:

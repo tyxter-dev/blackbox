@@ -15,6 +15,7 @@ from agent_runtime.runtime.config import (
     workflow_profile_docs,
     workflow_profiles,
 )
+from agent_runtime.workspaces import WorkspaceSpec
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 EXPECTED_PROFILES = {
@@ -246,3 +247,68 @@ async def test_model_runtime_rejects_unsupported_config_before_dispatch() -> Non
         match=r"temperature|parallel_tool_calls|reasoning_effort",
     ):
         await runtime.models.run(input="hello", config=config)
+
+
+async def test_agent_runtime_run_accepts_config_and_forwards_model_controls() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    scripted.queue(text_only_turn("ok"))
+    runtime.registry.register_model(scripted)
+    config = RuntimeConfig.profile("fast_text").with_overrides(provider="scripted:test")
+
+    result = await runtime.run(
+        input="hello",
+        config=config,
+        max_output_tokens=128,
+    )
+
+    assert result.text == "ok"
+    request = scripted.calls[0]
+    assert request.model == "test"
+    assert request.controls.temperature == 0.2
+    assert request.controls.max_output_tokens == 128
+
+
+async def test_agent_runtime_plan_run_accepts_config() -> None:
+    runtime = AgentRuntime()
+    runtime.registry.register_model(ScriptedModelProvider())
+    config = RuntimeConfig.profile("fast_text").with_overrides(provider="scripted:test")
+
+    plan = await runtime.plan_run(input="hello", config=config)
+
+    assert plan.provider == "scripted"
+    assert plan.model == "test"
+
+
+async def test_agent_runtime_rejects_wrong_surface_config_before_dispatch() -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    config = RuntimeConfig.profile("realtime_voice").with_overrides(
+        provider="scripted:test"
+    )
+
+    with pytest.raises(ConfigurationError, match="cannot be used"):
+        await runtime.run(input="hello", config=config)
+
+    assert scripted.calls == []
+
+
+async def test_agent_runtime_coding_profile_maps_named_approval_policy(
+    tmp_path: Path,
+) -> None:
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    scripted.queue(text_only_turn("done"))
+    runtime.registry.register_model(scripted)
+    config = RuntimeConfig.profile("coding_agent").with_overrides(
+        provider="scripted:test",
+        workspace=WorkspaceSpec.local(tmp_path),
+        cache=None,
+        compaction=None,
+    )
+
+    result = await runtime.run(input="inspect workspace", config=config)
+
+    assert result.text == "done"
+    assert scripted.calls[0].model == "test"

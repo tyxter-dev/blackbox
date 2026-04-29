@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from agent_runtime.core.errors import ConfigurationError
+from agent_runtime.core.policy import PolicyDecision, PolicyRequest
 from agent_runtime.providers.registry import ProviderRef
 
 WorkflowSurface = Literal["model", "runtime", "agent_session", "realtime"]
@@ -191,6 +192,30 @@ class RuntimeConfig:
         return values
 
 
+@dataclass(slots=True)
+class RiskyActionApprovalPolicy:
+    """Require approval for runtime actions that can mutate state or escape read-only mode."""
+
+    async def check(self, request: PolicyRequest) -> PolicyDecision:
+        if request.checkpoint in _RISKY_CHECKPOINTS or _looks_risky_action(
+            request.action
+        ):
+            return PolicyDecision.require_approval(
+                "Action requires approval under the risky_actions workflow policy."
+            )
+        return PolicyDecision.allow()
+
+
+def workflow_policy(value: Any) -> Any:
+    if value is None or not isinstance(value, str):
+        return value
+    if value == "risky_actions":
+        return RiskyActionApprovalPolicy()
+    if value == "allow_all":
+        return None
+    raise ConfigurationError(f"Unknown workflow policy {value!r}.")
+
+
 def get_workflow_profile(name: WorkflowProfileName | str) -> WorkflowProfile:
     try:
         return _PROFILES[str(name)]
@@ -224,6 +249,44 @@ def workflow_profile_docs() -> dict[str, dict[str, Any]]:
         }
         for profile in workflow_profiles()
     }
+
+
+_RISKY_CHECKPOINTS = frozenset(
+    {
+        "before_command",
+        "before_workspace_write",
+        "before_workspace_restore",
+        "before_port_expose",
+        "before_artifact_export",
+        "before_hosted_tool_call",
+        "before_hosted_artifact_export",
+        "before_mcp_call",
+        "before_agent_publish",
+        "before_connector_bind",
+        "before_scheduled_run",
+    }
+)
+
+_RISKY_ACTION_MARKERS = (
+    "apply",
+    "command",
+    "delete",
+    "deploy",
+    "exec",
+    "patch",
+    "publish",
+    "run",
+    "shell",
+    "write",
+)
+
+
+def _looks_risky_action(action: str) -> bool:
+    normalized = action.lower()
+    for separator in (":", "/", "\\", ".", "-", " "):
+        normalized = normalized.replace(separator, "_")
+    tokens = {token for token in normalized.split("_") if token}
+    return any(marker in tokens for marker in _RISKY_ACTION_MARKERS)
 
 
 def _load_yaml(path: Path) -> Any:
