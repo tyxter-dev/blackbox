@@ -1,3 +1,33 @@
+"""Public SDK entrypoint for ``agent_runtime``.
+
+Coding agents should treat this module as the first integration map for the
+library. The top-level exports below are the stable public API; implementation
+details live under the matching subpackages.
+
+Start paths:
+  * High-level task loop: ``AgentRuntime.run(...)``. Minimal offline example:
+    ``examples/minimal_runtime_run.py``.
+  * Direct model turn: ``runtime.models.run(...)``. Minimal offline example:
+    ``examples/minimal_model_turn.py``.
+  * Managed agent session: ``runtime.agents.run(...)``. Minimal offline
+    example: ``examples/minimal_local_agent.py``.
+  * Workspace/coding-agent files: ``runtime.workspaces`` and
+    ``WorkspaceSpec``. Minimal offline example: ``examples/minimal_workspace.py``.
+  * Packaged workspace agents: ``WorkspaceAgentSpec`` and
+    ``run_workspace_agent(...)``. See ``src/agent_runtime/workspace_agents/README.md``.
+  * Hosted tools and MCP: ``WebSearch``, ``FileSearch``, ``RemoteMCP``,
+    and ``MCPToolset``. See ``src/agent_runtime/tools/hosted/README.md`` and
+    ``src/agent_runtime/mcp/README.md``.
+
+Import guidance:
+  * Prefer ``from agent_runtime import AgentRuntime, WebSearch, FileSearch``
+    for public contracts.
+  * Import concrete providers from ``agent_runtime.providers.model_adapters``
+    and ``agent_runtime.providers.agent_adapters``.
+  * Compatibility namespaces under ``agent_runtime.models`` and
+    ``agent_runtime.agents`` exist for older imports.
+"""
+
 from importlib import import_module
 from typing import Any
 

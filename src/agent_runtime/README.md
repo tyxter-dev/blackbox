@@ -3,6 +3,41 @@
 `agent_runtime` is the public SDK package. Its subpackages are organized around
 runtime responsibilities, not around provider brands.
 
+## Coding Agent Quickstart
+
+Start with `src/agent_runtime/__init__.py`. It is the public export surface a
+coding agent should inspect first when integrating the library.
+
+Use these minimal offline examples as first references:
+
+- `examples/minimal_model_turn.py`: direct `runtime.models.run(...)`.
+- `examples/minimal_runtime_run.py`: high-level `AgentRuntime.run(...)` with
+  typed output.
+- `examples/minimal_local_agent.py`: `runtime.agents.run(...)` with the local
+  agent provider.
+- `examples/minimal_workspace.py`: `runtime.workspaces` local file and command
+  operations.
+
+Use these package READMEs for deeper subsystem context:
+
+- `runtime/README.md`: orchestration facades and high-level run behavior.
+- `providers/README.md`: provider protocols and adapter organization.
+- `tools/README.md`: local Python tool registration and execution.
+- `tools/hosted/README.md`: provider-hosted tools such as `WebSearch`,
+  `FileSearch`, and `RemoteMCP`.
+- `mcp/README.md`: MCP server specs, routing, connector, and trust policy.
+- `workspaces/README.md`: workspace provider contracts.
+- `workspace_agents/README.md`: packaged workspace-agent contracts.
+
+Import guidance:
+
+- Prefer `from agent_runtime import AgentRuntime, WebSearch, FileSearch` for
+  public contracts.
+- Import concrete providers from `agent_runtime.providers.model_adapters...`
+  and `agent_runtime.providers.agent_adapters...`.
+- Treat `agent_runtime.models` and `agent_runtime.agents` as compatibility
+  namespaces unless you are maintaining old imports.
+
 ## Current Layout
 
 - `core/`: stable primitive contracts shared across the runtime.

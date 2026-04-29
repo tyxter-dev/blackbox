@@ -4,6 +4,37 @@ A fresh scaffold for a provider-native agent runtime.
 
 The design deliberately does **not** use LiteLLM. It borrows only the useful idea of provider compatibility through routing, capabilities, and a common public interface. The core is not a Chat Completions normalizer. The core is built around sessions, events, state, artifacts, and provider-native escape hatches.
 
+## Coding agent fast path
+
+If you are integrating this library from code, start at
+`src/agent_runtime/__init__.py`. It is the public SDK entrypoint and lists the
+stable exports an external agent should prefer.
+
+Minimal offline examples:
+
+- Direct model call: `examples/minimal_model_turn.py`
+- High-level runtime loop with typed output: `examples/minimal_runtime_run.py`
+- Local managed agent session: `examples/minimal_local_agent.py`
+- Workspace/coding-agent file flow: `examples/minimal_workspace.py`
+
+Fuller reference examples:
+
+- Runtime loop with tools and typed output: `examples/run_with_typed_output.py`
+- OpenAI Responses provider: `examples/openai_responses_run.py`
+- Local agent streaming session: `examples/agent_provider_local_session.py`
+- Workspace provider file, patch, command, and artifact flow:
+  `examples/workspace_provider_local_files.py`
+- Hosted tools and MCP integrations: `examples/launchmybakery.py`
+
+Import guidance:
+
+- Prefer `from agent_runtime import AgentRuntime, WebSearch, FileSearch` for
+  public contracts.
+- Import concrete providers from `agent_runtime.providers.model_adapters...`
+  or `agent_runtime.providers.agent_adapters...`.
+- Use package READMEs under `src/agent_runtime/` for subsystem-specific
+  integration notes.
+
 ## Heart of the library
 
 ```text
@@ -334,6 +365,14 @@ from the model capability profile.
 
 Runnable scripts live under `examples/`:
 
+- `examples/minimal_model_turn.py` - smallest direct model-turn integration
+  using the dependency-free echo provider.
+- `examples/minimal_runtime_run.py` - smallest high-level `AgentRuntime.run`
+  integration with dataclass typed output.
+- `examples/minimal_local_agent.py` - smallest local `AgentProvider`
+  integration backed by the echo provider.
+- `examples/minimal_workspace.py` - smallest `runtime.workspaces` integration
+  for local files and commands.
 - `examples/run_with_typed_output.py` — high-level blackbox loop with a
   Pydantic `output_type`, tool dispatch, and deferred payload collection.
 - `examples/echo_run.py` — minimal model turn with the dependency-free echo provider.
