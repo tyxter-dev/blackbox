@@ -5,6 +5,13 @@ from agent_runtime.observability.evals import (
     EvaluatorHook,
     evaluate_trace,
 )
+from agent_runtime.observability.metrics import (
+    MemoryMetricExporter,
+    MetricExporter,
+    MetricRecord,
+    OpenTelemetryMetricExporter,
+    metrics_from_trace,
+)
 from agent_runtime.observability.otel import OpenTelemetryTraceExporter, span_to_otel_attributes
 from agent_runtime.observability.presets import ObservabilityPreset
 from agent_runtime.observability.replay import (
@@ -45,7 +52,11 @@ __all__ = [
     "EventSink",
     "JSONLEventSink",
     "MemoryEventSink",
+    "MemoryMetricExporter",
+    "MetricExporter",
+    "MetricRecord",
     "ObservabilityPreset",
+    "OpenTelemetryMetricExporter",
     "OpenTelemetryTraceExporter",
     "RedactingEventSink",
     "RedactionPolicy",
@@ -61,6 +72,7 @@ __all__ = [
     "diff_traces",
     "evaluate_trace",
     "infer_span_kind",
+    "metrics_from_trace",
     "model_turn_span_from_events",
     "replay_run",
     "span_to_otel_attributes",

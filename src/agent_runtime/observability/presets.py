@@ -4,6 +4,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from agent_runtime.observability.metrics import (
+    MemoryMetricExporter,
+    MetricExporter,
+    OpenTelemetryMetricExporter,
+)
 from agent_runtime.observability.sinks import (
     CompositeEventSink,
     EventSink,
@@ -28,6 +33,7 @@ class ObservabilityPreset:
     evaluations: str | None = None
     redact: bool = True
     event_sink: EventSink | None = None
+    metric_exporter: MetricExporter | None = None
     log_path: Path | None = None
     keep_raw_payloads: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -79,6 +85,11 @@ class ObservabilityPreset:
             event_sink = CompositeEventSink(sinks)
         if redact and event_sink is not None:
             event_sink = RedactingEventSink(inner=event_sink)
+        metric_exporter: MetricExporter | None = None
+        if metrics == "memory":
+            metric_exporter = MemoryMetricExporter()
+        elif metrics == "otlp":
+            metric_exporter = OpenTelemetryMetricExporter()
 
         return cls(
             service_name=service_name,
@@ -89,6 +100,7 @@ class ObservabilityPreset:
             evaluations=evaluations,
             redact=redact,
             event_sink=event_sink,
+            metric_exporter=metric_exporter,
             log_path=resolved_log_path,
             keep_raw_payloads=keep_raw_payloads,
             metadata=dict(metadata or {}),

@@ -4,7 +4,7 @@ import json
 
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.raw import RawEnvelope
-from agent_runtime.observability import ObservabilityPreset
+from agent_runtime.observability import MemoryMetricExporter, ObservabilityPreset
 
 
 def test_production_preset_builds_redacted_jsonl_logging(tmp_path) -> None:
@@ -22,9 +22,21 @@ def test_production_preset_builds_redacted_jsonl_logging(tmp_path) -> None:
     assert preset.traces_enabled is True
     assert preset.metrics_enabled is True
     assert preset.event_logging_enabled is True
+    assert preset.metric_exporter is not None
     assert preset.redact is True
     assert preset.keep_raw_payloads is False
     assert preset.log_path == log_path
+
+
+def test_memory_metric_backend_installs_memory_exporter(tmp_path) -> None:
+    preset = ObservabilityPreset.production(
+        service_name="agent-service",
+        metrics="memory",
+        logs="none",
+        log_path=tmp_path / "unused.jsonl",
+    )
+
+    assert isinstance(preset.metric_exporter, MemoryMetricExporter)
 
 
 async def test_production_jsonl_logging_drops_raw_payloads_by_default(tmp_path) -> None:
