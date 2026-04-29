@@ -95,6 +95,8 @@ Status legend:
 | In-memory event store | Supported | `InMemoryEventStore` | Append and ordered list operations are implemented. |
 | Run store protocol | Supported | `RunStore` | Interface exists for saving/loading `RunState`. |
 | In-memory run store | Supported | `InMemoryRunStore` | Save/load/all-runs operations are implemented. |
+| Session store protocol | Supported | `SessionStore` | Dedicated agent-session lifecycle store for session snapshots, event cursors, invocations, approvals, workspace/MCP state, and artifact refs. |
+| In-memory session store | Supported | `InMemorySessionStore` | Process-local session snapshots and replay ledger. |
 | Provider-native continuation state | Supported | `ProviderState` | Preserves provider continuation IDs and native state outside chat history. |
 | OpenAI previous response continuation | Supported | `ProviderState.previous_response_id` | OpenAI Responses adapter round-trips `previous_response_id`. |
 | Provider tool/source state preservation | Supported | `ProviderState.tool_state`, `ProviderState.reasoning_state` | Adapters retain native tool IDs, hosted/MCP IDs, output item IDs, source references, file handles, and reasoning signatures where providers expose them. |
@@ -105,7 +107,7 @@ Status legend:
 | Provider-side cache lifecycle | Partial | `runtime.caches.create(...)`, `runtime.caches.invalidate(..., delete_provider_cache=True)` | Gemini context cache creation/deletion is wired through `client.caches.create/delete`; providers without native create/delete APIs still get local registry invalidation. |
 | Raw provider payload preservation | Supported | `AgentEvent.raw`, `RawEnvelope` | Provider adapters can keep original SDK payloads; `RawEnvelope` supports sensitivity tagging/redaction. |
 | Resume run from persisted state | Supported | `provider_state=...`, `RunStore` | `RunState` can be saved, reloaded in a fresh runtime, and passed back into `AgentRuntime.run`. |
-| JSONL/SQLite stores | Supported | `JSONLEventStore`, `SQLiteRunStore` | JSONL event logs and SQLite run-state persistence are implemented and covered by tests. |
+| JSONL/SQLite stores | Supported | `JSONLEventStore`, `JSONLSessionStore`, `SQLiteRunStore`, `SQLiteSessionStore` | JSONL event/session logs plus SQLite run/session persistence are implemented and covered by tests. |
 
 ## Granular Model Capabilities
 
@@ -148,7 +150,10 @@ Status legend:
 | Create agent | Supported | `runtime.agents.create_agent(...)` | Creates an `AgentRef` for local providers. |
 | Create/start session | Supported | `runtime.agents.create_session(...)` | Produces first-class `AgentSession` objects. |
 | Stream session events | Supported | `runtime.agents.stream(...)` | Emits normalized model/tool/session events. |
-| Send message to session | Partial | `runtime.agents.send_message(...)` | Invocation ref is wired; behavior is not deeply covered yet. |
+| Durable session persistence | Supported | `AgentRuntime(session_store=...)` | Session creation, streamed events, cursor mappings, invocation state, approval state, provider state, workspace/MCP state, and artifact refs are stored in `SessionStore`. |
+| Durable session replay | Supported | `runtime.agents.replay(...)`, `runtime.agents.stream(..., after_event_id=...)` | Runtime event IDs are the public replay cursor; stored terminal sessions replay without contacting the provider. |
+| Provider-native live resume | Supported where advertised | `runtime.agents.load_session(...)`, `runtime.agents.resume_session(...)` | OpenAI Agents and Claude Code session refs preserve provider session IDs and receive provider-native cursors on live resume. Providers without `supports_resume` replay stored history but do not claim live reconnect. |
+| Send message to session | Supported | `runtime.agents.send_message(..., idempotency_key=...)` | Follow-up status behavior is defined; idempotency keys return the original invocation ref. |
 | Cancel session | Supported | `runtime.agents.cancel(...)` | Cancellation is honored between turns for local sessions. |
 | List session artifacts | Supported | `runtime.agents.list_artifacts(...)` | Local provider returns an `ArtifactPage`; no artifact-producing workspace flow yet. |
 | Session approval pause/resume/deny | Supported | `runtime.agents.approve(...)` | Local sessions can wait for approval and continue or skip denied tools. |
@@ -180,3 +185,4 @@ Status legend:
 
 - Vertex Agent Engine execution.
 - Provider-breadth routing through LiteLLM.
+- Live resume for local `AgentLoop` sessions after process restart.

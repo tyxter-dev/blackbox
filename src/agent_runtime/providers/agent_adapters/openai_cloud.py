@@ -207,7 +207,7 @@ class OpenAICloudAgentProvider:
             provider=session.provider,
             task=str(session.metadata.get("task", "")),
             agent_id=session.agent_id,
-            status="running",
+            status=_session_status(session.metadata.get("status", "running")),
             metadata=dict(session.metadata),
             id=session.id,
         )
@@ -648,6 +648,8 @@ def _coerce_session(
     metadata = dict(data.get("metadata") or {})
     if provider_session_id is not None:
         metadata.setdefault("provider_session_id", provider_session_id)
+    if runtime_session_id is not None:
+        metadata.setdefault("runtime_session_id", runtime_session_id)
     resume_token = _first_str(data, "resume_token")
     if resume_token is not None:
         metadata.setdefault("resume_token", resume_token)
@@ -840,7 +842,16 @@ def _approval_id(interruption: Any) -> str:
 
 def _provider_session_id(session: AgentSession) -> str:
     value = session.metadata.get("provider_session_id")
+    if value is not None:
+        return str(value)
+    value = session.metadata.get("runtime_session_id")
     return str(value) if value is not None else session.id
+
+
+def _session_status(value: Any) -> Any:
+    if value in {"created", "running", "waiting", "completed", "failed", "cancelled"}:
+        return value
+    return "running"
 
 
 def _as_dict(value: Any) -> dict[str, Any]:

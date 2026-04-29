@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from agent_runtime.core.artifacts import Artifact, ArtifactRef
 from agent_runtime.core.content import (
     AudioPart,
     ContentItem,
@@ -34,6 +35,13 @@ from agent_runtime.core.events import AgentEvent
 from agent_runtime.core.items import RunItem
 from agent_runtime.core.media import MediaRef
 from agent_runtime.core.raw import RawEnvelope
+from agent_runtime.core.session_state import (
+    AgentSessionState,
+    PendingApprovalState,
+    SessionEventCursor,
+    SessionInvocationState,
+)
+from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
 from agent_runtime.tools.routing import (
     ResolvedToolPlan,
@@ -64,6 +72,16 @@ _TOOL_CANDIDATE = "ToolCandidate"
 _SELECTED_TOOL = "SelectedTool"
 _TOOL_SELECTION_RESULT = "ToolSelectionResult"
 _RESOLVED_TOOL_PLAN = "ResolvedToolPlan"
+_AGENT_REF = "AgentRef"
+_SESSION_REF = "SessionRef"
+_INVOCATION_REF = "InvocationRef"
+_AGENT_SESSION = "AgentSession"
+_ARTIFACT_REF = "ArtifactRef"
+_ARTIFACT = "Artifact"
+_SESSION_EVENT_CURSOR = "SessionEventCursor"
+_SESSION_INVOCATION_STATE = "SessionInvocationState"
+_PENDING_APPROVAL_STATE = "PendingApprovalState"
+_AGENT_SESSION_STATE = "AgentSessionState"
 
 
 def event_to_dict(
@@ -166,6 +184,335 @@ def run_state_from_dict(payload: dict[str, Any]) -> RunState:
     )
 
 
+def agent_ref_to_dict(ref: AgentRef) -> dict[str, Any]:
+    return {
+        "_kind": _AGENT_REF,
+        "provider": ref.provider,
+        "id": ref.id,
+        "metadata": _safe_value(ref.metadata),
+    }
+
+
+def agent_ref_from_dict(payload: dict[str, Any]) -> AgentRef:
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    return AgentRef(
+        provider=str(payload.get("provider") or ""),
+        id=str(payload.get("id") or ""),
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
+
+
+def session_ref_to_dict(ref: SessionRef) -> dict[str, Any]:
+    return {
+        "_kind": _SESSION_REF,
+        "provider": ref.provider,
+        "id": ref.id,
+        "agent_id": ref.agent_id,
+        "metadata": _safe_value(ref.metadata),
+    }
+
+
+def session_ref_from_dict(payload: dict[str, Any]) -> SessionRef:
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    return SessionRef(
+        provider=str(payload.get("provider") or ""),
+        id=str(payload.get("id") or ""),
+        agent_id=payload.get("agent_id"),
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
+
+
+def invocation_ref_to_dict(ref: InvocationRef) -> dict[str, Any]:
+    return {
+        "_kind": _INVOCATION_REF,
+        "provider": ref.provider,
+        "session_id": ref.session_id,
+        "id": ref.id,
+        "metadata": _safe_value(ref.metadata),
+    }
+
+
+def invocation_ref_from_dict(payload: dict[str, Any]) -> InvocationRef:
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    return InvocationRef(
+        provider=str(payload.get("provider") or ""),
+        session_id=str(payload.get("session_id") or ""),
+        id=str(payload.get("id") or ""),
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
+
+
+def agent_session_to_dict(session: AgentSession) -> dict[str, Any]:
+    return {
+        "_kind": _AGENT_SESSION,
+        "provider": session.provider,
+        "task": session.task,
+        "agent_id": session.agent_id,
+        "model": session.model,
+        "status": session.status,
+        "metadata": _safe_value(session.metadata),
+        "id": session.id,
+    }
+
+
+def agent_session_from_dict(payload: dict[str, Any]) -> AgentSession:
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    status = str(payload.get("status") or "created")
+    if status not in {"created", "running", "waiting", "completed", "failed", "cancelled"}:
+        status = "created"
+    return AgentSession(
+        provider=str(payload.get("provider") or ""),
+        task=str(payload.get("task") or ""),
+        agent_id=payload.get("agent_id"),
+        model=payload.get("model"),
+        status=status,  # type: ignore[arg-type]
+        metadata=metadata if isinstance(metadata, dict) else {},
+        id=str(payload.get("id") or ""),
+    )
+
+
+def artifact_ref_to_dict(ref: ArtifactRef) -> dict[str, Any]:
+    return {
+        "_kind": _ARTIFACT_REF,
+        "id": ref.id,
+        "provider": ref.provider,
+        "uri": ref.uri,
+    }
+
+
+def artifact_ref_from_dict(payload: dict[str, Any]) -> ArtifactRef:
+    return ArtifactRef(
+        id=str(payload.get("id") or ""),
+        provider=payload.get("provider"),
+        uri=payload.get("uri"),
+    )
+
+
+def artifact_to_dict(artifact: Artifact) -> dict[str, Any]:
+    return {
+        "_kind": _ARTIFACT,
+        "type": artifact.type,
+        "name": artifact.name,
+        "data": _safe_value(artifact.data),
+        "uri": artifact.uri,
+        "metadata": _safe_value(artifact.metadata),
+        "id": artifact.id,
+    }
+
+
+def artifact_from_dict(payload: dict[str, Any]) -> Artifact:
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    return Artifact(
+        type=str(payload.get("type") or ""),
+        name=str(payload.get("name") or ""),
+        data=_hydrate_value(payload.get("data")),
+        uri=payload.get("uri"),
+        metadata=metadata if isinstance(metadata, dict) else {},
+        id=str(payload.get("id") or ""),
+    )
+
+
+def session_event_cursor_to_dict(cursor: SessionEventCursor) -> dict[str, Any]:
+    return {
+        "_kind": _SESSION_EVENT_CURSOR,
+        "session_id": cursor.session_id,
+        "event_id": cursor.event_id,
+        "session_sequence": cursor.session_sequence,
+        "run_id": cursor.run_id,
+        "run_sequence": cursor.run_sequence,
+        "provider_event_id": cursor.provider_event_id,
+        "provider_cursor": cursor.provider_cursor,
+        "created_at": cursor.created_at,
+        "metadata": _safe_value(cursor.metadata),
+    }
+
+
+def session_event_cursor_from_dict(payload: dict[str, Any]) -> SessionEventCursor:
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    return SessionEventCursor(
+        session_id=str(payload.get("session_id") or ""),
+        event_id=str(payload.get("event_id") or ""),
+        session_sequence=int(payload.get("session_sequence", -1)),
+        run_id=payload.get("run_id"),
+        run_sequence=payload.get("run_sequence"),
+        provider_event_id=payload.get("provider_event_id"),
+        provider_cursor=payload.get("provider_cursor"),
+        created_at=payload.get("created_at"),
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
+
+
+def session_invocation_to_dict(invocation: SessionInvocationState) -> dict[str, Any]:
+    return {
+        "_kind": _SESSION_INVOCATION_STATE,
+        "id": invocation.id,
+        "session_id": invocation.session_id,
+        "provider": invocation.provider,
+        "status": invocation.status,
+        "message": invocation.message,
+        "idempotency_key": invocation.idempotency_key,
+        "provider_invocation_id": invocation.provider_invocation_id,
+        "started_at": invocation.started_at,
+        "completed_at": invocation.completed_at,
+        "last_event_id": invocation.last_event_id,
+        "metadata": _safe_value(invocation.metadata),
+    }
+
+
+def session_invocation_from_dict(payload: dict[str, Any]) -> SessionInvocationState:
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    return SessionInvocationState(
+        id=str(payload.get("id") or ""),
+        session_id=str(payload.get("session_id") or ""),
+        provider=str(payload.get("provider") or ""),
+        status=str(payload.get("status") or "created"),
+        message=payload.get("message"),
+        idempotency_key=payload.get("idempotency_key"),
+        provider_invocation_id=payload.get("provider_invocation_id"),
+        started_at=payload.get("started_at"),
+        completed_at=payload.get("completed_at"),
+        last_event_id=payload.get("last_event_id"),
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
+
+
+def pending_approval_to_dict(approval: PendingApprovalState) -> dict[str, Any]:
+    return {
+        "_kind": _PENDING_APPROVAL_STATE,
+        "approval_id": approval.approval_id,
+        "session_id": approval.session_id,
+        "status": approval.status,
+        "action": approval.action,
+        "arguments": _safe_value(approval.arguments),
+        "provider_approval_id": approval.provider_approval_id,
+        "requested_event_id": approval.requested_event_id,
+        "resolved_event_id": approval.resolved_event_id,
+        "idempotency_key": approval.idempotency_key,
+        "metadata": _safe_value(approval.metadata),
+    }
+
+
+def pending_approval_from_dict(payload: dict[str, Any]) -> PendingApprovalState:
+    arguments = _hydrate_value(payload.get("arguments") or {})
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    return PendingApprovalState(
+        approval_id=str(payload.get("approval_id") or ""),
+        session_id=str(payload.get("session_id") or ""),
+        status=str(payload.get("status") or "pending"),
+        action=payload.get("action"),
+        arguments=arguments if isinstance(arguments, dict) else {},
+        provider_approval_id=payload.get("provider_approval_id"),
+        requested_event_id=payload.get("requested_event_id"),
+        resolved_event_id=payload.get("resolved_event_id"),
+        idempotency_key=payload.get("idempotency_key"),
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
+
+
+def agent_session_state_to_dict(state: AgentSessionState) -> dict[str, Any]:
+    return {
+        "_kind": _AGENT_SESSION_STATE,
+        "schema_version": state.schema_version,
+        "session": agent_session_to_dict(state.session),
+        "session_ref": session_ref_to_dict(state.session_ref),
+        "provider": state.provider,
+        "status": state.status,
+        "agent_ref": agent_ref_to_dict(state.agent_ref) if state.agent_ref is not None else None,
+        "task": state.task,
+        "model": state.model,
+        "provider_state": _safe_value(state.provider_state),
+        "run_ids": list(state.run_ids),
+        "current_run_id": state.current_run_id,
+        "trace_id": state.trace_id,
+        "last_event_id": state.last_event_id,
+        "last_session_sequence": state.last_session_sequence,
+        "last_provider_event_id": state.last_provider_event_id,
+        "last_provider_cursor": state.last_provider_cursor,
+        "invocations": [
+            session_invocation_to_dict(invocation)
+            for invocation in state.invocations
+        ],
+        "pending_approvals": {
+            key: pending_approval_to_dict(value)
+            for key, value in state.pending_approvals.items()
+        },
+        "workspace_ref": _safe_value(state.workspace_ref),
+        "workspace_state": _safe_value(state.workspace_state),
+        "mcp_state": _safe_value(state.mcp_state),
+        "artifact_refs": [artifact_ref_to_dict(ref) for ref in state.artifact_refs],
+        "idempotency_keys": _safe_value(state.idempotency_keys),
+        "created_at": state.created_at,
+        "updated_at": state.updated_at,
+        "completed_at": state.completed_at,
+        "metadata": _safe_value(state.metadata),
+    }
+
+
+def agent_session_state_from_dict(payload: dict[str, Any]) -> AgentSessionState:
+    session = _hydrate_value(payload.get("session"))
+    if not isinstance(session, AgentSession):
+        session = agent_session_from_dict(dict(payload.get("session") or {}))
+    session_ref = _hydrate_value(payload.get("session_ref"))
+    if not isinstance(session_ref, SessionRef):
+        session_ref = session.ref
+    agent_ref = _hydrate_value(payload.get("agent_ref"))
+    if not isinstance(agent_ref, AgentRef):
+        agent_ref = None
+    provider_state = _hydrate_value(payload.get("provider_state"))
+    if not isinstance(provider_state, ProviderState):
+        provider_state = None
+    invocations_raw = _hydrate_value(payload.get("invocations") or [])
+    invocations = [
+        invocation
+        for invocation in invocations_raw
+        if isinstance(invocation, SessionInvocationState)
+    ] if isinstance(invocations_raw, list) else []
+    approvals_raw = _hydrate_value(payload.get("pending_approvals") or {})
+    pending_approvals = {
+        str(key): value
+        for key, value in approvals_raw.items()
+        if isinstance(value, PendingApprovalState)
+    } if isinstance(approvals_raw, dict) else {}
+    workspace_ref = _hydrate_value(payload.get("workspace_ref"))
+    workspace_state = _hydrate_value(payload.get("workspace_state") or {})
+    mcp_state = _hydrate_value(payload.get("mcp_state") or {})
+    artifact_refs_raw = _hydrate_value(payload.get("artifact_refs") or [])
+    artifact_refs = [
+        ref for ref in artifact_refs_raw if isinstance(ref, ArtifactRef)
+    ] if isinstance(artifact_refs_raw, list) else []
+    idempotency_keys = _hydrate_value(payload.get("idempotency_keys") or {})
+    metadata = _hydrate_value(payload.get("metadata") or {})
+    return AgentSessionState(
+        schema_version=int(payload.get("schema_version", 1)),
+        session=session,
+        session_ref=session_ref,
+        provider=str(payload.get("provider") or session.provider),
+        status=str(payload.get("status") or session.status),
+        agent_ref=agent_ref,
+        task=payload.get("task"),
+        model=payload.get("model"),
+        provider_state=provider_state,
+        run_ids=list(payload.get("run_ids") or []),
+        current_run_id=payload.get("current_run_id"),
+        trace_id=payload.get("trace_id"),
+        last_event_id=payload.get("last_event_id"),
+        last_session_sequence=int(payload.get("last_session_sequence", -1)),
+        last_provider_event_id=payload.get("last_provider_event_id"),
+        last_provider_cursor=payload.get("last_provider_cursor"),
+        invocations=invocations,
+        pending_approvals=pending_approvals,
+        workspace_ref=workspace_ref if isinstance(workspace_ref, dict) else None,
+        workspace_state=workspace_state if isinstance(workspace_state, dict) else {},
+        mcp_state=mcp_state if isinstance(mcp_state, dict) else {},
+        artifact_refs=artifact_refs,
+        idempotency_keys=idempotency_keys if isinstance(idempotency_keys, dict) else {},
+        created_at=payload.get("created_at"),
+        updated_at=payload.get("updated_at"),
+        completed_at=payload.get("completed_at"),
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
+
+
 def _safe_value(value: Any, *, keep_media: bool = False) -> Any:
     """Convert supported runtime dataclasses and containers into JSON-safe values.
 
@@ -177,6 +524,26 @@ def _safe_value(value: Any, *, keep_media: bool = False) -> Any:
         return value
     if isinstance(value, datetime):
         return value.isoformat()
+    if isinstance(value, AgentRef):
+        return agent_ref_to_dict(value)
+    if isinstance(value, SessionRef):
+        return session_ref_to_dict(value)
+    if isinstance(value, InvocationRef):
+        return invocation_ref_to_dict(value)
+    if isinstance(value, AgentSession):
+        return agent_session_to_dict(value)
+    if isinstance(value, ArtifactRef):
+        return artifact_ref_to_dict(value)
+    if isinstance(value, Artifact):
+        return artifact_to_dict(value)
+    if isinstance(value, SessionEventCursor):
+        return session_event_cursor_to_dict(value)
+    if isinstance(value, SessionInvocationState):
+        return session_invocation_to_dict(value)
+    if isinstance(value, PendingApprovalState):
+        return pending_approval_to_dict(value)
+    if isinstance(value, AgentSessionState):
+        return agent_session_state_to_dict(value)
     if isinstance(value, RunItem):
         return {
             "_kind": _RUN_ITEM,
@@ -380,6 +747,26 @@ def _hydrate_value(value: Any) -> Any:
 
     if isinstance(value, dict):
         kind = value.get("_kind")
+        if kind == _AGENT_REF:
+            return agent_ref_from_dict(value)
+        if kind == _SESSION_REF:
+            return session_ref_from_dict(value)
+        if kind == _INVOCATION_REF:
+            return invocation_ref_from_dict(value)
+        if kind == _AGENT_SESSION:
+            return agent_session_from_dict(value)
+        if kind == _ARTIFACT_REF:
+            return artifact_ref_from_dict(value)
+        if kind == _ARTIFACT:
+            return artifact_from_dict(value)
+        if kind == _SESSION_EVENT_CURSOR:
+            return session_event_cursor_from_dict(value)
+        if kind == _SESSION_INVOCATION_STATE:
+            return session_invocation_from_dict(value)
+        if kind == _PENDING_APPROVAL_STATE:
+            return pending_approval_from_dict(value)
+        if kind == _AGENT_SESSION_STATE:
+            return agent_session_state_from_dict(value)
         if kind == _RUN_ITEM:
             data_raw = value.get("data") or {}
             data = _hydrate_value(data_raw)

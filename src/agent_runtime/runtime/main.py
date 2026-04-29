@@ -27,7 +27,14 @@ from agent_runtime.core.items import RunItem
 from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
 from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, ToolPayload
 from agent_runtime.core.state import ProviderState
-from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore, RunStore
+from agent_runtime.core.stores import (
+    EventStore,
+    InMemoryEventStore,
+    InMemoryRunStore,
+    InMemorySessionStore,
+    RunStore,
+    SessionStore,
+)
 from agent_runtime.mcp import MCPConnector, MCPToolset, resolve_mcp_route, to_remote_mcp
 from agent_runtime.observability.traces import TraceContext, trace_metadata_from_events
 from agent_runtime.output.schema import OutputSchema, build_output_schema
@@ -123,12 +130,14 @@ class AgentRuntime:
         *,
         event_store: EventStore | None = None,
         run_store: RunStore | None = None,
+        session_store: SessionStore | None = None,
         provider_cache_store: ProviderCacheStore | None = None,
     ) -> None:
         self.registry = registry or ProviderRegistry()
         self.model_catalog = ModelCatalog()
         self.event_store: EventStore = event_store or InMemoryEventStore()
         self.run_store: RunStore = run_store or InMemoryRunStore()
+        self.session_store: SessionStore = session_store or InMemorySessionStore()
         self.provider_cache_store: ProviderCacheStore = (
             provider_cache_store or InMemoryProviderCacheStore()
         )
@@ -147,6 +156,7 @@ class AgentRuntime:
             self.registry,
             event_store=self.event_store,
             run_store=self.run_store,
+            session_store=self.session_store,
             workspaces=self.workspaces,
         )
         self.caches = ProviderCacheRuntime(self.registry, self.provider_cache_store)

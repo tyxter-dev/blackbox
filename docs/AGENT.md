@@ -93,6 +93,7 @@ session supervision.
 | Vertex AI Agent Engine | `src/agent_runtime/agents/vertex_agent_engine.py` | Scaffold only. Raises typed unsupported errors until a real adapter lands. |
 | Capabilities | `src/agent_runtime/core/capabilities.py` | Implemented. `AgentCapabilities` advertises sessions, events, artifacts, workspace, approvals, MCP, cancellation, and resume. |
 | Session refs | `src/agent_runtime/core/sessions.py` | Implemented. `AgentRef`, `SessionRef`, `InvocationRef`, and `AgentSession` are public contracts. |
+| Session state | `src/agent_runtime/core/session_state.py`, `src/agent_runtime/core/stores.py` | Implemented. `AgentSessionState`, `SessionStore`, `InMemorySessionStore`, `JSONLSessionStore`, and `SQLiteSessionStore` persist provider-native session IDs, replay cursors, invocations, approvals, workspace/MCP metadata, and artifact refs. |
 | Events | `src/agent_runtime/core/events.py` | Implemented. Session, cloud-agent, workspace, approval, model, tool, MCP, artifact, handoff, guardrail, retry, and eval event names exist. |
 | Tests | `tests/runtime/test_local_agent_provider.py`, `tests/runtime/test_openai_agents_provider.py`, `tests/runtime/test_claude_code_agent_provider.py`, `tests/contracts/test_capability_honesty.py` | Current behavior is covered with local, injected-client, SDK-wrapper, and capability tests. |
 
@@ -189,6 +190,23 @@ result = await runtime.agents.run(
 The collector starts a session, stores stamped events, lists artifacts, exposes
 a strict result `status`, keeps the `SessionRef` for follow-up work, and
 validates final session text into the requested output type.
+
+### A3b: Replay Or Resume A Durable Session
+
+```python
+runtime = AgentRuntime(session_store=SQLiteSessionStore("sessions.sqlite"))
+
+restored = await runtime.agents.load_session("sess_runtime_1")
+
+async for event in runtime.agents.stream(restored, after_event_id="evt_123"):
+    ...
+```
+
+`after_event_id` is always a runtime `AgentEvent.id`. The session store maps it
+to the provider-native cursor when a live provider resume is possible. Terminal
+sessions replay from the durable session ledger without contacting the provider.
+Providers that do not advertise `supports_resume` can replay stored history but
+must not claim live reconnect after process restart.
 
 ### A4: Pause For Approval And Resume
 
@@ -349,13 +367,13 @@ provider-specific `data` fields.
 
 | ID | Requirement | Current state | Acceptance criteria |
 |---|---|---|---|
-| A-P1-1 | Event replay cursor | Partial | `after_event_id` should work consistently across local and cloud providers. |
-| A-P1-2 | Follow-up messages | Partial | `send_message(...)` should define provider-neutral behavior for running, waiting, and completed sessions. |
-| A-P1-3 | Provider-native resume | Partial | `SessionRef.metadata` and provider session IDs can restore sessions, but durable resumption semantics need one standard. |
+| A-P1-1 | Event replay cursor | Implemented | `SessionStore` stores runtime event IDs, session sequence, run sequence, and provider cursor mappings; unknown cursors raise `SessionCursorError`. |
+| A-P1-2 | Follow-up messages | Implemented | `send_message(...)` defines created/running/waiting/completed/failed/cancelled behavior and supports idempotency keys. |
+| A-P1-3 | Provider-native resume | Implemented for resume-capable adapters | `load_session(...)` reconstructs `AgentSession` from `SessionStore`; OpenAI Agents and Claude Code receive provider session IDs and provider-native cursors. |
 | A-P1-4 | Workspace handoff | Partial | `TaskSpec.workspace` reaches capable providers; local provider should integrate with `WorkspaceProvider` without ad hoc tool setup. |
 | A-P1-5 | MCP handoff | Partial | `AgentSpec.mcp_servers` is part of the contract; providers map it where their SDK supports MCP. |
 | A-P1-6 | Artifact normalization | Partial | Provider files, patches, logs, checkpoints, screenshots, and reports normalize into `Artifact` records. |
-| A-P1-7 | Session persistence | Partial | `runtime.agents.run(...)` saves session refs, status, provider state, and replay cursors into `RunStore`; a dedicated session store is still open. |
+| A-P1-7 | Session persistence | Implemented | `SessionStore` owns durable agent session state while `RunStore` remains the compact model-loop continuation store. |
 | A-P1-8 | Agent result collector | Implemented | `runtime.agents.run(...)` returns `AgentSessionResult[T]` with typed output, text, strict status, events, artifacts, session ref, provider state, usage, trace, and metadata. |
 
 ### P2 - Later
@@ -389,9 +407,10 @@ implement downstream admin, team, billing, or scheduling products
 2. **Local artifact collection:** Local sessions currently return an empty
    artifact page even when the underlying loop can emit artifacts. Define how
    those artifacts are stored by session.
-3. **Session persistence:** `runtime.agents.run(...)` writes a compact
-   `RunState`; decide whether richer multi-invocation history belongs in a new
-   `SessionStore`.
+3. **Local live resume:** Local sessions replay durable history through
+   `SessionStore`, but `LocalAgentProvider` should keep advertising
+   `supports_resume=False` until `AgentLoop` state is persisted at safe turn
+   boundaries.
 4. **Workspace handoff:** Route `TaskSpec.workspace` through the
    `WorkspaceProvider` layer for local sessions instead of requiring users to
    manually register workspace tools.

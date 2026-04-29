@@ -70,7 +70,14 @@ from agent_runtime.core.content import (
     ToolResultPart,
     VideoFramePart,
 )
-from agent_runtime.core.errors import OutputValidationError
+from agent_runtime.core.errors import (
+    OutputValidationError,
+    SessionBusyError,
+    SessionCursorError,
+    SessionNotFoundError,
+    SessionResumeError,
+    SessionTerminalError,
+)
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.items import ItemTypes, RunItem
 from agent_runtime.core.media import MediaRef
@@ -89,8 +96,20 @@ from agent_runtime.core.results import (
     result_summary,
     structured_output,
 )
+from agent_runtime.core.session_state import (
+    AgentSessionState,
+    PendingApprovalState,
+    SessionEventCursor,
+    SessionInvocationState,
+)
 from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
 from agent_runtime.core.state import ProviderState, RunState
+from agent_runtime.core.stores import (
+    InMemorySessionStore,
+    JSONLSessionStore,
+    SessionStore,
+    SQLiteSessionStore,
+)
 from agent_runtime.mcp import (
     MCPApprovalMode,
     MCPCapabilityRisk,
@@ -226,6 +245,7 @@ __all__ = [
     "AgentSession",
     "AgentSessionResult",
     "AgentSessionResultStatus",
+    "AgentSessionState",
     "AgentSpec",
     "ApplyPatch",
     "ApprovalDecision",
@@ -262,8 +282,10 @@ __all__ = [
     "ImageGeneration",
     "ImagePart",
     "InMemoryProviderCacheStore",
+    "InMemorySessionStore",
     "InMemoryWorkspaceAgentRegistry",
     "ItemTypes",
+    "JSONLSessionStore",
     "MCPApprovalMode",
     "MCPCapabilityRisk",
     "MCPRouteMode",
@@ -294,6 +316,7 @@ __all__ = [
     "OutputSchema",
     "OutputSpec",
     "OutputValidationError",
+    "PendingApprovalState",
     "PromptBundle",
     "PromptComposer",
     "PromptFragment",
@@ -328,11 +351,20 @@ __all__ = [
     "RunItem",
     "RunState",
     "SQLiteProviderCacheStore",
+    "SQLiteSessionStore",
     "ScheduleSpec",
     "ScheduleTrigger",
     "ScheduledRunRef",
     "SelectedPromptFragment",
+    "SessionBusyError",
+    "SessionCursorError",
+    "SessionEventCursor",
+    "SessionInvocationState",
+    "SessionNotFoundError",
     "SessionRef",
+    "SessionResumeError",
+    "SessionStore",
+    "SessionTerminalError",
     "Shell",
     "SkillBundleRef",
     "SkippedPromptFragment",

@@ -38,6 +38,111 @@ class SessionError(AgentRuntimeError):
     """Raised when a session is in an invalid state for the requested operation."""
 
 
+class SessionNotFoundError(SessionError):
+    """Raised when a durable session state cannot be found."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        session_id: str | None = None,
+        provider: str | None = None,
+        status: str | None = None,
+        operation: str | None = None,
+        safe_to_retry: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.session_id = session_id
+        self.provider = provider
+        self.status = status
+        self.operation = operation
+        self.safe_to_retry = safe_to_retry
+
+
+class SessionCursorError(SessionError):
+    """Raised when a session event replay cursor is unknown or invalid."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        session_id: str | None = None,
+        provider: str | None = None,
+        status: str | None = None,
+        operation: str | None = None,
+        safe_to_retry: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.session_id = session_id
+        self.provider = provider
+        self.status = status
+        self.operation = operation
+        self.safe_to_retry = safe_to_retry
+
+
+class SessionResumeError(SessionError):
+    """Raised when a provider cannot reconnect from persisted session metadata."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        session_id: str | None = None,
+        provider: str | None = None,
+        status: str | None = None,
+        operation: str | None = None,
+        safe_to_retry: bool = True,
+    ) -> None:
+        super().__init__(message)
+        self.session_id = session_id
+        self.provider = provider
+        self.status = status
+        self.operation = operation
+        self.safe_to_retry = safe_to_retry
+
+
+class SessionBusyError(SessionError):
+    """Raised when a session cannot accept another mutating operation yet."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        session_id: str | None = None,
+        provider: str | None = None,
+        status: str | None = None,
+        operation: str | None = None,
+        safe_to_retry: bool = True,
+    ) -> None:
+        super().__init__(message)
+        self.session_id = session_id
+        self.provider = provider
+        self.status = status
+        self.operation = operation
+        self.safe_to_retry = safe_to_retry
+
+
+class SessionTerminalError(SessionError):
+    """Raised when a terminal session cannot accept a requested operation."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        session_id: str | None = None,
+        provider: str | None = None,
+        status: str | None = None,
+        operation: str | None = None,
+        safe_to_retry: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.session_id = session_id
+        self.provider = provider
+        self.status = status
+        self.operation = operation
+        self.safe_to_retry = safe_to_retry
+
+
 class ArtifactError(AgentRuntimeError):
     """Raised when an artifact cannot be created, read, or referenced."""
 
