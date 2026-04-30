@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import dataclasses
 import re
+from collections.abc import Hashable
+from copy import deepcopy
 from dataclasses import MISSING, dataclass
+from functools import lru_cache
 from types import UnionType
-from typing import Any, Union, get_args, get_origin, get_type_hints
+from typing import Any, Union, cast, get_args, get_origin, get_type_hints
 
 from agent_runtime.core.results import OutputSpec
 
@@ -23,9 +26,7 @@ class OutputSchema:
 def build_output_schema(spec: OutputSpec) -> OutputSchema | None:
     if spec.schema is None or spec.schema is str:
         return None
-    schema = _schema_for(spec.schema)
-    if spec.strict:
-        schema = _strict_json_schema(schema)
+    schema = _schema_for_spec(spec.schema, strict=spec.strict)
     name = _normalize_name(spec.name or _schema_title(schema) or _schema_name(spec.schema))
     description = spec.description or _schema_description(schema)
     return OutputSchema(
@@ -37,10 +38,40 @@ def build_output_schema(spec: OutputSpec) -> OutputSchema | None:
     )
 
 
+def clear_output_schema_cache() -> None:
+    """Clear generated schema caches used by hot runtime paths."""
+
+    _schema_for_type_cached.cache_clear()
+    _strict_json_schema_for_type_cached.cache_clear()
+
+
+def _schema_for_spec(target: type[Any] | dict[str, Any], *, strict: bool) -> dict[str, Any]:
+    if isinstance(target, dict):
+        schema = dict(target)
+        return _strict_json_schema(schema) if strict else schema
+    cache_key = cast(Hashable, target)
+    if strict:
+        return deepcopy(_strict_json_schema_for_type_cached(cache_key))
+    return deepcopy(_schema_for_type_cached(cache_key))
+
+
+@lru_cache(maxsize=128)
+def _schema_for_type_cached(target: Hashable) -> dict[str, Any]:
+    return _schema_for_type(cast(type[Any], target))
+
+
+@lru_cache(maxsize=128)
+def _strict_json_schema_for_type_cached(target: Hashable) -> dict[str, Any]:
+    return _strict_json_schema(_schema_for_type(cast(type[Any], target)))
+
+
 def _schema_for(target: type[Any] | dict[str, Any]) -> dict[str, Any]:
     if isinstance(target, dict):
         return dict(target)
+    return deepcopy(_schema_for_type_cached(cast(Hashable, target)))
 
+
+def _schema_for_type(target: type[Any]) -> dict[str, Any]:
     model_json_schema = getattr(target, "model_json_schema", None)
     if callable(model_json_schema):
         schema = model_json_schema()

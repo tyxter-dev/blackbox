@@ -176,15 +176,26 @@ def test_tool_registry_caches_provider_tools_until_mutation(
         return original(tool)
 
     registry = ToolRegistry()
-    registry.register(lambda: "base", name="base", description="Base tool.", risk="low")
+    registry.register(
+        lambda: "base",
+        name="base",
+        description="Base tool.",
+        parameters={
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+        },
+        risk="low",
+    )
     monkeypatch.setattr(registry_module, "_tool_metadata", counting_metadata)
 
     first = registry.to_provider_tools()
     first[0]["metadata"]["risk"] = "mutated"
+    first[0]["parameters"]["properties"]["name"]["type"] = "integer"
     second = registry.to_provider_tools()
 
     assert calls == 1
     assert second[0]["metadata"]["risk"] == "low"
+    assert second[0]["parameters"]["properties"]["name"]["type"] == "string"
 
     registry.register(lambda: "extra", name="extra", description="Extra tool.")
     third = registry.to_provider_tools()

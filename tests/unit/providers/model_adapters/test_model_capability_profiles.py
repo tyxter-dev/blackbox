@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -8,9 +8,12 @@ from agent_runtime.core.capabilities import (
     CapabilityDetail,
     CapabilityStatus,
     ModelCapabilities,
+    ModelCapabilityProfile,
     capability_profile_from_dict,
     capability_profile_to_dict,
+    clear_model_capability_profile_cache,
     derive_profile_from_summary,
+    get_model_capability_profile,
 )
 from agent_runtime.core.errors import UnsupportedFeatureError
 from agent_runtime.core.results import OutputSpec
@@ -21,11 +24,15 @@ from agent_runtime.providers.base import (
     ModelCacheControl,
     ModelRequestControls,
     ToolSearchControl,
+    TurnRequest,
 )
+from agent_runtime.providers.model_adapters import capability_validation as validation_module
 from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
 from agent_runtime.providers.model_adapters.capability_validation import (
+    clear_capability_validation_cache,
     requested_controls,
     resolve_output_strategy,
+    validate_turn_request_capabilities,
 )
 from agent_runtime.providers.model_adapters.echo import EchoModelProvider
 from agent_runtime.providers.model_adapters.gemini_generate_content import (
@@ -35,6 +42,16 @@ from agent_runtime.providers.model_adapters.openai_responses import OpenAIRespon
 from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
 from agent_runtime.providers.registry import ProviderRegistry
 from agent_runtime.runtime import ModelRuntime
+
+
+class CountingEchoModelProvider(EchoModelProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.profile_calls = 0
+
+    def capability_profile(self, model: str | None = None) -> ModelCapabilityProfile:
+        self.profile_calls += 1
+        return super().capability_profile(model)
 
 
 @pytest.mark.parametrize("status", ["supported", "conditional", "passthrough"])
@@ -125,6 +142,45 @@ def test_model_runtime_capabilities_parses_provider_ref() -> None:
 
     assert profile.provider == "echo"
     assert profile.model == "echo-mini"
+
+
+def test_model_capability_profiles_are_cached_by_provider_and_model() -> None:
+    clear_model_capability_profile_cache()
+    provider = CountingEchoModelProvider()
+
+    first = get_model_capability_profile(provider, "echo-cached")
+    second = get_model_capability_profile(provider, "echo-cached")
+    other = get_model_capability_profile(provider, "echo-other")
+
+    assert first is second
+    assert other is not first
+    assert provider.profile_calls == 2
+    clear_model_capability_profile_cache()
+
+
+def test_turn_capability_validation_reuses_successful_results(
+    monkeypatch: Any,
+) -> None:
+    clear_model_capability_profile_cache()
+    clear_capability_validation_cache()
+    calls = 0
+    original = validation_module.validate_capability_request
+
+    def counting_validate(*args: Any, **kwargs: Any) -> None:
+        nonlocal calls
+        calls += 1
+        original(*args, **kwargs)
+
+    monkeypatch.setattr(validation_module, "validate_capability_request", counting_validate)
+    provider = CountingEchoModelProvider()
+    request = TurnRequest(model="echo-cached-validation", input="hello")
+
+    validate_turn_request_capabilities(provider=provider, request=request)
+    validate_turn_request_capabilities(provider=provider, request=request)
+
+    assert calls == 1
+    clear_model_capability_profile_cache()
+    clear_capability_validation_cache()
 
 
 def test_openai_profile_exposes_hardened_tool_and_control_surfaces() -> None:

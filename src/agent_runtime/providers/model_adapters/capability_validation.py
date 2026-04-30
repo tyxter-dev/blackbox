@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 from agent_runtime.core.capabilities import (
     CapabilityConstraint,
@@ -29,6 +29,9 @@ class ModelCapabilityRequest:
     control_values: dict[ControlName, object] | None = None
 
 
+_VALIDATED_CAPABILITY_REQUESTS: set[tuple[int, tuple[Any, ...], OutputFallback | None]] = set()
+
+
 def validate_turn_request_capabilities(
     *,
     provider: ModelProvider,
@@ -37,7 +40,17 @@ def validate_turn_request_capabilities(
 ) -> None:
     profile = get_model_capability_profile(provider, request.model)
     requirement = capability_request_from_turn(request)
+    cache_key = (id(profile), _request_cache_key(requirement), output_fallback)
+    if cache_key in _VALIDATED_CAPABILITY_REQUESTS:
+        return
     validate_capability_request(profile, requirement, output_fallback=output_fallback)
+    _VALIDATED_CAPABILITY_REQUESTS.add(cache_key)
+
+
+def clear_capability_validation_cache() -> None:
+    """Clear successful capability validation cache entries."""
+
+    _VALIDATED_CAPABILITY_REQUESTS.clear()
 
 
 def capability_request_from_turn(request: TurnRequest) -> ModelCapabilityRequest:
@@ -239,3 +252,34 @@ def _constraint_matches(
     ):
         return False
     return True
+
+
+def _request_cache_key(requirement: ModelCapabilityRequest) -> tuple[Any, ...]:
+    return (
+        requirement.model,
+        requirement.hosted_tools,
+        requirement.output_strategy,
+        requirement.controls,
+        requirement.state_mode,
+        requirement.has_function_tools,
+        tuple(
+            sorted(
+                (key, _cacheable_value(value))
+                for key, value in (requirement.control_values or {}).items()
+            )
+        ),
+    )
+
+
+def _cacheable_value(value: object) -> object:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list | tuple):
+        return tuple(_cacheable_value(item) for item in value)
+    if isinstance(value, set | frozenset):
+        return tuple(sorted(repr(_cacheable_value(item)) for item in value))
+    if isinstance(value, dict):
+        return tuple(
+            sorted((str(key), _cacheable_value(item)) for key, item in value.items())
+        )
+    return repr(value)

@@ -191,7 +191,22 @@ def _provider_tool_payload(tool: ToolDefinition) -> dict[str, Any]:
 
 def _copy_provider_tool(tool: dict[str, Any]) -> dict[str, Any]:
     copied = dict(tool)
+    parameters = copied.get("parameters")
+    if isinstance(parameters, dict):
+        copied["parameters"] = _copy_jsonish(parameters)
     metadata = copied.get("metadata")
     if isinstance(metadata, dict):
-        copied["metadata"] = dict(metadata)
+        copied["metadata"] = _copy_jsonish(metadata)
     return copied
+
+
+def _copy_jsonish(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _copy_jsonish(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_copy_jsonish(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_copy_jsonish(item) for item in value)
+    if isinstance(value, set):
+        return {_copy_jsonish(item) for item in value}
+    return value

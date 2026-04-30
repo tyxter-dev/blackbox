@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+import agent_runtime.output.schema as schema_module
 from agent_runtime.core.results import OutputSpec
-from agent_runtime.output.schema import build_output_schema
+from agent_runtime.output.schema import build_output_schema, clear_output_schema_cache
 
 
 class Decision(BaseModel):
@@ -87,3 +89,32 @@ def test_schema_name_is_normalized_and_limited() -> None:
 def test_str_or_missing_schema_does_not_build_output_schema() -> None:
     assert build_output_schema(OutputSpec(schema=None)) is None
     assert build_output_schema(OutputSpec(schema=str)) is None
+
+
+def test_output_schema_cache_reuses_type_generation_and_returns_isolated_copies(
+    monkeypatch: Any,
+) -> None:
+    @dataclass
+    class CachedIncident:
+        title: str
+
+    clear_output_schema_cache()
+    calls = 0
+    original = schema_module._dataclass_schema
+
+    def counting_schema(target: type[Any]) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return original(target)
+
+    monkeypatch.setattr(schema_module, "_dataclass_schema", counting_schema)
+
+    first = build_output_schema(OutputSpec(schema=CachedIncident))
+    assert first is not None
+    first.schema["properties"]["title"]["type"] = "integer"
+
+    second = build_output_schema(OutputSpec(schema=CachedIncident))
+
+    assert second is not None
+    assert calls == 1
+    assert second.schema["properties"]["title"]["type"] == "string"

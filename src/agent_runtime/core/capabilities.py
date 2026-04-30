@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import weakref
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Protocol, TypeAlias, runtime_checkable
 
@@ -237,17 +238,48 @@ class AgentCapabilities:
     supports_resume: bool = False
 
 
+_ProfileCacheRef = weakref.ReferenceType[Any] | None
+_PROFILE_CACHE: dict[tuple[int, str | None], tuple[_ProfileCacheRef, ModelCapabilityProfile]] = {}
+
+
 def get_model_capability_profile(
     provider: Any,
     model: str | None = None,
 ) -> ModelCapabilityProfile:
+    cache_key = (id(provider), model)
+    cached = _PROFILE_CACHE.get(cache_key)
+    if cached is not None:
+        provider_ref, profile = cached
+        if provider_ref is None or provider_ref() is provider:
+            return profile
+        _PROFILE_CACHE.pop(cache_key, None)
+
     if isinstance(provider, GranularModelCapabilityProvider):
-        return provider.capability_profile(model)
-    return derive_profile_from_summary(
-        provider_id=str(provider.provider_id),
-        model=model,
-        summary=provider.capabilities(model),
-    )
+        profile = provider.capability_profile(model)
+    else:
+        profile = derive_profile_from_summary(
+            provider_id=str(provider.provider_id),
+            model=model,
+            summary=provider.capabilities(model),
+        )
+    _PROFILE_CACHE[cache_key] = (_provider_ref(provider, cache_key), profile)
+    return profile
+
+
+def clear_model_capability_profile_cache() -> None:
+    """Clear cached provider/model capability profiles."""
+
+    _PROFILE_CACHE.clear()
+
+
+def _provider_ref(
+    provider: Any,
+    cache_key: tuple[int, str | None],
+) -> _ProfileCacheRef:
+    try:
+        return weakref.ref(provider, lambda _ref: _PROFILE_CACHE.pop(cache_key, None))
+    except TypeError:
+        return None
 
 
 def derive_profile_from_summary(
