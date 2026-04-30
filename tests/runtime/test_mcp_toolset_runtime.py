@@ -141,6 +141,58 @@ async def test_runtime_toolsets_expose_local_mcp_tools_and_stop_connector(monkey
     assert transport.stopped is True
 
 
+async def test_runtime_toolset_reuses_discovery_cache_between_runs(
+    monkeypatch: Any,
+) -> None:
+    all_transports = [_FakeTransport(), _FakeTransport()]
+    transports = list(all_transports)
+    monkeypatch.setattr(
+        connector_module,
+        "transport_for_spec",
+        lambda spec, auth_provider=None: transports.pop(0),
+    )
+    runtime = AgentRuntime()
+    scripted = ScriptedModelProvider()
+    runtime.registry.register_model(scripted)
+    scripted.queue(
+        tool_call_turn(
+            call_id="c1",
+            name="mcp:tickets.lookup",
+            arguments={"ticket_id": "T-1"},
+        )
+    )
+    scripted.queue(text_only_turn("done 1"))
+    scripted.queue(
+        tool_call_turn(
+            call_id="c2",
+            name="mcp:tickets.lookup",
+            arguments={"ticket_id": "T-2"},
+        )
+    )
+    scripted.queue(text_only_turn("done 2"))
+    toolset = MCPToolset(
+        server=_trusted_ticket_spec(),
+        mode="local",
+    )
+
+    await runtime.run(
+        provider="scripted:test",
+        input="lookup ticket",
+        toolsets=[toolset],
+    )
+    second = await runtime.run(
+        provider="scripted:test",
+        input="lookup another ticket",
+        toolsets=[toolset],
+    )
+
+    first_transport, second_transport = all_transports
+    assert [request[0] for request in first_transport.requests].count("tools/list") == 1
+    assert [request[0] for request in second_transport.requests].count("tools/list") == 0
+    assert [request[0] for request in second_transport.requests].count("tools/call") == 1
+    assert EventTypes.MCP_TOOLS_CACHE_HIT in [event.type for event in second.events]
+
+
 class _RequireMCPApproval:
     def __init__(self) -> None:
         self.seen: list[PolicyRequest] = []

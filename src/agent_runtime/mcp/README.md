@@ -37,7 +37,9 @@ the model adapters still own final provider API mapping.
   `local_only`, `enterprise_remote`, and `provider_native_allowed`.
 - Discovery cache keys include server, session, protocol, tool filters, trust
   fingerprint, auth identity, and one-way credential/header fingerprints. They
-  never store raw tokens. `notifications/tools/list_changed` invalidates cached
+  never store raw tokens. Runtime-managed `MCPToolset` instances keep a
+  per-toolset local discovery cache so repeated runs can reuse schemas without
+  re-listing tools. `notifications/tools/list_changed` invalidates cached
   discovery and clears stale managed tool descriptors.
 - MCP policy requests and approval events include server/tool/ref, scopes,
   risks, trust level, route mode, and trust fingerprint so applications can make

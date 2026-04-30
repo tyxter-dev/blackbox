@@ -117,7 +117,8 @@ strict budgets.
 Use these benchmarks to evaluate the current P0 optimization targets:
 
 - Cache generated tool schemas and output schemas.
-- Cache MCP discovery by server identity, protocol, auth shape, and filters.
+- Cache MCP discovery by server identity, protocol, auth shape, and filters,
+  then reuse runtime-managed toolset caches across runs.
 - Avoid copying large raw provider payloads unless retention is enabled.
 - Batch event-store writes for high-volume streams.
 - Add bounded queues/backpressure for streaming consumers.

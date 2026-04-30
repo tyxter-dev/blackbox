@@ -433,6 +433,7 @@ class AgentRuntime:
                 connector = MCPConnector(
                     [mcp_toolset.server_for_local_dispatch()],
                     policy=None,
+                    _tool_cache=mcp_toolset.cache_for_local_dispatch(),
                 )
                 registered_mcp_tools = await connector.register_runtime_tools(
                     effective_tool_session.registry
@@ -835,6 +836,7 @@ class AgentRuntime:
             connector = MCPConnector(
                 [mcp_toolset.server_for_local_dispatch()],
                 policy=None,
+                _tool_cache=mcp_toolset.cache_for_local_dispatch(),
             )
             registered_mcp_tools = await connector.register_runtime_tools(
                 effective_tool_session.registry

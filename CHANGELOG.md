@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Slice 20 — P0 hot-path performance gates
+
+The benchmark watchlist is now backed by strict CI enforcement and concrete
+hot-path optimizations for repeated runtime flows.
+
+- Adds strict benchmark budgets for core P0 scenarios plus per-scenario p50/p95
+  trend reporting from JSON benchmark output.
+- Caches generated tool/output schemas and provider capability/profile
+  validation results while preserving mutation isolation for callers.
+- Batches event-store writes during high-volume streams and routes internal
+  stream queues through bounded backpressure helpers.
+- Avoids retaining large raw payloads when storage is not allowed and lazily
+  materializes large workspace artifacts until export.
+- Reuses identity-aware MCP discovery caches from runtime-managed local
+  `MCPToolset` instances across runs.
+
 ### Slice 19 — MCP production compatibility hardening
 
 MCP is now represented as a formal production compatibility boundary rather

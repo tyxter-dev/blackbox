@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
 from agent_runtime.core.capabilities import ModelCapabilityProfile
 from agent_runtime.core.errors import UnsupportedFeatureError
+from agent_runtime.mcp.cache import MCPToolCacheEntry
 from agent_runtime.mcp.spec import MCPServerSpec
 from agent_runtime.mcp.trust import (
     MCPRouteMode as TrustRouteMode,
@@ -31,6 +32,12 @@ class MCPToolset:
     allowed_tools: list[str] | None = None
     denied_tools: list[str] | None = None
     provider_extra: dict[str, object] | None = None
+    _local_tool_cache: dict[str, MCPToolCacheEntry] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def server_for_local_dispatch(self) -> MCPServerSpec:
         return replace(
@@ -42,6 +49,10 @@ class MCPToolset:
             if self.denied_tools is not None
             else self.server.denied_tools,
         )
+
+    def cache_for_local_dispatch(self) -> dict[str, MCPToolCacheEntry]:
+        """Return the per-toolset discovery cache for runtime-managed dispatch."""
+        return self._local_tool_cache
 
 
 def resolve_mcp_route(
