@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
-from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.state import ProviderState
-from agent_runtime.providers.base import TurnRequest
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.core.errors import ProviderExecutionError, ProviderNotConfiguredError
+from blackbox.core.items import ItemTypes, RunItem
+from blackbox.core.state import ProviderState
+from blackbox.providers.base import TurnRequest
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
 from tests.fixtures.fake_anthropic_client import (
     FakeAnthropicClient,
     block_delta,

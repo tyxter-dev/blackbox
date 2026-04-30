@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 
-from agent_runtime import AgentResult, AgentRuntime, ModelPricing
-from agent_runtime.core.capabilities import ModelCapabilities
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.providers.base import TurnRequest
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentResult, AgentRuntime, ModelPricing
+from blackbox.core.capabilities import ModelCapabilities
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.providers.base import TurnRequest
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 from tests.fixtures.fake_openai_client import FakeOpenAIClient, evt, final_response, item
 
 
@@ -48,7 +48,7 @@ async def test_model_runtime_metadata_includes_model_turn_trace_span() -> None:
     assert span["attributes"]["cost"]["provider"] == "openai"
 
 
-async def test_agent_runtime_trace_span_uses_stream_run_id() -> None:
+async def test_blackbox_trace_span_uses_stream_run_id() -> None:
     runtime = AgentRuntime()
     scripted = _SingleTurnProvider()
     runtime.registry.register_model(scripted)
@@ -67,7 +67,7 @@ class _SingleTurnProvider:
         return ModelCapabilities(supports_streaming_events=True)
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
-        from agent_runtime.core.state import ProviderState
+        from blackbox.core.state import ProviderState
 
         yield AgentEvent(type=EventTypes.MODEL_REQUEST_STARTED, provider="single")
         yield AgentEvent(

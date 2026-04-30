@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime.core.errors import WorkspaceError
-from agent_runtime.core.events import EventTypes
-from agent_runtime.workspaces import LocalWorkspaceProvider, WorkspaceSpec
-from agent_runtime.workspaces.changes import CommandResult, CommandSpec, FileChange, Patch
+from blackbox.core.errors import WorkspaceError
+from blackbox.core.events import EventTypes
+from blackbox.workspaces import LocalWorkspaceProvider, WorkspaceSpec
+from blackbox.workspaces.changes import CommandResult, CommandSpec, FileChange, Patch
 
 
 async def test_local_provider_lists_relative_files(tmp_path: Path) -> None:

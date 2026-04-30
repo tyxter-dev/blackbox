@@ -16,11 +16,11 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, Field
 
-from agent_runtime import AgentResult, AgentRuntime, EventTypes, OutputValidationError
-from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
-from agent_runtime.hosted_tools import WebSearch
-from agent_runtime.tools import ToolResult
-from agent_runtime.workspaces import (
+from blackbox import AgentResult, AgentRuntime, EventTypes, OutputValidationError
+from blackbox.core.policy import Policy, PolicyDecision, PolicyRequest
+from blackbox.hosted_tools import WebSearch
+from blackbox.tools import ToolResult
+from blackbox.workspaces import (
     CommandResult,
     CommandSpec,
     WorkspaceRef,
@@ -211,8 +211,8 @@ async def test_run_dispatches_three_tools_in_one_turn() -> None:
     )
 
     def three_tool_turn(request: Any) -> Any:
-        from agent_runtime.core.events import AgentEvent as Evt
-        from agent_runtime.core.state import ProviderState
+        from blackbox.core.events import AgentEvent as Evt
+        from blackbox.core.state import ProviderState
         yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
         yield Evt(type=EventTypes.TOOL_CALL_REQUESTED, provider="scripted",
                   item_id="c1", data={"call_id": "c1", "name": "part_1",
@@ -264,8 +264,8 @@ async def test_run_executes_parallel_tool_calls_concurrently() -> None:
         )
 
     def three_tool_turn(request: Any) -> Any:
-        from agent_runtime.core.events import AgentEvent as Evt
-        from agent_runtime.core.state import ProviderState
+        from blackbox.core.events import AgentEvent as Evt
+        from blackbox.core.state import ProviderState
 
         yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
         for n in (1, 2, 3):
@@ -319,8 +319,8 @@ async def test_run_can_limit_tool_concurrency() -> None:
         )
 
     def three_tool_turn(request: Any) -> Any:
-        from agent_runtime.core.events import AgentEvent as Evt
-        from agent_runtime.core.state import ProviderState
+        from blackbox.core.events import AgentEvent as Evt
+        from blackbox.core.state import ProviderState
 
         yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
         for index in range(3):
@@ -434,8 +434,8 @@ async def test_run_collects_deferred_payloads_from_each_tool() -> None:
         )
 
     def parallel_turn(request: Any) -> Any:
-        from agent_runtime.core.events import AgentEvent as Evt
-        from agent_runtime.core.state import ProviderState
+        from blackbox.core.events import AgentEvent as Evt
+        from blackbox.core.state import ProviderState
         yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
         for n in (1, 2, 3):
             yield Evt(type=EventTypes.TOOL_CALL_REQUESTED, provider="scripted",
@@ -606,8 +606,8 @@ async def test_workspace_write_command_and_snapshot_tools_run_through_agent_loop
     registered = runtime.tools.register_workspace(workspace_runtime, workspace)
 
     def workspace_turn(request: Any) -> Any:
-        from agent_runtime.core.events import AgentEvent as Evt
-        from agent_runtime.core.state import ProviderState
+        from blackbox.core.events import AgentEvent as Evt
+        from blackbox.core.state import ProviderState
 
         yield Evt(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
         yield Evt(

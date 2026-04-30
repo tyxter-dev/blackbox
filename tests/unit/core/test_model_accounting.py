@@ -4,13 +4,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_runtime import AgentResult, AgentRuntime, ModelCacheControl, ModelPricing
-from agent_runtime.core.accounting import (
+from blackbox import AgentResult, AgentRuntime, ModelCacheControl, ModelPricing
+from blackbox.core.accounting import (
     ModelUsage,
     usage_from_anthropic_message,
     usage_from_gemini_chunk,
 )
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 from tests.fixtures.fake_openai_client import FakeOpenAIClient, evt, final_response, item
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,
@@ -72,7 +72,7 @@ async def test_model_runtime_collects_usage_and_estimates_cost() -> None:
     assert result.metadata["cost"]["total"] == 0.000182
 
 
-async def test_agent_runtime_result_metadata_includes_usage_and_cost() -> None:
+async def test_blackbox_result_metadata_includes_usage_and_cost() -> None:
     client = FakeOpenAIClient()
     msg = item("message", id_="msg_1")
     usage = SimpleNamespace(input_tokens=10, output_tokens=5, total_tokens=15)
@@ -132,7 +132,7 @@ async def test_model_runtime_tracks_cache_records_for_explicit_cache_key() -> No
     assert record.cache_read_input_tokens == 75
 
 
-async def test_agent_runtime_usage_counts_tool_calls() -> None:
+async def test_blackbox_usage_counts_tool_calls() -> None:
     provider = ScriptedModelProvider()
     provider.queue(tool_call_turn(call_id="call_1", name="lookup", arguments={"q": "x"}))
     provider.queue(text_only_turn("done"))
@@ -203,7 +203,7 @@ async def test_model_runtime_collects_mcp_cache_metadata() -> None:
     }
 
 
-async def test_agent_runtime_result_metadata_includes_mcp_cache_metadata() -> None:
+async def test_blackbox_result_metadata_includes_mcp_cache_metadata() -> None:
     client = FakeOpenAIClient()
     approval = item(
         "mcp_approval_request",
@@ -260,7 +260,7 @@ def test_usage_accumulates_and_estimates_cached_input_cost() -> None:
 
 
 def test_add_usage_keeps_missing_usage_absent() -> None:
-    from agent_runtime.core.accounting import add_usage
+    from blackbox.core.accounting import add_usage
 
     assert add_usage(None, None) is None
 

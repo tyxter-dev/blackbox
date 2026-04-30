@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 bootstrap(load_env=True)
 
-from agent_runtime import create_runtime_with_default_providers, structured_output
+from blackbox import create_runtime_with_default_providers, structured_output
 
 
 class RequestClassification(BaseModel):

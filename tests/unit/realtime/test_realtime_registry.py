@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.core.errors import ProviderNotFoundError
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
-from agent_runtime.providers.registry import ProviderRegistry
-from agent_runtime.realtime.fake import FakeRealtimeProvider
+from blackbox.core.errors import ProviderNotFoundError
+from blackbox.providers.model_adapters.echo import EchoModelProvider
+from blackbox.providers.registry import ProviderRegistry
+from blackbox.realtime.fake import FakeRealtimeProvider
 
 
 def test_registry_keeps_realtime_separate_from_model_providers() -> None:

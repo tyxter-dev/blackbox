@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.core.errors import ProviderExecutionError, ProviderNotConfiguredError
-from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.state import ProviderState
-from agent_runtime.providers.base import TurnRequest
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.core.errors import ProviderExecutionError, ProviderNotConfiguredError
+from blackbox.core.items import ItemTypes, RunItem
+from blackbox.core.state import ProviderState
+from blackbox.providers.base import TurnRequest
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
 from tests.fixtures.fake_openai_client import (
     FakeOpenAIClient,
     evt,

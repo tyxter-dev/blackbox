@@ -17,39 +17,39 @@ from typing import cast
 
 import pytest
 
-from agent_runtime import AgentRuntime, AgentSpec
-from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.capabilities import (
+from blackbox import AgentRuntime, AgentSpec
+from blackbox.core.approvals import ApprovalDecision
+from blackbox.core.capabilities import (
     AgentCapabilities,
     HostedToolKind,
     ModelCapabilities,
     ModelCapabilityProfile,
     get_model_capability_profile,
 )
-from agent_runtime.core.errors import (
+from blackbox.core.errors import (
     ApprovalError,
     ProviderNotConfiguredError,
     SessionError,
     UnsupportedFeatureError,
 )
-from agent_runtime.core.results import OutputSpec
-from agent_runtime.core.sessions import SessionRef
-from agent_runtime.hosted_tools import WebSearch
-from agent_runtime.output.schema import build_output_schema
-from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
-from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
-from agent_runtime.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
-from agent_runtime.providers.agent_adapters.vertex_agent_engine import VertexAIAgentEngineProvider
-from agent_runtime.providers.base import AgentProvider, ModelProvider, TaskSpec, TurnRequest
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox.core.results import OutputSpec
+from blackbox.core.sessions import SessionRef
+from blackbox.hosted_tools import WebSearch
+from blackbox.output.schema import build_output_schema
+from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.providers.agent_adapters.local import LocalAgentProvider
+from blackbox.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
+from blackbox.providers.agent_adapters.vertex_agent_engine import VertexAIAgentEngineProvider
+from blackbox.providers.base import AgentProvider, ModelProvider, TaskSpec, TurnRequest
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox.providers.model_adapters.echo import EchoModelProvider
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
-from agent_runtime.providers.registry import ProviderRegistry
-from agent_runtime.runtime import ModelRuntime
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox.providers.registry import ProviderRegistry
+from blackbox.runtime import ModelRuntime
 from tests.fixtures.fake_anthropic_client import FakeAnthropicClient
 from tests.fixtures.fake_gemini_client import FakeGeminiClient
 from tests.fixtures.scripted_model import ScriptedModelProvider, tool_call_turn

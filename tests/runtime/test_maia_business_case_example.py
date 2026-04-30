@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent_runtime import AgentEvent, EventTypes, PromptSpec, ProviderState
+from blackbox import AgentEvent, EventTypes, PromptSpec, ProviderState
 from examples.maia_bella_cucina_business_case import (
     CASE_CONTEXT_FLAGS,
     CASE_INPUT,

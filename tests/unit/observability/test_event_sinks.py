@@ -5,9 +5,9 @@ sensitive payloads are rewritten before they reach a downstream sink.
 """
 from __future__ import annotations
 
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.raw import RawEnvelope
-from agent_runtime.observability import (
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.raw import RawEnvelope
+from blackbox.observability import (
     MemoryEventSink,
     RedactingEventSink,
     default_redaction_policy,

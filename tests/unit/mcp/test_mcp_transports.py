@@ -4,8 +4,8 @@ from typing import Any
 
 import pytest
 
-from agent_runtime.core.errors import MCPError
-from agent_runtime.mcp import MCPServerSpec, StdioMCPTransport
+from blackbox.core.errors import MCPError
+from blackbox.mcp import MCPServerSpec, StdioMCPTransport
 
 
 class _TimeoutStdioTransport(StdioMCPTransport):

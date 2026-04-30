@@ -4,8 +4,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.providers.base import AgentSpec, TaskSpec
+from blackbox.core.approvals import ApprovalDecision
+from blackbox.providers.base import AgentSpec, TaskSpec
 
 
 @dataclass(slots=True)

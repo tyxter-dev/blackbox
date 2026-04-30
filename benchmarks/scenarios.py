@@ -11,46 +11,46 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agent_runtime.core.artifacts import Artifact, ArtifactPage
-from agent_runtime.core.capabilities import (
+from benchmarks.harness import BenchmarkRecorder, MetricValue, time_async, time_sync
+from blackbox.core.artifacts import Artifact, ArtifactPage
+from blackbox.core.capabilities import (
     AgentCapabilities,
     CapabilityDetail,
     HostedToolSupport,
     ModelCapabilities,
     ModelCapabilityProfile,
 )
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.results import OutputSpec
-from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
-from agent_runtime.core.state import ProviderState, RunState
-from agent_runtime.core.stores import (
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.items import ItemTypes, RunItem
+from blackbox.core.results import OutputSpec
+from blackbox.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
+from blackbox.core.state import ProviderState, RunState
+from blackbox.core.stores import (
     InMemoryEventStore,
     JSONLEventStore,
     SQLiteRunStore,
 )
-from agent_runtime.mcp import (
+from blackbox.mcp import (
     MCPApprovalMode,
     MCPConnector,
     MCPServerSpec,
     MCPServerTrustPolicy,
     MCPTrustLevel,
 )
-from agent_runtime.observability.traces import trace_metadata_from_events
-from agent_runtime.output.schema import build_output_schema
-from agent_runtime.providers.base import (
+from blackbox.observability.traces import trace_metadata_from_events
+from blackbox.output.schema import build_output_schema
+from blackbox.providers.base import (
     AgentSpec,
     TaskSpec,
     TurnRequest,
 )
-from agent_runtime.runtime.main import AgentRuntime
-from agent_runtime.runtime.output import _validate_output
-from agent_runtime.tools.catalog import ToolCatalog
-from agent_runtime.tools.results import ToolResult
-from agent_runtime.tools.toolsets import DynamicToolsetSession, ToolBudget
-from agent_runtime.workspaces import CommandResult, CommandSpec, WorkspaceRuntime, WorkspaceSpec
-from agent_runtime.workspaces.changes import FileChange, Patch
-from benchmarks.harness import BenchmarkRecorder, MetricValue, time_async, time_sync
+from blackbox.runtime.main import AgentRuntime
+from blackbox.runtime.output import _validate_output
+from blackbox.tools.catalog import ToolCatalog
+from blackbox.tools.results import ToolResult
+from blackbox.tools.toolsets import DynamicToolsetSession, ToolBudget
+from blackbox.workspaces import CommandResult, CommandSpec, WorkspaceRuntime, WorkspaceSpec
+from blackbox.workspaces.changes import FileChange, Patch
 
 ScenarioAction = Callable[[BenchmarkRecorder], Awaitable[dict[str, MetricValue] | None]]
 ScenarioEntry = tuple[str, ScenarioAction]
@@ -358,7 +358,7 @@ async def openai_text_only_network(recorder: BenchmarkRecorder) -> dict[str, Met
     """Minimal credential-gated provider run for manual network baselines."""
 
     try:
-        from agent_runtime.providers.model_adapters.openai_responses import (
+        from blackbox.providers.model_adapters.openai_responses import (
             OpenAIResponsesProvider,
         )
     except ImportError as exc:
@@ -612,7 +612,7 @@ async def mcp_tool_discovery_call(recorder: BenchmarkRecorder) -> dict[str, Metr
 async def workspace_read_write_patch_snapshot(
     recorder: BenchmarkRecorder,
 ) -> dict[str, MetricValue]:
-    with tempfile.TemporaryDirectory(prefix="agent-runtime-bench-ws-") as root:
+    with tempfile.TemporaryDirectory(prefix="blackbox-bench-ws-") as root:
         root_path = Path(root)
         workspace_runtime = WorkspaceRuntime(executor=_fake_command_executor)
         workspace = await workspace_runtime.open(WorkspaceSpec.local(root_path))
@@ -685,7 +685,7 @@ async def cloud_agent_session_stream_collection(
 
 
 async def persisted_resume_jsonl_sqlite(recorder: BenchmarkRecorder) -> dict[str, MetricValue]:
-    with tempfile.TemporaryDirectory(prefix="agent-runtime-bench-persist-") as root:
+    with tempfile.TemporaryDirectory(prefix="blackbox-bench-persist-") as root:
         root_path = Path(root)
         event_store = JSONLEventStore(root_path / "events.jsonl")
         run_store = SQLiteRunStore(root_path / "runs.sqlite")

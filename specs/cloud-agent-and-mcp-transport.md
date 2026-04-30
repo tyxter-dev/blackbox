@@ -95,7 +95,7 @@ coverage.
 Phase 1 target:
 
 ```text
-src/agent_runtime/agents/claude_code.py
+src/blackbox/agents/claude_code.py
 ```
 
 `ClaudeCodeAgentProvider` was the first concrete non-local `AgentProvider`.
@@ -225,8 +225,8 @@ Add a small adapter boundary instead of binding tests directly to a third-party
 SDK:
 
 ```text
-src/agent_runtime/agents/claude_code.py
-src/agent_runtime/agents/_cloud_sessions.py
+src/blackbox/agents/claude_code.py
+src/blackbox/agents/_cloud_sessions.py
 tests/fixtures/fake_claude_code_client.py
 ```
 
@@ -328,10 +328,10 @@ await connector.refresh_tools("tickets")
 Add:
 
 ```text
-src/agent_runtime/mcp/client.py
-src/agent_runtime/mcp/transports.py
-src/agent_runtime/mcp/auth.py
-src/agent_runtime/mcp/cache.py
+src/blackbox/mcp/client.py
+src/blackbox/mcp/transports.py
+src/blackbox/mcp/auth.py
+src/blackbox/mcp/cache.py
 ```
 
 Core protocol:

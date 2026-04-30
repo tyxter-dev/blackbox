@@ -10,7 +10,7 @@ billing, and multi-tenant persistence belong in downstream applications.
 
 ## Core Surface
 
-`agent_runtime.workspace_agents` exposes:
+`blackbox.workspace_agents` exposes:
 
 - `WorkspaceAgentSpec` - packaged agent definition with instructions, model
   preference, tools, hosted tools, MCP servers, connectors, permissions,

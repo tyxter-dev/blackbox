@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import pytest
 
-from agent_runtime.core.capabilities import (
+from blackbox.core.capabilities import (
     CapabilityDetail,
     CapabilityStatus,
     ModelCapabilities,
@@ -15,33 +15,33 @@ from agent_runtime.core.capabilities import (
     derive_profile_from_summary,
     get_model_capability_profile,
 )
-from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.core.results import OutputSpec
-from agent_runtime.hosted_tools import WebSearch, hosted_tool_kind
-from agent_runtime.output.schema import build_output_schema
-from agent_runtime.providers.base import (
+from blackbox.core.errors import UnsupportedFeatureError
+from blackbox.core.results import OutputSpec
+from blackbox.hosted_tools import WebSearch, hosted_tool_kind
+from blackbox.output.schema import build_output_schema
+from blackbox.providers.base import (
     CompactionControl,
     ModelCacheControl,
     ModelRequestControls,
     ToolSearchControl,
     TurnRequest,
 )
-from agent_runtime.providers.model_adapters import capability_validation as validation_module
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.providers.model_adapters.capability_validation import (
+from blackbox.providers.model_adapters import capability_validation as validation_module
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox.providers.model_adapters.capability_validation import (
     clear_capability_validation_cache,
     requested_controls,
     resolve_output_strategy,
     validate_turn_request_capabilities,
 )
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox.providers.model_adapters.echo import EchoModelProvider
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
-from agent_runtime.providers.registry import ProviderRegistry
-from agent_runtime.runtime import ModelRuntime
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox.providers.registry import ProviderRegistry
+from blackbox.runtime import ModelRuntime
 
 
 class CountingEchoModelProvider(EchoModelProvider):

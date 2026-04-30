@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-import agent_runtime.tools.registry as registry_module
-import agent_runtime.tools.runtime as runtime_module
-from agent_runtime.core.errors import ToolExecutionError
-from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
+import blackbox.tools.registry as registry_module
+import blackbox.tools.runtime as runtime_module
+from blackbox.core.errors import ToolExecutionError
+from blackbox.tools import ToolRegistry, ToolResult, ToolRuntime
 
 # --- context injection ------------------------------------------------------
 

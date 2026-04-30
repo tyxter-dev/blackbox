@@ -7,7 +7,7 @@ ordinary keyword arguments already accepted by `runtime.run(...)`,
 `runtime.realtime.connect(...)`.
 
 ```python
-from agent_runtime import RuntimeConfig, WorkspaceSpec
+from blackbox import RuntimeConfig, WorkspaceSpec
 
 config = RuntimeConfig.profile("coding_agent").with_overrides(
     provider="openai:gpt-5.5",
@@ -42,7 +42,7 @@ first, file or environment values can fill in the next layer, and
 Profile metadata is available at runtime:
 
 ```python
-from agent_runtime import workflow_profile_docs
+from blackbox import workflow_profile_docs
 
 docs = workflow_profile_docs()
 print(docs["coding_agent"]["tradeoffs"])

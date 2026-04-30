@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Packaging — Blackbox rename and MIT license
+
+- Renamed the public distribution and import package from `agent-runtime-core`
+  / `agent_runtime` to `blackbox`.
+- Added repository metadata for `tyxter-dev/blackbox`.
+- Added the MIT license file and packaging metadata.
+
 ### Slice 20 — P0 hot-path performance gates
 
 The benchmark watchlist is now backed by strict CI enforcement and concrete
@@ -232,7 +239,7 @@ Redaction sink (PRD §17–18, supports VALIDATION 5.8):
 - Pass-through behavior preserved for bare SDK objects on `event.raw` —
   adapters opt-in to redaction by wrapping in `RawEnvelope`.
 - Custom `RedactionPolicy` callable + custom marker supported.
-- Re-exported from `agent_runtime.observability`.
+- Re-exported from `blackbox.observability`.
 
 Tests:
 - `tests/runtime/test_runtime_retry.py` — 5 tests: retry succeeds,
@@ -252,7 +259,7 @@ First cut of the workspace layer (PRD §15, M2). Builds the data contracts
 and a local-directory runtime that emits canonical workspace events and
 honors the workspace-relevant `Policy` checkpoints.
 
-- New data classes in `agent_runtime.workspaces`:
+- New data classes in `blackbox.workspaces`:
   - `WorkspaceRef` (stable handle for an opened workspace),
   - `WorkspaceMount` (workspace mounted into an agent's environment),
   - `CommandSpec` / `CommandResult`,
@@ -337,7 +344,7 @@ provider-native primitives.
   `to_provider_tools`, `call(..., mock=...)` (P0-R13).
 
 ### Loop extraction
-- New `agent_runtime.loop.AgentLoop` owns the iterative control flow per
+- New `blackbox.loop.AgentLoop` owns the iterative control flow per
   PRD §8.4. Both `LocalAgentProvider` (session-shaped API) and
   `AgentRuntime.run` (blackbox API) share the same loop body.
 

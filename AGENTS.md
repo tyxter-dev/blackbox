@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Project-specific guidance for coding agents working on `agent_runtime`.
+Project-specific guidance for coding agents working on `blackbox`.
 
 ## What this project is
 
-`agent_runtime` is the successor in spirit to `llm_factory_toolkit`, not a mechanical rewrite of it.
+`blackbox` is the successor in spirit to `llm_factory_toolkit`, not a mechanical rewrite of it.
 
 The original v1 product promise is still load-bearing:
 
@@ -36,7 +36,7 @@ Read these before making non-trivial changes:
 - `CHANGELOG.md` — slice history (one entry per slice, semver-ish).
 - `tests/VALIDATION.md` — coverage tracker mapping behaviors to the tests that prove them.
 - `README.md` — public-facing API surface and package layout.
-- `src/agent_runtime/<package>/README.md` — every domain package has a "Belongs Here / Does Not Belong Here / File Map" README. Read the relevant one before adding code in a package you don't already own.
+- `src/blackbox/<package>/README.md` — every domain package has a "Belongs Here / Does Not Belong Here / File Map" README. Read the relevant one before adding code in a package you don't already own.
 - Architecture notes: `docs/ORGANIZATION_PLAN.md`, `docs/AGENT.md`, `docs/MODEL.md`, `docs/WORKSPACE.md`, `docs/WORKFLOW_PROFILES.md`.
 
 The PRD is updated when product direction shifts; ask before making sweeping PRD edits. `FEATURES.md` should be kept honest as features land.
@@ -62,7 +62,7 @@ All three quality gates (pytest / ruff / mypy --strict) must pass before committ
 ## Package layout
 
 ```
-src/agent_runtime/
+src/blackbox/
   core/             # events, items, state, sessions, capabilities, artifacts, approvals, accounting, cache, content
   providers/        # ModelProvider/AgentProvider protocols, registry, request contracts, and adapters
     model_adapters/ # OpenAI Responses, Anthropic Messages, Gemini GenerateContent, xAI, Echo
@@ -97,7 +97,7 @@ src/agent_runtime/
    - `runtime.caches` — provider cache lifecycle helpers.
    - `runtime.chat` — explicit chat-shaped compatibility facade (export only; never the runtime's truth).
 
-3. **`AgentLoop` (in `src/agent_runtime/runtime/agent_loop.py`) is the shared execution layer.** Both `LocalAgentProvider` and the high-level `AgentRuntime.run` delegate to it. New tool/approval/policy semantics belong here, not duplicated across providers. `src/agent_runtime/loop.py` and `src/agent_runtime/hosted_tools.py` are compatibility shims — don't add logic there.
+3. **`AgentLoop` (in `src/blackbox/runtime/agent_loop.py`) is the shared execution layer.** Both `LocalAgentProvider` and the high-level `AgentRuntime.run` delegate to it. New tool/approval/policy semantics belong here, not duplicated across providers. `src/blackbox/loop.py` and `src/blackbox/hosted_tools.py` are compatibility shims — don't add logic there.
 
 4. **Events are the runtime stream.** `AgentEvent` carries `run_id` (UUID per `runtime.run/.stream` invocation) and a monotonic `sequence`. There are now ~148 event-type constants in `core/events.py` covering: run/session lifecycle, model turns, tool calls (local, hosted, agent, MCP), tool routing/search/choice, prompt planning, MCP server lifecycle and trust, workspace operations, approvals, handoffs, guardrails, retries, evals, cloud-agent status, and realtime audio/turn events. Every event flows through `runtime.event_store` (an `EventStore` Protocol; in-memory by default). Text is one projection; structured `output` is another; the events log is the truth.
 
@@ -108,7 +108,7 @@ src/agent_runtime/
 `RuntimeConfig` is a frozen value object — **not a new facade** — that bundles a `profile_name` plus override kwargs and expands into the same keyword arguments the runtime methods already accept. It can be loaded from a mapping, environment variables, or a JSON/TOML/YAML file.
 
 ```python
-from agent_runtime import RuntimeConfig, WorkspaceSpec
+from blackbox import RuntimeConfig, WorkspaceSpec
 
 config = RuntimeConfig.profile("coding_agent").with_overrides(
     provider="openai:gpt-5.5",
@@ -165,7 +165,7 @@ All exceptions descend from `AgentRuntimeError` (`core/errors.py`). Use the clos
 - Type hints required on every public function. `mypy --strict` is enforced.
 - Prefer dataclasses with `slots=True` for value types. Frozen dataclasses for ID/ref objects and config objects.
 - Async generators for streaming methods. Protocol declarations use plain `def` returning `AsyncIterator[...]`, not `async def`, so async-generator implementations type-check.
-- Imports ordered stdlib → typing → `agent_runtime.*`. Ruff handles ordering; don't fight it.
+- Imports ordered stdlib → typing → `blackbox.*`. Ruff handles ordering; don't fight it.
 - `__all__` lists must be alphabetically sorted (ruff `RUF022` is enforced).
 - Use `replace(event, ...)` (from `dataclasses`) to update frozen events; never mutate.
 

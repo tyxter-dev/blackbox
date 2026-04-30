@@ -15,9 +15,9 @@ from _bootstrap import bootstrap
 
 bootstrap()
 
-from agent_runtime import AgentRuntime, AgentSession, AgentSpec, EventTypes
-from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from blackbox import AgentRuntime, AgentSession, AgentSpec, EventTypes
+from blackbox.providers.agent_adapters.local import LocalAgentProvider
+from blackbox.providers.model_adapters.echo import EchoModelProvider
 
 
 async def _print_stream(runtime: AgentRuntime, session: AgentSession) -> None:

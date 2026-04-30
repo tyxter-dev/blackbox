@@ -13,9 +13,9 @@ import os
 import pytest
 from pydantic import BaseModel
 
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.core.results import AgentResult, OutputSpec
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.core.results import AgentResult, OutputSpec
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 pytestmark = pytest.mark.integration_openai
 

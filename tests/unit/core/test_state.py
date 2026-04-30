@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from agent_runtime import AgentRuntime
-from agent_runtime.core.state import ProviderState
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from blackbox import AgentRuntime
+from blackbox.core.state import ProviderState
+from blackbox.providers.model_adapters.echo import EchoModelProvider
 
 
 async def test_run_returns_provider_state() -> None:

@@ -5,8 +5,8 @@ import os
 
 import pytest
 
-from agent_runtime import AgentRuntime, ModelPricing
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox import AgentRuntime, ModelPricing
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
 
 pytestmark = pytest.mark.integration_xai
 

@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, Field
 
-from agent_runtime import (
+from blackbox import (
     AgentRuntime,
     ChatMessage,
     CodeInterpreter,
@@ -31,17 +31,17 @@ from agent_runtime import (
     ToolSearchControl,
     WebSearch,
 )
-from agent_runtime.core.errors import OutputValidationError
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.results import AgentResult, OutputSpec
-from agent_runtime.core.state import ProviderState
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox.core.errors import OutputValidationError
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.results import AgentResult, OutputSpec
+from blackbox.core.state import ProviderState
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
-from agent_runtime.tools import ToolResult
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox.tools import ToolResult
 
 pytestmark = pytest.mark.journey_model_provider
 
@@ -567,7 +567,7 @@ async def test_journey_request_controls_usage_and_cost_metadata() -> None:
             kwargs["compaction"] = CompactionControl(strategy="auto")
         if provider.supports_cache_key:
             kwargs["cache"] = ModelCacheControl(
-                key="agent-runtime-journey-cache",
+                key="blackbox-journey-cache",
                 ttl="24h",
             )
         try:

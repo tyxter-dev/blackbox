@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, ClassVar, cast
 
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.providers.base import TurnRequest
-from agent_runtime.providers.model_adapters.anthropic_messages import _compose_messages
-from agent_runtime.providers.model_adapters.gemini_generate_content import _compose_contents
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.providers.base import TurnRequest
+from blackbox.providers.model_adapters.anthropic_messages import _compose_messages
+from blackbox.providers.model_adapters.gemini_generate_content import _compose_contents
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 from tests.fixtures.fake_openai_client import FakeOpenAIClient, FakeStream, evt, final_response
 
 

@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime import (
+from blackbox import (
     AgentRuntime,
     EventTypes,
     FragmentRequirements,
     PromptFragment,
     PromptSpec,
 )
-from agent_runtime.core.errors import ConfigurationError
-from agent_runtime.tools import ToolResult
+from blackbox.core.errors import ConfigurationError
+from blackbox.tools import ToolResult
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 

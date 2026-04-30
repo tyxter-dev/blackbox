@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime import AgentRuntime, FileSearch, HostedToolRaw, WebSearch
-from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.core.results import AgentResult, OutputSpec
-from agent_runtime.output.schema import build_output_schema
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox import AgentRuntime, FileSearch, HostedToolRaw, WebSearch
+from blackbox.core.errors import UnsupportedFeatureError
+from blackbox.core.results import AgentResult, OutputSpec
+from blackbox.output.schema import build_output_schema
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox.providers.model_adapters.echo import EchoModelProvider
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
 from tests.fixtures.fake_anthropic_client import FakeAnthropicClient, final_message

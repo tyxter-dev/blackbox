@@ -1,7 +1,7 @@
 # WorkspaceProvider Framework PRD
 
 **Framework:** `WorkspaceProvider`
-**Parent PRD:** `PRD.md` (Agent Runtime Core)
+**Parent PRD:** `PRD.md` (Blackbox)
 **Document status:** Framework PRD, implementation-aligned draft
 **Last reviewed against code:** 2026-04-27
 
@@ -85,14 +85,14 @@ billing/tenancy
 
 | Area | Current evidence | State |
 |---|---|---|
-| Core protocol | `src/agent_runtime/workspaces/provider.py` | Implemented. `WorkspaceProvider` includes open/attach/close, file ops, patches, commands, snapshots, restore, ports, artifacts, approvals, state, and event draining. |
-| Data contracts | `src/agent_runtime/workspaces/spec.py`, `src/agent_runtime/workspaces/changes.py` | Implemented. `WorkspaceSpec`, `WorkspaceRef`, `WorkspaceSessionState`, capabilities, ports, commands, file changes, patches, and patch artifacts exist. |
-| Local backend | `src/agent_runtime/workspaces/local.py` | Implemented. Local files, commands, patches, snapshots, restore, artifacts, policy gates, approvals, and path safety. |
-| Sandbox backend | `src/agent_runtime/workspaces/sandbox.py` | Implemented. Client-backed sandbox workspace with commands, streaming output, patches, snapshots, restore, ports when client supports them, artifacts, approvals, and state. |
-| Sandbox clients | `src/agent_runtime/workspaces/fake.py`, `src/agent_runtime/workspaces/docker.py`, `src/agent_runtime/workspaces/sandbox_client.py` | Implemented. Fake client supports deterministic tests; Docker client starts containers and maps host workspace state. |
-| Runtime integration | `src/agent_runtime/runtime.py` | Implemented. `runtime.workspaces` opens provider-backed workspaces; `runtime.agents.run(..., workspace=...)` receives a resolved `WorkspaceRef`; `runtime.run/stream(..., workspace=...)` keeps the run-scoped workspace-tool compatibility bridge. |
-| Workspace tools | `src/agent_runtime/workspaces/tools.py` | Implemented. Registers read/write/delete/list/apply_patch/run_command/snapshot/expose_port tools against a provider/ref. |
-| Backward-compatible alias | `src/agent_runtime/workspaces/runtime.py` | Implemented. `WorkspaceRuntime` aliases the local provider for older local-workspace tests/imports. |
+| Core protocol | `src/blackbox/workspaces/provider.py` | Implemented. `WorkspaceProvider` includes open/attach/close, file ops, patches, commands, snapshots, restore, ports, artifacts, approvals, state, and event draining. |
+| Data contracts | `src/blackbox/workspaces/spec.py`, `src/blackbox/workspaces/changes.py` | Implemented. `WorkspaceSpec`, `WorkspaceRef`, `WorkspaceSessionState`, capabilities, ports, commands, file changes, patches, and patch artifacts exist. |
+| Local backend | `src/blackbox/workspaces/local.py` | Implemented. Local files, commands, patches, snapshots, restore, artifacts, policy gates, approvals, and path safety. |
+| Sandbox backend | `src/blackbox/workspaces/sandbox.py` | Implemented. Client-backed sandbox workspace with commands, streaming output, patches, snapshots, restore, ports when client supports them, artifacts, approvals, and state. |
+| Sandbox clients | `src/blackbox/workspaces/fake.py`, `src/blackbox/workspaces/docker.py`, `src/blackbox/workspaces/sandbox_client.py` | Implemented. Fake client supports deterministic tests; Docker client starts containers and maps host workspace state. |
+| Runtime integration | `src/blackbox/runtime.py` | Implemented. `runtime.workspaces` opens provider-backed workspaces; `runtime.agents.run(..., workspace=...)` receives a resolved `WorkspaceRef`; `runtime.run/stream(..., workspace=...)` keeps the run-scoped workspace-tool compatibility bridge. |
+| Workspace tools | `src/blackbox/workspaces/tools.py` | Implemented. Registers read/write/delete/list/apply_patch/run_command/snapshot/expose_port tools against a provider/ref. |
+| Backward-compatible alias | `src/blackbox/workspaces/runtime.py` | Implemented. `WorkspaceRuntime` aliases the local provider for older local-workspace tests/imports. |
 | Tests | `tests/unit/workspaces/test_workspace_runtime.py`, `tests/unit/workspaces/test_local_workspace_provider.py`, `tests/unit/workspaces/test_sandbox_workspace_provider.py`, `tests/unit/workspaces/test_workspace_provider_contracts.py`, `tests/runtime/test_workspace_tool_loop.py` | Current behavior is covered by unit, contract, and runtime loop tests. |
 
 ## 5. Primary Users

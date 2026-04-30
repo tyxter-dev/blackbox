@@ -1,6 +1,6 @@
 # Feature Catalog
 
-This catalog lists the features currently supported by `agent_runtime`.
+This catalog lists the features currently supported by `blackbox`.
 Use it as a product/runtime inventory, not as a roadmap.
 
 Status legend:

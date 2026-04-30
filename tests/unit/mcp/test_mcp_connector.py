@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-from agent_runtime.core.errors import ApprovalError, MCPError
-from agent_runtime.core.events import EventTypes
-from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.mcp import (
+from blackbox.core.errors import ApprovalError, MCPError
+from blackbox.core.events import EventTypes
+from blackbox.core.policy import PolicyDecision, PolicyRequest
+from blackbox.mcp import (
     MCPApprovalMode,
     MCPCapabilityRisk,
     MCPConnector,
@@ -17,9 +17,9 @@ from agent_runtime.mcp import (
     MCPToolTrustPolicy,
     MCPTrustLevel,
 )
-from agent_runtime.mcp.cache import MCPToolCacheEntry
-from agent_runtime.tools.registry import ToolRegistry
-from agent_runtime.tools.runtime import ToolRuntime
+from blackbox.mcp.cache import MCPToolCacheEntry
+from blackbox.tools.registry import ToolRegistry
+from blackbox.tools.runtime import ToolRuntime
 
 
 class _FakeTransport:

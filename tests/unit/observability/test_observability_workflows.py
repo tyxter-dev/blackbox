@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.stores import InMemoryEventStore
-from agent_runtime.observability import (
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.stores import InMemoryEventStore
+from blackbox.observability import (
     EvaluationResult,
     OpenTelemetryTraceExporter,
     diff_traces,
@@ -209,10 +209,10 @@ def test_span_to_otel_attributes_flattens_nested_values() -> None:
 
     attrs = span_to_otel_attributes(trace.spans[1])
 
-    assert attrs["agent_runtime.trace_id"] == "run_1"
-    assert attrs["agent_runtime.span_kind"] == "model"
+    assert attrs["blackbox.trace_id"] == "run_1"
+    assert attrs["blackbox.span_kind"] == "model"
     assert attrs["gen_ai.system"] == "scripted"
-    assert attrs["agent_runtime.usage"] == '{"total_tokens": 3}'
+    assert attrs["blackbox.usage"] == '{"total_tokens": 3}'
 
 
 def test_open_telemetry_exporter_projects_trace_events(monkeypatch) -> None:
@@ -232,11 +232,11 @@ def test_open_telemetry_exporter_projects_trace_events(monkeypatch) -> None:
     )
     fake_trace_api = _FakeTraceAPI()
     monkeypatch.setattr(
-        "agent_runtime.observability.otel._otel_trace_api",
+        "blackbox.observability.otel._otel_trace_api",
         lambda: fake_trace_api,
     )
     monkeypatch.setattr(
-        "agent_runtime.observability.otel._otel_status_api",
+        "blackbox.observability.otel._otel_status_api",
         lambda: (_FakeStatus, _FakeStatusCode),
     )
     span = _FakeOTelSpan()
@@ -245,7 +245,7 @@ def test_open_telemetry_exporter_projects_trace_events(monkeypatch) -> None:
     exporter.export(trace)
 
     assert span.events[0][0] == "model.stream"
-    assert span.events[0][1]["agent_runtime.event.type"] == EventTypes.MODEL_TEXT_DELTA
+    assert span.events[0][1]["blackbox.event.type"] == EventTypes.MODEL_TEXT_DELTA
 
 
 class _FakeOTelSpan:

@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime.core.errors import ApprovalError, WorkspaceError
-from agent_runtime.core.events import EventTypes
-from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.workspaces import (
+from blackbox.core.errors import ApprovalError, WorkspaceError
+from blackbox.core.events import EventTypes
+from blackbox.core.policy import PolicyDecision, PolicyRequest
+from blackbox.workspaces import (
     CommandResult,
     CommandSpec,
     FileChange,

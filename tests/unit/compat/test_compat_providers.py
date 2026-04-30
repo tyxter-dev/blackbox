@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.agents.local import LocalAgentProvider as CompatLocalAgentProvider
-from agent_runtime.compat.providers import (
+from blackbox.agents.local import LocalAgentProvider as CompatLocalAgentProvider
+from blackbox.compat.providers import (
     create_runtime_with_default_providers,
     provider_ref_for_model,
     register_default_model_providers,
     resolve_model_route,
 )
-from agent_runtime.loop import AgentLoop as CompatAgentLoop
-from agent_runtime.models.xai_responses import XAIResponsesProvider as CompatXAIResponsesProvider
-from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
-from agent_runtime.providers.registry import ProviderRegistry
-from agent_runtime.runtime import AgentRuntime
-from agent_runtime.runtime.agent_loop import AgentLoop
+from blackbox.loop import AgentLoop as CompatAgentLoop
+from blackbox.models.xai_responses import XAIResponsesProvider as CompatXAIResponsesProvider
+from blackbox.providers.agent_adapters.local import LocalAgentProvider
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox.providers.registry import ProviderRegistry
+from blackbox.runtime import AgentRuntime
+from blackbox.runtime.agent_loop import AgentLoop
 
 
 @pytest.mark.parametrize(

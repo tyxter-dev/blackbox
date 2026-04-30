@@ -5,9 +5,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-import agent_runtime.output.schema as schema_module
-from agent_runtime.core.results import OutputSpec
-from agent_runtime.output.schema import build_output_schema, clear_output_schema_cache
+import blackbox.output.schema as schema_module
+from blackbox.core.results import OutputSpec
+from blackbox.output.schema import build_output_schema, clear_output_schema_cache
 
 
 class Decision(BaseModel):

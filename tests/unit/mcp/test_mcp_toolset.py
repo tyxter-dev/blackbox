@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.core.capabilities import (
+from blackbox.core.capabilities import (
     CapabilityDetail,
     ModelCapabilities,
     ModelCapabilityProfile,
 )
-from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.mcp import (
+from blackbox.core.errors import UnsupportedFeatureError
+from blackbox.mcp import (
     MCPApprovalMode,
     MCPRouteMode,
     MCPServerSpec,
@@ -18,7 +18,7 @@ from agent_runtime.mcp import (
     resolve_mcp_route,
     to_remote_mcp,
 )
-from agent_runtime.providers.registry import ProviderRef
+from blackbox.providers.registry import ProviderRef
 
 
 def _profile(*, remote_mcp: bool) -> ModelCapabilityProfile:

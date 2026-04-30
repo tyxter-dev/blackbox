@@ -12,8 +12,8 @@ import os
 
 import pytest
 
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
 
 pytestmark = pytest.mark.integration_anthropic
 

@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run agent-runtime performance benchmarks and emit JSON.",
+        description="Run blackbox performance benchmarks and emit JSON.",
     )
     parser.add_argument(
         "--output",

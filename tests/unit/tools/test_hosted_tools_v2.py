@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.hosted_tools import (
+from blackbox.core.errors import UnsupportedFeatureError
+from blackbox.hosted_tools import (
     ApplyPatch,
     CodeInterpreter,
     ComputerUse,
@@ -125,7 +125,7 @@ def test_tool_namespace_is_deferred_by_default() -> None:
         ]
     )
 
-    from agent_runtime.hosted_tools import openai_namespace_tools
+    from blackbox.hosted_tools import openai_namespace_tools
 
     assert openai_namespace_tools([spec]) == [
         {

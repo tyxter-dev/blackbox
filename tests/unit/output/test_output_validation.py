@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from agent_runtime.runtime.output import _validate_output
+from blackbox.runtime.output import _validate_output
 
 
 @dataclass

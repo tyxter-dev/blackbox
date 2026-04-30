@@ -6,19 +6,19 @@ from typing import Any
 
 import pytest
 
-from agent_runtime import AgentRuntime, AgentSpec, ModelCacheControl
-from agent_runtime import RuntimeConfig as PublicRuntimeConfig
-from agent_runtime.core.errors import ConfigurationError, UnsupportedFeatureError
-from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
-from agent_runtime.realtime.fake import FakeRealtimeProvider
-from agent_runtime.runtime.config import (
+from blackbox import AgentRuntime, AgentSpec, ModelCacheControl
+from blackbox import RuntimeConfig as PublicRuntimeConfig
+from blackbox.core.errors import ConfigurationError, UnsupportedFeatureError
+from blackbox.providers.agent_adapters.local import LocalAgentProvider
+from blackbox.providers.model_adapters.echo import EchoModelProvider
+from blackbox.realtime.fake import FakeRealtimeProvider
+from blackbox.runtime.config import (
     RuntimeConfig,
     get_workflow_profile,
     workflow_profile_docs,
     workflow_profiles,
 )
-from agent_runtime.workspaces import WorkspaceSpec
+from blackbox.workspaces import WorkspaceSpec
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 EXPECTED_PROFILES = {
@@ -177,7 +177,7 @@ def test_yaml_loader_reports_optional_dependency_when_missing(
             raise ImportError("missing")
         raise AssertionError(name)
 
-    monkeypatch.setattr("agent_runtime.runtime.config.import_module", fail_import)
+    monkeypatch.setattr("blackbox.runtime.config.import_module", fail_import)
 
     with pytest.raises(ConfigurationError, match="PyYAML"):
         RuntimeConfig.from_file(path)
@@ -258,7 +258,7 @@ async def test_model_runtime_rejects_unsupported_config_before_dispatch() -> Non
         await runtime.models.run(input="hello", config=config)
 
 
-async def test_agent_runtime_run_accepts_config_and_forwards_model_controls() -> None:
+async def test_blackbox_run_accepts_config_and_forwards_model_controls() -> None:
     runtime = AgentRuntime()
     scripted = ScriptedModelProvider()
     scripted.queue(text_only_turn("ok"))
@@ -278,7 +278,7 @@ async def test_agent_runtime_run_accepts_config_and_forwards_model_controls() ->
     assert request.controls.max_output_tokens == 128
 
 
-async def test_agent_runtime_plan_run_accepts_config() -> None:
+async def test_blackbox_plan_run_accepts_config() -> None:
     runtime = AgentRuntime()
     runtime.registry.register_model(ScriptedModelProvider())
     config = RuntimeConfig.profile("fast_text").with_overrides(provider="scripted:test")
@@ -289,7 +289,7 @@ async def test_agent_runtime_plan_run_accepts_config() -> None:
     assert plan.model == "test"
 
 
-async def test_agent_runtime_rejects_wrong_surface_config_before_dispatch() -> None:
+async def test_blackbox_rejects_wrong_surface_config_before_dispatch() -> None:
     runtime = AgentRuntime()
     scripted = ScriptedModelProvider()
     runtime.registry.register_model(scripted)
@@ -303,7 +303,7 @@ async def test_agent_runtime_rejects_wrong_surface_config_before_dispatch() -> N
     assert scripted.calls == []
 
 
-async def test_agent_runtime_coding_profile_maps_named_approval_policy(
+async def test_blackbox_coding_profile_maps_named_approval_policy(
     tmp_path: Path,
 ) -> None:
     runtime = AgentRuntime()

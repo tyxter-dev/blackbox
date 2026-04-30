@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime import EventTypes
-from agent_runtime.core.errors import MCPError
-from agent_runtime.mcp import (
+from blackbox import EventTypes
+from blackbox.core.errors import MCPError
+from blackbox.mcp import (
     DefaultMCPTrustEvaluator,
     MCPApprovalMode,
     MCPConnector,

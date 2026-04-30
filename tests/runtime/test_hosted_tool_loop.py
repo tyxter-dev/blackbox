@@ -4,12 +4,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from agent_runtime import AgentResult, AgentRuntime, EventTypes
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.state import ProviderState
-from agent_runtime.hosted_tools import ApplyPatch, ComputerUse, HostedToolHandlers, Shell
-from agent_runtime.tools.hosted import HostedToolCall, HostedToolContext, HostedToolOutput
+from blackbox import AgentResult, AgentRuntime, EventTypes
+from blackbox.core.events import AgentEvent
+from blackbox.core.items import ItemTypes, RunItem
+from blackbox.core.state import ProviderState
+from blackbox.hosted_tools import ApplyPatch, ComputerUse, HostedToolHandlers, Shell
+from blackbox.tools.hosted import HostedToolCall, HostedToolContext, HostedToolOutput
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 

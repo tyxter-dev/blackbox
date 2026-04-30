@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_runtime.core import errors
+from blackbox.core import errors
 
 
 def test_all_errors_descend_from_runtime_base() -> None:

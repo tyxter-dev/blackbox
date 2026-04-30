@@ -1,7 +1,7 @@
 # AgentProvider Framework PRD
 
 **Framework:** `AgentProvider`
-**Parent PRD:** `PRD.md` (Agent Runtime Core)
+**Parent PRD:** `PRD.md` (Blackbox)
 **Document status:** Framework PRD, implementation-aligned draft
 **Last reviewed against code:** 2026-04-26
 
@@ -85,16 +85,16 @@ session supervision.
 
 | Area | Current evidence | State |
 |---|---|---|
-| Core protocol | `src/agent_runtime/providers/base.py` | Implemented. `AgentProvider` exposes create/start/stream/follow-up/approve/cancel/artifacts. |
-| Runtime facade | `src/agent_runtime/runtime.py` | Implemented. `runtime.agents` routes provider calls and stamps streamed events with run/trace metadata. |
-| Local provider | `src/agent_runtime/agents/local.py` | Implemented. Uses `AgentLoop` for model/tool execution and session-shaped lifecycle. |
-| OpenAI Agents provider | `src/agent_runtime/agents/openai_cloud.py` | Implemented as an optional `openai-agents` SDK wrapper or injected client. |
-| Claude Code provider | `src/agent_runtime/agents/claude_code.py` | Implemented as an optional `claude-agent-sdk` wrapper or injected client. |
-| Vertex AI Agent Engine | `src/agent_runtime/agents/vertex_agent_engine.py` | Scaffold only. Raises typed unsupported errors until a real adapter lands. |
-| Capabilities | `src/agent_runtime/core/capabilities.py` | Implemented. `AgentCapabilities` advertises sessions, events, artifacts, workspace, approvals, MCP, cancellation, and resume. |
-| Session refs | `src/agent_runtime/core/sessions.py` | Implemented. `AgentRef`, `SessionRef`, `InvocationRef`, and `AgentSession` are public contracts. |
-| Session state | `src/agent_runtime/core/session_state.py`, `src/agent_runtime/core/stores.py` | Implemented. `AgentSessionState`, `SessionStore`, `InMemorySessionStore`, `JSONLSessionStore`, and `SQLiteSessionStore` persist provider-native session IDs, replay cursors, invocations, approvals, workspace/MCP metadata, and artifact refs. |
-| Events | `src/agent_runtime/core/events.py` | Implemented. Session, cloud-agent, workspace, approval, model, tool, MCP, artifact, handoff, guardrail, retry, and eval event names exist. |
+| Core protocol | `src/blackbox/providers/base.py` | Implemented. `AgentProvider` exposes create/start/stream/follow-up/approve/cancel/artifacts. |
+| Runtime facade | `src/blackbox/runtime.py` | Implemented. `runtime.agents` routes provider calls and stamps streamed events with run/trace metadata. |
+| Local provider | `src/blackbox/agents/local.py` | Implemented. Uses `AgentLoop` for model/tool execution and session-shaped lifecycle. |
+| OpenAI Agents provider | `src/blackbox/agents/openai_cloud.py` | Implemented as an optional `openai-agents` SDK wrapper or injected client. |
+| Claude Code provider | `src/blackbox/agents/claude_code.py` | Implemented as an optional `claude-agent-sdk` wrapper or injected client. |
+| Vertex AI Agent Engine | `src/blackbox/agents/vertex_agent_engine.py` | Scaffold only. Raises typed unsupported errors until a real adapter lands. |
+| Capabilities | `src/blackbox/core/capabilities.py` | Implemented. `AgentCapabilities` advertises sessions, events, artifacts, workspace, approvals, MCP, cancellation, and resume. |
+| Session refs | `src/blackbox/core/sessions.py` | Implemented. `AgentRef`, `SessionRef`, `InvocationRef`, and `AgentSession` are public contracts. |
+| Session state | `src/blackbox/core/session_state.py`, `src/blackbox/core/stores.py` | Implemented. `AgentSessionState`, `SessionStore`, `InMemorySessionStore`, `JSONLSessionStore`, and `SQLiteSessionStore` persist provider-native session IDs, replay cursors, invocations, approvals, workspace/MCP metadata, and artifact refs. |
+| Events | `src/blackbox/core/events.py` | Implemented. Session, cloud-agent, workspace, approval, model, tool, MCP, artifact, handoff, guardrail, retry, and eval event names exist. |
 | Tests | `tests/runtime/test_local_agent_provider.py`, `tests/runtime/test_openai_agents_provider.py`, `tests/runtime/test_claude_code_agent_provider.py`, `tests/contracts/test_capability_honesty.py` | Current behavior is covered with local, injected-client, SDK-wrapper, and capability tests. |
 
 ## 5. Primary Users

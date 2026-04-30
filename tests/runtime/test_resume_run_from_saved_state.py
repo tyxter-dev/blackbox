@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_runtime import AgentResult, AgentRuntime
-from agent_runtime.core.state import RunState
-from agent_runtime.core.stores import SQLiteRunStore
+from blackbox import AgentResult, AgentRuntime
+from blackbox.core.state import RunState
+from blackbox.core.stores import SQLiteRunStore
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 

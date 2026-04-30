@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent_runtime import AgentRuntime, EventTypes, ToolBudget, Toolset
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.core.state import ProviderState
-from agent_runtime.tools import ToolResult
+from blackbox import AgentRuntime, EventTypes, ToolBudget, Toolset
+from blackbox.core.events import AgentEvent
+from blackbox.core.policy import PolicyDecision, PolicyRequest
+from blackbox.core.state import ProviderState
+from blackbox.tools import ToolResult
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 

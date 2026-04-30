@@ -5,8 +5,8 @@ import os
 
 import pytest
 
-from agent_runtime import AgentRuntime, ModelCacheControl, ModelPricing
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentRuntime, ModelCacheControl, ModelPricing
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 pytestmark = pytest.mark.integration_openai
 
@@ -44,7 +44,7 @@ def _long_prompt() -> str:
 async def test_real_prompt_cache_key_usage_and_cost_metadata() -> None:
     runtime = _runtime()
     cache = ModelCacheControl(
-        key="agent-runtime-integration-cache",
+        key="blackbox-integration-cache",
         ttl="24h",
     )
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.hosted_tools import (
+from blackbox.core.errors import UnsupportedFeatureError
+from blackbox.hosted_tools import (
     CodeInterpreter,
     FileSearch,
     HostedToolRaw,

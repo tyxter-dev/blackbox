@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime.core.errors import WorkspaceError
-from agent_runtime.core.events import EventTypes
-from agent_runtime.workspaces import (
+from blackbox.core.errors import WorkspaceError
+from blackbox.core.events import EventTypes
+from blackbox.workspaces import (
     CommandResult,
     CommandSpec,
     FakeSandboxClient,

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from agent_runtime import AgentRuntime
-from agent_runtime.core.events import EventTypes
-from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.state import ProviderState
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox import AgentRuntime
+from blackbox.core.events import EventTypes
+from blackbox.core.items import ItemTypes, RunItem
+from blackbox.core.state import ProviderState
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
 from tests.fixtures.fake_gemini_client import (

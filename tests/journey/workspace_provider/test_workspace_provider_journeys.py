@@ -18,23 +18,23 @@ from typing import Any
 
 import pytest
 
-from agent_runtime import (
+from blackbox import (
     AgentRuntime,
     ApprovalDecision,
     EventTypes,
     ModelPricing,
 )
-from agent_runtime.core.artifacts import Artifact, ArtifactPage
-from agent_runtime.core.errors import WorkspaceError
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox.core.artifacts import Artifact, ArtifactPage
+from blackbox.core.errors import WorkspaceError
+from blackbox.core.events import AgentEvent
+from blackbox.core.policy import PolicyDecision, PolicyRequest
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
-from agent_runtime.workspaces import (
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox.workspaces import (
     CommandResult,
     CommandSpec,
     FakeSandboxClient,

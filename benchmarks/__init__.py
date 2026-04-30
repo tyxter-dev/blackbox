@@ -1,1 +1,1 @@
-"""Performance benchmark helpers for agent-runtime-core."""
+"""Performance benchmark helpers for blackbox."""

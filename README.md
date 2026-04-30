@@ -1,4 +1,4 @@
-# Agent Runtime Core
+# Blackbox
 
 A fresh scaffold for a provider-native agent runtime.
 
@@ -7,7 +7,7 @@ The design deliberately does **not** use LiteLLM. It borrows only the useful ide
 ## Coding agent fast path
 
 If you are integrating this library from code, start at
-`src/agent_runtime/__init__.py`. It is the public SDK entrypoint and lists the
+`src/blackbox/__init__.py`. It is the public SDK entrypoint and lists the
 stable exports an external agent should prefer.
 
 Minimal offline examples:
@@ -28,11 +28,11 @@ Fuller reference examples:
 
 Import guidance:
 
-- Prefer `from agent_runtime import AgentRuntime, WebSearch, FileSearch` for
+- Prefer `from blackbox import AgentRuntime, WebSearch, FileSearch` for
   public contracts.
-- Import concrete providers from `agent_runtime.providers.model_adapters...`
-  or `agent_runtime.providers.agent_adapters...`.
-- Use package READMEs under `src/agent_runtime/` for subsystem-specific
+- Import concrete providers from `blackbox.providers.model_adapters...`
+  or `blackbox.providers.agent_adapters...`.
+- Use package READMEs under `src/blackbox/` for subsystem-specific
   integration notes.
 
 ## Heart of the library
@@ -64,7 +64,7 @@ Chat messages can be an import/export compatibility layer later, but they should
 ## Package layout
 
 ```text
-src/agent_runtime/
+src/blackbox/
   core/             # events, items, state, sessions, capabilities, artifacts, approvals
   providers/        # provider protocols, registry, request contracts, and adapters
     model_adapters/ # OpenAI, Anthropic, Gemini, xAI, and Echo model adapters
@@ -95,8 +95,8 @@ loop end-to-end.
 ```python
 from pydantic import BaseModel
 
-from agent_runtime import AgentRuntime
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentRuntime
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 
 class TicketDecision(BaseModel):
@@ -154,7 +154,7 @@ tool specs through `hosted_tools`; the provider adapter maps them to native
 tool configuration without registering fake local callables:
 
 ```python
-from agent_runtime import AgentRuntime, FileSearch, RemoteMCP, WebSearch
+from blackbox import AgentRuntime, FileSearch, RemoteMCP, WebSearch
 
 runtime = AgentRuntime()
 
@@ -189,8 +189,8 @@ provider to list the same MCP tools again.
 ## Lower-level model turns
 
 ```python
-from agent_runtime import AgentRuntime
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from blackbox import AgentRuntime
+from blackbox.providers.model_adapters.echo import EchoModelProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(EchoModelProvider())
@@ -227,7 +227,7 @@ accepted by `runtime.run(...)`, `runtime.models.run(...)`,
 `runtime.agents.run(...)`, and `runtime.realtime.connect(...)`.
 
 ```python
-from agent_runtime import RuntimeConfig, WorkspaceSpec
+from blackbox import RuntimeConfig, WorkspaceSpec
 
 config = RuntimeConfig.profile("coding_agent").with_overrides(
     provider="openai:gpt-5.5",
@@ -255,7 +255,7 @@ See `docs/WORKFLOW_PROFILES.md` for the full defaults and examples.
 Chat messages are supported as an explicit compatibility projection:
 
 ```python
-from agent_runtime import ChatMessage
+from blackbox import ChatMessage
 
 result = await runtime.chat.run(
     provider="openai:gpt-5.4",
@@ -273,9 +273,9 @@ or state model.
 ## Local agent usage
 
 ```python
-from agent_runtime import AgentRuntime
-from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from blackbox import AgentRuntime
+from blackbox.providers.agent_adapters.local import LocalAgentProvider
+from blackbox.providers.model_adapters.echo import EchoModelProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(EchoModelProvider())
@@ -335,7 +335,7 @@ admin UI, OAuth, org RBAC, cron execution, secret storage, and persistence stay
 in downstream applications.
 
 ```python
-from agent_runtime import (
+from blackbox import (
     AgentRuntime,
     ConnectorSpec,
     MCPServerSpec,
@@ -346,7 +346,7 @@ from agent_runtime import (
     WorkspaceAgentSpec,
     run_workspace_agent,
 )
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from blackbox.providers.model_adapters.echo import EchoModelProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(EchoModelProvider())
@@ -428,7 +428,7 @@ hand-writing `MCPServerSpec` blocks in every app. The helpers stay atomic:
 applications compose separate integrations for their own workflows.
 
 ```python
-from agent_runtime.integrations import google_bigquery_mcp_toolset
+from blackbox.integrations import google_bigquery_mcp_toolset
 
 result = await runtime.run(
     provider="openai:gpt-5.4",
@@ -454,8 +454,8 @@ to `MODEL_ITEM_CREATED` with the original item type stashed in
 `ProviderState.previous_response_id` round-trips for multi-turn continuations.
 
 ```python
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(OpenAIResponsesProvider(api_key="..."))
@@ -476,8 +476,8 @@ capability flags for surfaces that are not wired as native xAI features here
 (`tool_search`, client-executed search, and remote MCP).
 
 ```python
-from agent_runtime import AgentRuntime
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox import AgentRuntime
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(XAIResponsesProvider(api_key="..."))
@@ -507,7 +507,7 @@ OpenAI-specific typed controls include provider tool search and Responses
 truncation:
 
 ```python
-from agent_runtime import CompactionControl, ToolSearchControl
+from blackbox import CompactionControl, ToolSearchControl
 
 result = await runtime.run(
     provider="openai:gpt-5.4",
@@ -530,7 +530,7 @@ Register prices in `runtime.model_catalog` to also receive
 `result.metadata["cost"]`:
 
 ```python
-from agent_runtime import ModelPricing
+from blackbox import ModelPricing
 
 runtime.model_catalog.register_pricing(ModelPricing(
     provider="openai",
@@ -549,7 +549,7 @@ provider cache IDs are tracked in `runtime.caches`, backed by either the default
 in-memory registry or `SQLiteProviderCacheStore`:
 
 ```python
-from agent_runtime import ModelCacheControl, SQLiteProviderCacheStore
+from blackbox import ModelCacheControl, SQLiteProviderCacheStore
 
 runtime = AgentRuntime(provider_cache_store=SQLiteProviderCacheStore("caches.sqlite"))
 result = await runtime.models.run(
@@ -579,8 +579,8 @@ on `event.raw`. `ProviderState.native_history` carries the full Anthropic
 `messages` array for multi-turn continuation.
 
 ```python
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(AnthropicMessagesProvider(api_key="..."))
@@ -599,9 +599,9 @@ the `EventStore` and `RunStore` Protocols. Use them to persist event
 logs to disk and resume an in-flight run from a checkpoint:
 
 ```python
-from agent_runtime import AgentRuntime
-from agent_runtime.core.state import RunState
-from agent_runtime.core.stores import JSONLEventStore, SQLiteRunStore
+from blackbox import AgentRuntime
+from blackbox.core.state import RunState
+from blackbox.core.stores import JSONLEventStore, SQLiteRunStore
 
 runtime = AgentRuntime(
     event_store=JSONLEventStore("./events.jsonl"),
@@ -637,7 +637,7 @@ Pass an `OutputSpec` to ask the runtime to repair its own output when
 validation fails:
 
 ```python
-from agent_runtime.core.results import OutputSpec
+from blackbox.core.results import OutputSpec
 
 result = await runtime.run(
     provider="openai:gpt-5.4",
@@ -663,7 +663,7 @@ Use `ObservabilityPreset.production(...)` to enable trace export, metric
 export, and redacted event logging with one runtime switch:
 
 ```python
-from agent_runtime import AgentRuntime, ObservabilityPreset
+from blackbox import AgentRuntime, ObservabilityPreset
 
 runtime = AgentRuntime(
     observability=ObservabilityPreset.production(
@@ -701,7 +701,7 @@ Wrap an event sink with `RedactingEventSink` to scrub `RawEnvelope`-tagged
 payloads before they reach logs or telemetry:
 
 ```python
-from agent_runtime.observability import MemoryEventSink, RedactingEventSink
+from blackbox.observability import MemoryEventSink, RedactingEventSink
 
 sink = RedactingEventSink(inner=MemoryEventSink())  # default policy
 async for event in runtime.stream(provider="...", input="..."):
@@ -720,7 +720,7 @@ provider-native request/trace identifiers are preserved separately on the
 event when available.
 
 ```python
-from agent_runtime.observability import (
+from blackbox.observability import (
     OpenTelemetryTraceExporter,
     evaluate_trace,
     replay_run,
@@ -757,7 +757,7 @@ contract. Provider-managed agents receive a resolved `WorkspaceRef` through
 approval, and artifact events are normalized into the runtime event taxonomy.
 
 ```python
-from agent_runtime.workspaces import WorkspaceSpec
+from blackbox.workspaces import WorkspaceSpec
 
 workspace = await runtime.workspaces.open(
     WorkspaceSpec.git(url="https://example.com/org/repo.git", ref="main")
@@ -774,7 +774,7 @@ result = await runtime.agents.run(
 The direct provider API remains available for orchestration:
 
 ```python
-from agent_runtime.workspaces import (
+from blackbox.workspaces import (
     CommandSpec, Patch, FileChange, WorkspaceRuntime, WorkspaceSpec,
 )
 
@@ -819,7 +819,7 @@ JSON-RPC, listed through `tools/list`, cached, called through `tools/call`,
 policy-gated, and surfaced as canonical MCP events.
 
 ```python
-from agent_runtime.mcp import MCPConnector, MCPServerSpec
+from blackbox.mcp import MCPConnector, MCPServerSpec
 
 connector = MCPConnector([MCPServerSpec(name="tickets", transport="stdio")])
 connector.register_tool("tickets", "lookup", lambda ticket_id: {"id": ticket_id})
@@ -860,7 +860,7 @@ and uses provider-native remote MCP only when the provider capability profile
 supports it.
 
 ```python
-from agent_runtime.mcp import MCPServerSpec, MCPToolset
+from blackbox.mcp import MCPServerSpec, MCPToolset
 
 github = MCPToolset(
     server=MCPServerSpec(
@@ -896,6 +896,10 @@ pytest -m integration_gemini      # network-gated, requires GOOGLE_API_KEY
 Integration tests load a repo-root `.env` only when an integration marker or
 `tests/integration/...` path is selected, so the default `pytest` run remains
 offline.
+
+## License
+
+MIT License - see [LICENSE](LICENSE).
 
 ## Next implementation targets
 

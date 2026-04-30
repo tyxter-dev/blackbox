@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from agent_runtime import EventTypes, ToolRoutingSpec
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.serialization import event_from_dict, event_to_dict
-from agent_runtime.runtime.tool_routing import RoutingContext, resolve_tool_routing
-from agent_runtime.tools.registry import ToolRegistry
-from agent_runtime.tools.routing import ResolvedToolPlan, ToolBudget, ToolSelectionResult
+from blackbox import EventTypes, ToolRoutingSpec
+from blackbox.core.events import AgentEvent
+from blackbox.core.serialization import event_from_dict, event_to_dict
+from blackbox.runtime.tool_routing import RoutingContext, resolve_tool_routing
+from blackbox.tools.registry import ToolRegistry
+from blackbox.tools.routing import ResolvedToolPlan, ToolBudget, ToolSelectionResult
 
 
 async def test_coding_defaults_build_expected_workspace_refs() -> None:

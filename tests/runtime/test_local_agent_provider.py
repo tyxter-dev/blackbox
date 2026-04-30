@@ -12,13 +12,13 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
-from agent_runtime import AgentRuntime, AgentSpec, EventTypes, WebSearch, conversational_response
-from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.sessions import AgentSession
-from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
-from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
+from blackbox import AgentRuntime, AgentSpec, EventTypes, WebSearch, conversational_response
+from blackbox.core.approvals import ApprovalDecision
+from blackbox.core.events import AgentEvent
+from blackbox.core.sessions import AgentSession
+from blackbox.providers.agent_adapters.local import LocalAgentProvider
+from blackbox.providers.model_adapters.echo import EchoModelProvider
+from blackbox.tools import ToolRegistry, ToolResult, ToolRuntime
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,
     text_only_turn,

@@ -18,7 +18,7 @@ from _bootstrap import bootstrap
 
 bootstrap()
 
-from agent_runtime.workspaces import LocalWorkspaceProvider, WorkspaceSpec
+from blackbox.workspaces import LocalWorkspaceProvider, WorkspaceSpec
 
 
 async def main() -> None:

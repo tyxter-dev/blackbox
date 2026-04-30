@@ -11,8 +11,8 @@ import json
 import pytest
 from pydantic import BaseModel
 
-from agent_runtime import AgentResult, AgentRuntime, OutputValidationError
-from agent_runtime.core.results import OutputSpec
+from blackbox import AgentResult, AgentRuntime, OutputValidationError
+from blackbox.core.results import OutputSpec
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 

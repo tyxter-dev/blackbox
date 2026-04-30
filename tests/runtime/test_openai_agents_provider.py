@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
-from agent_runtime import AgentRuntime
-from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.events import EventTypes
-from agent_runtime.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
-from agent_runtime.providers.base import AgentSpec, TaskSpec
+from blackbox import AgentRuntime
+from blackbox.core.approvals import ApprovalDecision
+from blackbox.core.events import EventTypes
+from blackbox.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
+from blackbox.providers.base import AgentSpec, TaskSpec
 
 
 def test_openai_agents_provider_registers_plural_alias() -> None:

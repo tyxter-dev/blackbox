@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.errors import ApprovalError
-from agent_runtime.core.stores import SQLiteSessionStore
-from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.core.approvals import ApprovalDecision
+from blackbox.core.errors import ApprovalError
+from blackbox.core.stores import SQLiteSessionStore
+from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient
 
 

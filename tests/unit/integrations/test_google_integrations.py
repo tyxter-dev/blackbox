@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime.integrations.google import (
+from blackbox.integrations.google import (
     BIGQUERY_MCP_URL,
     MAPS_MCP_URL,
     google_bigquery_mcp_toolset,
     google_maps_mcp_toolset,
 )
-from agent_runtime.mcp import to_remote_mcp
+from blackbox.mcp import to_remote_mcp
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -65,11 +65,11 @@ def test_google_bigquery_mcp_toolset_can_read_project_from_env(
 def test_root_package_lazily_exposes_integrations() -> None:
     code = """
 import sys
-import agent_runtime
-print("agent_runtime.integrations" in sys.modules)
-from agent_runtime import google_maps_mcp_toolset
+import blackbox
+print("blackbox.integrations" in sys.modules)
+from blackbox import google_maps_mcp_toolset
 print(google_maps_mcp_toolset.__name__)
-print("agent_runtime.integrations.google" in sys.modules)
+print("blackbox.integrations.google" in sys.modules)
 """
     env = dict(os.environ)
     env["PYTHONPATH"] = str(ROOT / "src")

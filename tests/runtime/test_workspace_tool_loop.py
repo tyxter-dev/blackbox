@@ -6,13 +6,13 @@ from typing import Any
 
 import pytest
 
-from agent_runtime import AgentRuntime, ApprovalDecision, EventTypes
-from agent_runtime.core.errors import ConfigurationError
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.core.results import AgentResult
-from agent_runtime.core.state import ProviderState
-from agent_runtime.workspaces import (
+from blackbox import AgentRuntime, ApprovalDecision, EventTypes
+from blackbox.core.errors import ConfigurationError
+from blackbox.core.events import AgentEvent
+from blackbox.core.policy import PolicyDecision, PolicyRequest
+from blackbox.core.results import AgentResult
+from blackbox.core.state import ProviderState
+from blackbox.workspaces import (
     CommandResult,
     FakeSandboxClient,
     SandboxWorkspaceProvider,
@@ -65,7 +65,7 @@ async def test_runtime_run_accepts_sandbox_workspace_provider(tmp_path: Path) ->
     )
 
     def workspace_turn(request: Any) -> Any:
-        from agent_runtime.core.events import AgentEvent
+        from blackbox.core.events import AgentEvent
 
         tool_names = [tool["name"] for tool in request.tools]
         assert "workspace_run_command" in tool_names

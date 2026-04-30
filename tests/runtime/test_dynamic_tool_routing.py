@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from agent_runtime import AgentResult, AgentRuntime, EventTypes, ToolRoutingSpec
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.state import ProviderState
-from agent_runtime.tools.routing import ToolBudget
-from agent_runtime.workspaces import WorkspaceSpec
+from blackbox import AgentResult, AgentRuntime, EventTypes, ToolRoutingSpec
+from blackbox.core.events import AgentEvent
+from blackbox.core.state import ProviderState
+from blackbox.tools.routing import ToolBudget
+from blackbox.workspaces import WorkspaceSpec
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn, tool_call_turn
 
 

@@ -18,8 +18,8 @@ from _bootstrap import bootstrap
 
 bootstrap()
 
-from agent_runtime import AgentRuntime
-from agent_runtime.workspaces import CommandSpec, WorkspaceSpec
+from blackbox import AgentRuntime
+from blackbox.workspaces import CommandSpec, WorkspaceSpec
 
 
 async def main() -> None:

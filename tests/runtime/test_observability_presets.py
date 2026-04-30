@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import cast
 
-from agent_runtime import AgentResult, AgentRuntime, EventTypes, ObservabilityPreset
-from agent_runtime.observability import (
+from blackbox import AgentResult, AgentRuntime, EventTypes, ObservabilityPreset
+from blackbox.observability import (
     MemoryEventSink,
     MemoryMetricExporter,
     MemoryTraceExporter,
 )
-from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 

@@ -4,17 +4,17 @@ from collections.abc import Iterable
 
 from pydantic import BaseModel
 
-from agent_runtime import AgentResult, AgentRuntime
-from agent_runtime.core.capabilities import ModelCapabilities
-from agent_runtime.core.errors import (
+from blackbox import AgentResult, AgentRuntime
+from blackbox.core.capabilities import ModelCapabilities
+from blackbox.core.errors import (
     OutputValidationError,
     ProviderExecutionError,
     UnsupportedFeatureError,
 )
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.items import ItemTypes
-from agent_runtime.core.results import OutputSpec
-from agent_runtime.providers.base import TurnRequest
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.items import ItemTypes
+from blackbox.core.results import OutputSpec
+from blackbox.providers.base import TurnRequest
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn, tool_call_turn
 
 
@@ -170,7 +170,7 @@ async def test_finalizer_tool_strategy_returns_validated_output() -> None:
     finalizer_tool = scripted.calls[0].tools[0]
     assert finalizer_tool["name"] == "submit_final_output"
     assert finalizer_tool["metadata"] == {
-        "agent_runtime_hidden": True,
+        "blackbox_hidden": True,
         "purpose": "final_output",
         "schema_name": "Decision",
     }

@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from agent_runtime.core.streams import DEFAULT_STREAM_QUEUE_MAXSIZE, bounded_queue
+from blackbox.core.streams import DEFAULT_STREAM_QUEUE_MAXSIZE, bounded_queue
 
 
 async def test_bounded_queue_enforces_backpressure() -> None:

@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import agent_runtime.mcp.connector as connector_module
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.policy import PolicyDecision, PolicyRequest
-from agent_runtime.mcp import (
+import blackbox.mcp.connector as connector_module
+from blackbox import AgentRuntime, EventTypes
+from blackbox.core.approvals import ApprovalDecision
+from blackbox.core.policy import PolicyDecision, PolicyRequest
+from blackbox.mcp import (
     MCPApprovalMode,
     MCPServerSpec,
     MCPServerTrustPolicy,
@@ -103,7 +103,7 @@ def _trusted_ticket_spec() -> MCPServerSpec:
 
 
 async def test_runtime_toolsets_expose_local_mcp_tools_and_stop_connector(monkeypatch: Any) -> None:
-    import agent_runtime.mcp.connector as connector_module
+    import blackbox.mcp.connector as connector_module
 
     transport = _FakeTransport()
     monkeypatch.setattr(

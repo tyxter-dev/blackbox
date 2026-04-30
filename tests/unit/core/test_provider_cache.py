@@ -5,8 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from agent_runtime import AgentRuntime, ProviderCacheRecord, SQLiteProviderCacheStore
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox import AgentRuntime, ProviderCacheRecord, SQLiteProviderCacheStore
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
 

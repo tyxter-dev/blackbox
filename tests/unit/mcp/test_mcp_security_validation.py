@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.mcp import MCPServerSpec, trust_fingerprint
+from blackbox.mcp import MCPServerSpec, trust_fingerprint
 
 
 def test_stdio_command_rejects_shell_style_string() -> None:

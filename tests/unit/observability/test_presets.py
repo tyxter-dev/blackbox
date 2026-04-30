@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.raw import RawEnvelope
-from agent_runtime.observability import MemoryMetricExporter, ObservabilityPreset
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.raw import RawEnvelope
+from blackbox.observability import MemoryMetricExporter, ObservabilityPreset
 
 
 def test_production_preset_builds_redacted_jsonl_logging(tmp_path) -> None:

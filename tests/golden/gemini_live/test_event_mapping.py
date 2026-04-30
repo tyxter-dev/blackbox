@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from agent_runtime.core.events import EventTypes
-from agent_runtime.core.media import MediaRef
-from agent_runtime.core.state import ProviderState
-from agent_runtime.realtime.providers.gemini_live import map_gemini_live_message
+from blackbox.core.events import EventTypes
+from blackbox.core.media import MediaRef
+from blackbox.core.state import ProviderState
+from blackbox.realtime.providers.gemini_live import map_gemini_live_message
 
 
 def test_gemini_live_maps_core_server_messages() -> None:

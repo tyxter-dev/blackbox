@@ -15,8 +15,8 @@ from _bootstrap import bootstrap
 
 bootstrap()
 
-from agent_runtime import AgentRuntime
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
+from blackbox import AgentRuntime
+from blackbox.providers.model_adapters.echo import EchoModelProvider
 
 
 async def main() -> None:

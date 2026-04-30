@@ -22,12 +22,12 @@ from pydantic import BaseModel
 
 bootstrap()
 
-from agent_runtime import AgentRuntime
-from agent_runtime.core.capabilities import ModelCapabilities
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.state import ProviderState
-from agent_runtime.providers.base import TurnRequest
-from agent_runtime.tools import ToolResult
+from blackbox import AgentRuntime
+from blackbox.core.capabilities import ModelCapabilities
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.state import ProviderState
+from blackbox.providers.base import TurnRequest
+from blackbox.tools import ToolResult
 
 
 class _ScriptedModel:

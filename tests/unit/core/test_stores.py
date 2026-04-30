@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from agent_runtime import AgentResult, AgentRuntime, EventTypes
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.stores import (
+from blackbox import AgentResult, AgentRuntime, EventTypes
+from blackbox.core.events import AgentEvent
+from blackbox.core.stores import (
     EventStore,
     EventStoreBatcher,
     InMemoryEventStore,
@@ -99,7 +99,7 @@ async def test_runtime_appends_events_to_store_during_run() -> None:
 
 
 async def test_in_memory_run_store_round_trip() -> None:
-    from agent_runtime.core.state import RunState
+    from blackbox.core.state import RunState
 
     store = InMemoryRunStore()
     state = RunState(provider="scripted", model="test")

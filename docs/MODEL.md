@@ -1,14 +1,14 @@
 # ModelProvider Framework PRD
 
 **Framework:** `ModelProvider`
-**Parent PRD:** `PRD.md` (Agent Runtime Core)
+**Parent PRD:** `PRD.md` (Blackbox)
 **Document status:** Framework PRD, implementation-aligned draft
 **Last reviewed against code:** 2026-04-26
 
 ## 1. Product Purpose
 
 `ModelProvider` is the provider-native framework for running single model turns
-inside Agent Runtime Core.
+inside Blackbox.
 
 It is the primitive that powers direct model calls, the high-level
 `runtime.run(...)` loop, and local model-backed agent sessions. It must preserve
@@ -80,16 +80,16 @@ owns workspace operations. `AgentProvider` owns session lifecycle.
 
 | Area | Current evidence | State |
 |---|---|---|
-| Core protocol | `src/agent_runtime/providers/base.py` | Implemented. `ModelProvider` exposes provider id, capabilities, and `stream_turn(...)`. |
-| Model runtime facade | `src/agent_runtime/runtime/model.py` | Implemented. `runtime.models.run/stream` build `TurnRequest`, validate capabilities, stamp events, collect text, provider state, artifacts, usage, cost, cache, MCP, hosted-tool, workspace, and trace metadata. |
-| Local loop integration | `src/agent_runtime/runtime/agent_loop.py` | Implemented. `AgentLoop` drives repeated model turns and dispatches tool results through provider-native continuation. |
-| OpenAI Responses | `src/agent_runtime/providers/model_adapters/openai_responses/provider.py` | Implemented. Maps Responses streaming events, hosted tools, remote MCP, provider state, structured output, controls, usage, and retries. |
-| Anthropic Messages | `src/agent_runtime/providers/model_adapters/anthropic_messages/provider.py` | Implemented. Preserves native Messages content/history, thinking, tools, MCP blocks, cache controls, and usage. |
-| Gemini GenerateContent | `src/agent_runtime/providers/model_adapters/gemini_generate_content/provider.py` | Implemented. Preserves content/part history, function calls, thought signatures, provider-native JSON schema, cache references, provider cache create/delete, and usage. |
-| xAI Responses | `src/agent_runtime/providers/model_adapters/xai_responses/provider.py` | Implemented as an OpenAI-compatible Responses adapter with conservative capabilities. |
-| Echo/test providers | `src/agent_runtime/providers/model_adapters/echo.py`, `tests/fixtures/scripted_model.py` | Implemented. Used for deterministic local loop and contract coverage. |
-| Capability profiles | `src/agent_runtime/core/capabilities.py`, `src/agent_runtime/providers/model_adapters/capability_validation.py` | Implemented. Profiles cover hosted tools, output strategies, controls, state modes, constraints, and pre-dispatch validation. |
-| Output strategies | `src/agent_runtime/core/results.py`, `src/agent_runtime/output/schema.py` | Implemented. Supports `provider_native`, `finalizer_tool`, `posthoc_parse`, and `posthoc_parse_with_retry`. |
+| Core protocol | `src/blackbox/providers/base.py` | Implemented. `ModelProvider` exposes provider id, capabilities, and `stream_turn(...)`. |
+| Model runtime facade | `src/blackbox/runtime/model.py` | Implemented. `runtime.models.run/stream` build `TurnRequest`, validate capabilities, stamp events, collect text, provider state, artifacts, usage, cost, cache, MCP, hosted-tool, workspace, and trace metadata. |
+| Local loop integration | `src/blackbox/runtime/agent_loop.py` | Implemented. `AgentLoop` drives repeated model turns and dispatches tool results through provider-native continuation. |
+| OpenAI Responses | `src/blackbox/providers/model_adapters/openai_responses/provider.py` | Implemented. Maps Responses streaming events, hosted tools, remote MCP, provider state, structured output, controls, usage, and retries. |
+| Anthropic Messages | `src/blackbox/providers/model_adapters/anthropic_messages/provider.py` | Implemented. Preserves native Messages content/history, thinking, tools, MCP blocks, cache controls, and usage. |
+| Gemini GenerateContent | `src/blackbox/providers/model_adapters/gemini_generate_content/provider.py` | Implemented. Preserves content/part history, function calls, thought signatures, provider-native JSON schema, cache references, provider cache create/delete, and usage. |
+| xAI Responses | `src/blackbox/providers/model_adapters/xai_responses/provider.py` | Implemented as an OpenAI-compatible Responses adapter with conservative capabilities. |
+| Echo/test providers | `src/blackbox/providers/model_adapters/echo.py`, `tests/fixtures/scripted_model.py` | Implemented. Used for deterministic local loop and contract coverage. |
+| Capability profiles | `src/blackbox/core/capabilities.py`, `src/blackbox/providers/model_adapters/capability_validation.py` | Implemented. Profiles cover hosted tools, output strategies, controls, state modes, constraints, and pre-dispatch validation. |
+| Output strategies | `src/blackbox/core/results.py`, `src/blackbox/output/schema.py` | Implemented. Supports `provider_native`, `finalizer_tool`, `posthoc_parse`, and `posthoc_parse_with_retry`. |
 | Tests | `tests/golden/`, `tests/runtime/`, `tests/unit/providers/model_adapters/test_model_request_controls.py`, `tests/contracts/test_capability_honesty.py` | Current behavior is covered by golden provider mappings, runtime loop tests, capability validation, request controls, accounting, and integration gates. |
 
 ## 5. Primary Users

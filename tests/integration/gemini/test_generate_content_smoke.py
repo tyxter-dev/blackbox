@@ -12,8 +12,8 @@ import os
 
 import pytest
 
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox import AgentRuntime, EventTypes
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
 

@@ -8,12 +8,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.raw import RawEnvelope
-from agent_runtime.core.serialization import event_from_dict, event_to_dict
-from agent_runtime.core.state import ProviderState, RunState
-from agent_runtime.core.stores import JSONLEventStore, SQLiteRunStore
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.items import ItemTypes, RunItem
+from blackbox.core.raw import RawEnvelope
+from blackbox.core.serialization import event_from_dict, event_to_dict
+from blackbox.core.state import ProviderState, RunState
+from blackbox.core.stores import JSONLEventStore, SQLiteRunStore
 
 # --- serialization round-trip ---------------------------------------------
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from agent_runtime.core.approvals import ApprovalDecision, ApprovalRequest
-from agent_runtime.core.artifacts import Artifact, ArtifactRef
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.sessions import AgentRef, AgentSession, SessionRef
+from blackbox.core.approvals import ApprovalDecision, ApprovalRequest
+from blackbox.core.artifacts import Artifact, ArtifactRef
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.items import ItemTypes, RunItem
+from blackbox.core.sessions import AgentRef, AgentSession, SessionRef
 
 
 def test_agent_event_defaults_and_unique_ids() -> None:

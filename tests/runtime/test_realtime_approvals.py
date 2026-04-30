@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
-from agent_runtime import AgentRuntime
-from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.events import EventTypes
-from agent_runtime.realtime.fake import FakeRealtimeProvider
+from blackbox import AgentRuntime
+from blackbox.core.approvals import ApprovalDecision
+from blackbox.core.events import EventTypes
+from blackbox.realtime.fake import FakeRealtimeProvider
 
 
 async def test_realtime_auto_tool_approval_can_be_denied() -> None:

@@ -23,7 +23,7 @@ bootstrap(load_env=True)
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from agent_runtime import (
+from blackbox import (
     AgentSpec,
     conversational_response,
     create_runtime_with_default_providers,
@@ -66,7 +66,7 @@ async def main() -> None:
 
     try:
         async with temporary_openai_file_search(
-            name="agent-runtime-support-conversation-example",
+            name="blackbox-support-conversation-example",
             documents=DOCUMENTS,
             max_num_results=4,
             include_results=True,

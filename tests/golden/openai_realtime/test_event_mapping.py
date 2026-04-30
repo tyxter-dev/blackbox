@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from agent_runtime.core.events import EventTypes
-from agent_runtime.core.media import MediaRef
-from agent_runtime.core.raw import RawEnvelope
-from agent_runtime.realtime.providers.openai_realtime import map_openai_realtime_event
+from blackbox.core.events import EventTypes
+from blackbox.core.media import MediaRef
+from blackbox.core.raw import RawEnvelope
+from blackbox.realtime.providers.openai_realtime import map_openai_realtime_event
 
 
 def test_openai_realtime_maps_text_audio_tool_and_completion_events() -> None:

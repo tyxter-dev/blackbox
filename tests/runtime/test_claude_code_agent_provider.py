@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from agent_runtime.core.approvals import ApprovalDecision
-from agent_runtime.core.events import EventTypes
-from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
-from agent_runtime.providers.base import AgentSpec, TaskSpec
-from agent_runtime.workspaces.spec import WorkspaceSpec
+from blackbox.core.approvals import ApprovalDecision
+from blackbox.core.events import EventTypes
+from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.providers.base import AgentSpec, TaskSpec
+from blackbox.workspaces.spec import WorkspaceSpec
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient
 
 

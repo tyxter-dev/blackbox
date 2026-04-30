@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime.core.errors import SessionCursorError
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.session_state import AgentSessionState
-from agent_runtime.core.sessions import AgentSession
-from agent_runtime.core.stores import (
+from blackbox.core.errors import SessionCursorError
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.session_state import AgentSessionState
+from blackbox.core.sessions import AgentSession
+from blackbox.core.stores import (
     InMemorySessionStore,
     JSONLSessionStore,
     SessionStore,

@@ -1,6 +1,6 @@
-# PRD: Agent Runtime Core
+# PRD: Blackbox
 
-**Working package name:** `agent_runtime`  
+**Working package name:** `blackbox`  
 **Document version:** 0.1 draft  
 **Date:** April 25, 2026  
 **Owner:** Diego Carboni  
@@ -8,7 +8,7 @@
 
 ## 1. Executive summary
 
-Agent Runtime Core is a new Python library for running complete agent workflows and supervising both model-level LLM workflows and cloud-managed agent workflows through a unified, provider-native runtime.
+Blackbox is a new Python library for running complete agent workflows and supervising both model-level LLM workflows and cloud-managed agent workflows through a unified, provider-native runtime.
 
 The library is not a rewrite of `llm_factory_toolkit`. It is a new architecture, but it must preserve the original v1 product promise:
 
@@ -89,7 +89,7 @@ The high-level path must be built on top of the low-level primitives, not replac
 
 ### 3.1 One sentence
 
-Agent Runtime Core is a provider-native Python runtime that can either run a complete typed agent/tool loop for the user or expose lower-level supervision over model providers and cloud agent providers.
+Blackbox is a provider-native Python runtime that can either run a complete typed agent/tool loop for the user or expose lower-level supervision over model providers and cloud agent providers.
 
 ### 3.2 What it is
 
@@ -275,7 +275,7 @@ AgentLoop / TaskRunner            ModelRuntimeFacade              AgentRuntimeFa
 ### 8.2 Package layout
 
 ```text
-src/agent_runtime/
+src/blackbox/
   core/                  # provider-neutral events, state, results, errors, policy
   runtime/               # AgentRuntime, AgentLoop, facades, orchestration helpers
     agent_loop.py
@@ -1148,8 +1148,8 @@ checking, ruff, changelog, release candidate.
 ```python
 from pydantic import BaseModel
 
-from agent_runtime import AgentRuntime
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentRuntime
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 
 class TicketDecision(BaseModel):
@@ -1190,8 +1190,8 @@ async for event in runtime.stream(
 ### 23.3 Model turn
 
 ```python
-from agent_runtime import AgentRuntime
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentRuntime
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 runtime = AgentRuntime()
 runtime.registry.register_model(OpenAIResponsesProvider(api_key="..."))
@@ -1275,7 +1275,7 @@ Compatibility import/export must be clearly labeled as lossy when appropriate.
 
 ## 26. Open questions
 
-1. What is the package name: `agent_runtime`, `agentkit`, `agentflow`, or another brand?
+1. What is the package name: `blackbox`, `agentkit`, `agentflow`, or another brand?
 2. Should the first real `AgentProvider` be OpenAI cloud/Codex-style, Anthropic Managed Agents, or Google Agent Platform?
 3. Should workspaces be part of core in v0.1 or introduced in v0.2?
 4. Should tools use dataclasses or Pydantic models for schemas?

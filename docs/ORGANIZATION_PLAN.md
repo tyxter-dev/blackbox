@@ -11,7 +11,7 @@ Scope: package, test, and documentation organization only
   docs now use canonical provider adapter paths except for targeted
   compatibility checks and migration notes.
 - Phase 2 is implemented: `AgentLoop` lives in `runtime/agent_loop.py`, with
-  `agent_runtime.loop` retained as a compatibility shim.
+  `blackbox.loop` retained as a compatibility shim.
 - Phase 3 is implemented: OpenAI Responses, Anthropic Messages, Gemini
   GenerateContent, and xAI Responses are packages with stable public
   re-exports. Remaining adapter package splits should move one at a time when
@@ -52,22 +52,22 @@ reducing structural ambiguity created by rushed feature work.
 
 ## Starting Friction
 
-1. `agent_runtime.models` and `agent_runtime.agents` look first-class in the
+1. `blackbox.models` and `blackbox.agents` look first-class in the
    tree, but they are compatibility namespaces. Tests and docs still use them
    heavily, which makes the old layout feel canonical.
-2. `agent_runtime.loop` owns core orchestration but sits at package root instead
+2. `blackbox.loop` owns core orchestration but sits at package root instead
    of under `runtime`.
 3. Large modules such as provider adapters and `runtime/main.py` hide useful
    internal boundaries.
 4. Before Phase 5, `tests/unit` was flat, so test location did not reinforce
    package ownership.
-5. The top-level `agent_runtime.__init__` is broad enough that it can obscure
+5. The top-level `blackbox.__init__` is broad enough that it can obscure
    the intended package boundaries.
 
 ## Target Shape
 
 ```text
-src/agent_runtime/
+src/blackbox/
   core/                  # stable primitives and shared contracts
   runtime/               # AgentRuntime, AgentLoop, facades, orchestration
   providers/
@@ -100,9 +100,9 @@ src/agent_runtime/
 
 ## Compatibility Policy
 
-- Canonical new imports should use `agent_runtime.providers.model_adapters.*`
-  and `agent_runtime.providers.agent_adapters.*`.
-- `agent_runtime.models.*` and `agent_runtime.agents.*` remain as import shims
+- Canonical new imports should use `blackbox.providers.model_adapters.*`
+  and `blackbox.providers.agent_adapters.*`.
+- `blackbox.models.*` and `blackbox.agents.*` remain as import shims
   for at least one release after the project stops using them internally.
 - Root-level compatibility shims should contain re-exports only. They should
   not gain new implementation logic.
@@ -116,7 +116,7 @@ Purpose: document the intended structure before moving code.
 Tasks:
 
 - Add this organization plan.
-- Keep `src/agent_runtime/README.md` as the package map and update it whenever a
+- Keep `src/blackbox/README.md` as the package map and update it whenever a
   phase lands.
 - Record canonical import paths in README examples and new docs.
 
@@ -133,15 +133,15 @@ provider adapters.
 Tasks:
 
 - Update project-owned tests, examples, and docs from:
-  - `agent_runtime.models.*` to `agent_runtime.providers.model_adapters.*`
-  - `agent_runtime.agents.*` to `agent_runtime.providers.agent_adapters.*`
-- Keep targeted compatibility tests for `agent_runtime.models.*` and
-  `agent_runtime.agents.*`.
+  - `blackbox.models.*` to `blackbox.providers.model_adapters.*`
+  - `blackbox.agents.*` to `blackbox.providers.agent_adapters.*`
+- Keep targeted compatibility tests for `blackbox.models.*` and
+  `blackbox.agents.*`.
 - Update PRD examples that still show old adapter imports.
 
 Done when:
 
-- `rg "agent_runtime\\.(models|agents)" tests examples docs README.md` only
+- `rg "blackbox\\.(models|agents)" tests examples docs README.md` only
   finds compatibility-specific references or migration documentation.
 - Offline tests still pass.
 
@@ -152,16 +152,16 @@ package.
 
 Tasks:
 
-- Move implementation from `src/agent_runtime/loop.py` to
-  `src/agent_runtime/runtime/agent_loop.py`.
-- Replace `src/agent_runtime/loop.py` with a compatibility re-export shim.
-- Update source imports to use `agent_runtime.runtime.agent_loop`.
+- Move implementation from `src/blackbox/loop.py` to
+  `src/blackbox/runtime/agent_loop.py`.
+- Replace `src/blackbox/loop.py` with a compatibility re-export shim.
+- Update source imports to use `blackbox.runtime.agent_loop`.
 - Keep any old-path assertion in compatibility tests only.
 
 Done when:
 
 - `AgentLoop` implementation is under `runtime`.
-- `agent_runtime.loop` contains no implementation logic.
+- `blackbox.loop` contains no implementation logic.
 - Runtime and local-agent tests still pass.
 
 ## Phase 3: Split Large Provider Adapters
@@ -193,7 +193,7 @@ providers/model_adapters/openai_responses/
 Rules:
 
 - Keep the public import path stable:
-  `from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider`.
+  `from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider`.
 - Move one adapter at a time.
 - Prefer pure mechanical moves first, then small cleanup commits after tests
   prove parity.
@@ -271,7 +271,7 @@ Purpose: align the PRD, README, and package maps after code movement.
 Tasks:
 
 - Update `README.md` package layout after each structural phase.
-- Update `src/agent_runtime/README.md` as the authoritative package map.
+- Update `src/blackbox/README.md` as the authoritative package map.
 - Update `docs/PRD.md` section 8.2 after the target shape is true.
 - Keep `CLAUDE.md` focused on behavioral constraints and canonical paths.
 - Move historical layout notes into changelog entries rather than keeping stale
@@ -288,8 +288,8 @@ Done when:
 The first slice should be small and low risk:
 
 1. Canonicalize imports in tests and examples.
-2. Update docs that still show `agent_runtime.models.*` or
-   `agent_runtime.agents.*` as preferred imports.
+2. Update docs that still show `blackbox.models.*` or
+   `blackbox.agents.*` as preferred imports.
 3. Keep compatibility shims untouched.
 4. Run `pytest -q`.
 5. Run `ruff check src tests examples`.

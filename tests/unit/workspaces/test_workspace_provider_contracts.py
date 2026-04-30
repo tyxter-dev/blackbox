@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime.core.artifacts import ArtifactRef
-from agent_runtime.core.errors import UnsupportedFeatureError, WorkspaceError
-from agent_runtime.workspaces import (
+from blackbox.core.artifacts import ArtifactRef
+from blackbox.core.errors import UnsupportedFeatureError, WorkspaceError
+from blackbox.workspaces import (
     CloudWorkspaceProvider,
     DockerWorkspaceProvider,
     FakeSandboxClient,

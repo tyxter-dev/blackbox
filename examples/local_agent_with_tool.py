@@ -15,13 +15,13 @@ from _bootstrap import bootstrap
 
 bootstrap()
 
-from agent_runtime import AgentRuntime, AgentSpec, EventTypes
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.items import RunItem
-from agent_runtime.core.state import ProviderState
-from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
-from agent_runtime.providers.base import TurnRequest
-from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
+from blackbox import AgentRuntime, AgentSpec, EventTypes
+from blackbox.core.events import AgentEvent
+from blackbox.core.items import RunItem
+from blackbox.core.state import ProviderState
+from blackbox.providers.agent_adapters.local import LocalAgentProvider
+from blackbox.providers.base import TurnRequest
+from blackbox.tools import ToolRegistry, ToolResult, ToolRuntime
 
 
 class _ScriptedModel:
@@ -33,7 +33,7 @@ class _ScriptedModel:
         self._calls = 0
 
     def capabilities(self, model: str | None = None):
-        from agent_runtime.core.capabilities import ModelCapabilities
+        from blackbox.core.capabilities import ModelCapabilities
         return ModelCapabilities(supports_streaming_events=True, supports_function_tools=True)
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:

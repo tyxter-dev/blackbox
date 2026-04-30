@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from agent_runtime import AgentRuntime
-from agent_runtime.core.events import EventTypes
-from agent_runtime.realtime.fake import FakeRealtimeProvider
+from blackbox import AgentRuntime
+from blackbox.core.events import EventTypes
+from blackbox.realtime.fake import FakeRealtimeProvider
 
 
 async def test_manual_tool_mode_only_emits_requested() -> None:

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.core.capabilities import (
+from blackbox.core.capabilities import (
     HostedToolSupport,
     ModelCapabilities,
     validate_hosted_tools,
 )
-from agent_runtime.core.errors import UnsupportedFeatureError
-from agent_runtime.hosted_tools import HostedToolRaw, Shell, WebSearch
+from blackbox.core.errors import UnsupportedFeatureError
+from blackbox.hosted_tools import HostedToolRaw, Shell, WebSearch
 
 
 def test_validate_hosted_tools_rejects_provider_without_hosted_support() -> None:

@@ -5,9 +5,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_runtime import AgentRuntime, AgentSessionResult, EventTypes
-from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
-from agent_runtime.workspaces import WorkspaceRef, WorkspaceSpec
+from blackbox import AgentRuntime, AgentSessionResult, EventTypes
+from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.workspaces import WorkspaceRef, WorkspaceSpec
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient
 
 
@@ -149,7 +149,7 @@ async def test_agents_run_routes_workspace_ref_through_workspace_provider(
     _git(source, "init")
     _git(source, "checkout", "-b", "main")
     _git(source, "config", "user.email", "test@example.com")
-    _git(source, "config", "user.name", "Agent Runtime")
+    _git(source, "config", "user.name", "Blackbox")
     _git(source, "add", "README.md")
     _git(source, "commit", "-m", "initial")
 

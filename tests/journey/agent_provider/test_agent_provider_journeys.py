@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from agent_runtime import (
+from blackbox import (
     AgentCapabilities,
     AgentRef,
     AgentRuntime,
@@ -27,20 +27,20 @@ from agent_runtime import (
     ModelPricing,
     TaskSpec,
 )
-from agent_runtime.core.artifacts import ArtifactPage
-from agent_runtime.core.errors import ProviderNotConfiguredError, UnsupportedFeatureError
-from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.sessions import InvocationRef
-from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
-from agent_runtime.providers.agent_adapters.local import LocalAgentProvider
-from agent_runtime.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
-from agent_runtime.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
-from agent_runtime.providers.model_adapters.gemini_generate_content import (
+from blackbox.core.artifacts import ArtifactPage
+from blackbox.core.errors import ProviderNotConfiguredError, UnsupportedFeatureError
+from blackbox.core.events import AgentEvent
+from blackbox.core.sessions import InvocationRef
+from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.providers.agent_adapters.local import LocalAgentProvider
+from blackbox.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
+from blackbox.providers.model_adapters.anthropic_messages import AnthropicMessagesProvider
+from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
-from agent_runtime.providers.model_adapters.xai_responses import XAIResponsesProvider
-from agent_runtime.tools import ToolResult
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
+from blackbox.tools import ToolResult
 
 pytestmark = pytest.mark.journey_agent_provider
 

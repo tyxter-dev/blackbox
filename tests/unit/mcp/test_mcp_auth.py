@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from agent_runtime.core.errors import MCPAuthenticationError
-from agent_runtime.mcp import (
+from blackbox.core.errors import MCPAuthenticationError
+from blackbox.mcp import (
     MCPAuthChallenge,
     MCPAuthToken,
     MCPServerSpec,

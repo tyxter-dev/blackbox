@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime import AgentRuntime
-from agent_runtime.core.errors import RealtimeUnsupportedFeatureError
-from agent_runtime.realtime.fake import FakeRealtimeProvider
-from agent_runtime.realtime.provider import RealtimeSessionConfig, TurnDetectionConfig
+from blackbox import AgentRuntime
+from blackbox.core.errors import RealtimeUnsupportedFeatureError
+from blackbox.realtime.fake import FakeRealtimeProvider
+from blackbox.realtime.provider import RealtimeSessionConfig, TurnDetectionConfig
 
 
 async def test_runtime_rejects_unsupported_transport_before_connect() -> None:

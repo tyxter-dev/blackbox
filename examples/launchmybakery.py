@@ -1,4 +1,4 @@
-"""Launch My Bakery rebuilt with Agent Runtime MCP toolsets.
+"""Launch My Bakery rebuilt with Blackbox MCP toolsets.
 
 This translates Google's ADK example into the library's high-level runtime:
 the model receives two Google-hosted remote MCP servers, one for Maps and one
@@ -39,16 +39,16 @@ SRC_DIR = REPO_ROOT / "src"
 if SRC_DIR.exists():
     sys.path.insert(0, str(SRC_DIR))
 
-from agent_runtime import (  # noqa: E402
+from blackbox import (  # noqa: E402
     AgentRuntime,
     MCPToolset,
     create_runtime_with_default_providers,
 )
-from agent_runtime.integrations import (  # noqa: E402
+from blackbox.integrations import (  # noqa: E402
     google_bigquery_mcp_toolset,
     google_maps_mcp_toolset,
 )
-from agent_runtime.integrations.google import MCPRouteMode  # noqa: E402
+from blackbox.integrations.google import MCPRouteMode  # noqa: E402
 
 DEFAULT_PROVIDER = "openai:gpt-5.4"
 DEFAULT_QUESTION = (

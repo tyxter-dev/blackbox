@@ -22,8 +22,8 @@ from dotenv import load_dotenv
 
 bootstrap()
 
-from agent_runtime import AgentRuntime, AgentSpec, Artifact, EventTypes
-from agent_runtime.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
+from blackbox import AgentRuntime, AgentSpec, Artifact, EventTypes
+from blackbox.providers.agent_adapters.openai_cloud import OpenAICloudAgentProvider
 
 load_dotenv()
 

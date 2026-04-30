@@ -4,16 +4,16 @@ from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent_runtime.core.capabilities import (
+from blackbox.core.capabilities import (
     CapabilityDetail,
     HostedToolSupport,
     ModelCapabilities,
     ModelCapabilityProfile,
 )
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.items import ItemTypes, RunItem
-from agent_runtime.core.state import ProviderState
-from agent_runtime.providers.base import TurnRequest
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.items import ItemTypes, RunItem
+from blackbox.core.state import ProviderState
+from blackbox.providers.base import TurnRequest
 
 TurnScript = Callable[[TurnRequest], Iterable[AgentEvent]]
 

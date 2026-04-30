@@ -15,8 +15,8 @@ from _bootstrap import bootstrap
 
 bootstrap()
 
-from agent_runtime import AgentRuntime, EventTypes
-from agent_runtime.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox import AgentRuntime, EventTypes
+from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
 
 
 async def main() -> None:
@@ -31,7 +31,7 @@ async def main() -> None:
     async for event in runtime.models.stream(
         provider="openai",
         model="gpt-4o-mini",
-        input="In one sentence, what is an Agent Runtime?",
+        input="In one sentence, what is Blackbox?",
     ):
         if event.type == EventTypes.MODEL_TEXT_DELTA:
             print(event.data["delta"], end="", flush=True)

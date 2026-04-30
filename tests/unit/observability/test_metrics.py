@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.observability import (
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.observability import (
     MemoryMetricExporter,
     MetricRecord,
     OpenTelemetryMetricExporter,

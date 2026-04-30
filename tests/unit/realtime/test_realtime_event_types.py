@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_runtime.core.events import EventTypes
+from blackbox.core.events import EventTypes
 
 
 def test_realtime_event_types_are_registered() -> None:

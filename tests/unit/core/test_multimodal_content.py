@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from agent_runtime.core.content import (
+from blackbox.core.content import (
     AudioPart,
     ContentItem,
     FilePart,
@@ -11,9 +11,9 @@ from agent_runtime.core.content import (
     TextPart,
     ToolResultPart,
 )
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.media import MediaRef
-from agent_runtime.core.serialization import event_from_dict, event_to_dict
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.media import MediaRef
+from blackbox.core.serialization import event_from_dict, event_to_dict
 
 
 def test_content_parts_serialize_and_round_trip() -> None:

@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 bootstrap(load_env=True)
 
-from agent_runtime import (
+from blackbox import (
     create_runtime_with_default_providers,
     structured_output,
     temporary_openai_file_search,
@@ -62,7 +62,7 @@ async def main() -> None:
 
     try:
         async with temporary_openai_file_search(
-            name="agent-runtime-knowledge-drawer-example",
+            name="blackbox-knowledge-drawer-example",
             documents=DOCUMENTS,
             max_num_results=4,
             include_results=True,

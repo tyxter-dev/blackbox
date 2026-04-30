@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime import AgentRuntime
-from agent_runtime.core.policy import PolicyRequest
-from agent_runtime.core.results import AgentResult
-from agent_runtime.mcp import MCPServerSpec, MCPToolset
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider
-from agent_runtime.workspace_agents import (
+from blackbox import AgentRuntime
+from blackbox.core.policy import PolicyRequest
+from blackbox.core.results import AgentResult
+from blackbox.mcp import MCPServerSpec, MCPToolset
+from blackbox.providers.model_adapters.echo import EchoModelProvider
+from blackbox.workspace_agents import (
     ApprovalRequirement,
     ConnectorSpec,
     InMemoryWorkspaceAgentRegistry,

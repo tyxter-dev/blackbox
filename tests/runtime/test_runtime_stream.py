@@ -6,8 +6,8 @@ replay or correlate across the EventStore.
 """
 from __future__ import annotations
 
-from agent_runtime import AgentResult, AgentRuntime, EventTypes
-from agent_runtime.tools import ToolResult
+from blackbox import AgentResult, AgentRuntime, EventTypes
+from blackbox.tools import ToolResult
 from tests.fixtures.scripted_model import (
     ScriptedModelProvider,
     text_only_turn,

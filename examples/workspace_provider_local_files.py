@@ -18,8 +18,8 @@ from _bootstrap import bootstrap
 
 bootstrap()
 
-from agent_runtime.core.events import EventTypes
-from agent_runtime.workspaces import (
+from blackbox.core.events import EventTypes
+from blackbox.workspaces import (
     CommandSpec,
     FileChange,
     LocalWorkspaceProvider,

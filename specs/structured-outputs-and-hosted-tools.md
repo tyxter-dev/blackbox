@@ -149,7 +149,7 @@ Default behavior:
 Add a schema helper module:
 
 ```text
-src/agent_runtime/output/schema.py
+src/blackbox/output/schema.py
 ```
 
 Responsibilities:
@@ -250,7 +250,7 @@ For `OutputSpec(strategy="finalizer_tool")`, inject a hidden tool:
     "name": "submit_final_output",
     "description": "...",
     "parameters": schema.schema,
-    "metadata": {"agent_runtime_hidden": True, "purpose": "final_output"},
+    "metadata": {"blackbox_hidden": True, "purpose": "final_output"},
 }
 ```
 
@@ -324,7 +324,7 @@ Docs/catalog:
 Add:
 
 ```python
-from agent_runtime.hosted_tools import WebSearch, FileSearch, CodeInterpreter
+from blackbox.hosted_tools import WebSearch, FileSearch, CodeInterpreter
 
 result = await runtime.run(
     provider="openai:gpt-5.4",
@@ -359,7 +359,7 @@ HostedToolRaw(payload={"type": "future_provider_tool", ...})
 Add:
 
 ```text
-src/agent_runtime/hosted_tools.py
+src/blackbox/hosted_tools.py
 ```
 
 Phase 1 specs:
@@ -406,7 +406,7 @@ hosted_tools: list[HostedToolSpec] = field(default_factory=list)
 Add provider conversion helpers:
 
 ```text
-src/agent_runtime/hosted_tools.py
+src/blackbox/hosted_tools.py
 to_openai_tool(spec) -> dict[str, Any]
 to_gemini_tool(spec) -> dict[str, Any]
 ```

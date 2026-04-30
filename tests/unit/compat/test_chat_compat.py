@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent_runtime import AgentRuntime, ChatMessage
-from agent_runtime.compat.chat import message_from_assistant_text, messages_to_input
+from blackbox import AgentRuntime, ChatMessage
+from blackbox.compat.chat import message_from_assistant_text, messages_to_input
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 

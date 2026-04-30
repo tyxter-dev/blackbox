@@ -1,4 +1,4 @@
-"""Maia-style CRM business case implemented with Agent Runtime.
+"""Maia-style CRM business case implemented with Blackbox.
 
 This ports the useful shape of Maia Assistants' ``bella_cucina__returning_guest``
 benchmark into this library without depending on Maia internals.
@@ -36,15 +36,15 @@ if SRC_DIR.exists():
 
 load_dotenv(REPO_ROOT / ".env")
 
-from agent_runtime import (  # noqa: E402
+from blackbox import (  # noqa: E402
     AgentRuntime,
     FragmentRequirements,
     FragmentSelector,
     PromptFragment,
     PromptSpec,
 )
-from agent_runtime.providers.model_adapters.echo import EchoModelProvider  # noqa: E402
-from agent_runtime.tools import ToolResult  # noqa: E402
+from blackbox.providers.model_adapters.echo import EchoModelProvider  # noqa: E402
+from blackbox.tools import ToolResult  # noqa: E402
 
 CASE_KEY = "bella_cucina__returning_guest"
 CASE_INPUT = (

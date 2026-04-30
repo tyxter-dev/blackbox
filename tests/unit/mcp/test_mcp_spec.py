@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_runtime.mcp import MCPServerSpec
+from blackbox.mcp import MCPServerSpec
 
 
 def test_stdio_managed_validation_requires_command() -> None:

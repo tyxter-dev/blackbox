@@ -22,9 +22,9 @@ from _bootstrap import bootstrap
 
 bootstrap()
 
-from agent_runtime import AgentRuntime, AgentSessionResult, AgentSpec, Artifact, EventTypes
-from agent_runtime.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
-from agent_runtime.workspaces import WorkspaceSpec
+from blackbox import AgentRuntime, AgentSessionResult, AgentSpec, Artifact, EventTypes
+from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.workspaces import WorkspaceSpec
 
 
 @dataclass(slots=True)

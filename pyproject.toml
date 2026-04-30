@@ -3,14 +3,15 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-runtime-core"
+name = "blackbox"
 version = "0.1.0"
-description = "Provider-native runtime scaffold for model providers and cloud agent providers."
+description = "Provider-native runtime for complete blackbox agent loops and agent sessions."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "Your Name" }]
+license = { file = "LICENSE" }
+authors = [{ name = "Diego Carboni" }]
 classifiers = [
+  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -19,6 +20,11 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/tyxter-dev/blackbox"
+Repository = "https://github.com/tyxter-dev/blackbox"
+Issues = "https://github.com/tyxter-dev/blackbox/issues"
 
 [project.optional-dependencies]
 openai = ["openai>=2,<3"]
@@ -56,7 +62,7 @@ all = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agent_runtime"]
+packages = ["src/blackbox"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

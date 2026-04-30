@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import json
 
-from agent_runtime.core.events import AgentEvent, EventTypes
-from agent_runtime.core.serialization import (
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.serialization import (
     agent_session_state_from_dict,
     agent_session_state_to_dict,
 )
-from agent_runtime.core.session_state import (
+from blackbox.core.session_state import (
     AgentSessionState,
     PendingApprovalState,
     SessionEventCursor,
     SessionInvocationState,
     apply_session_event,
 )
-from agent_runtime.core.sessions import AgentRef, AgentSession
-from agent_runtime.core.state import ProviderState
+from blackbox.core.sessions import AgentRef, AgentSession
+from blackbox.core.state import ProviderState
 
 
 def test_agent_session_state_round_trip_preserves_resume_metadata() -> None:
