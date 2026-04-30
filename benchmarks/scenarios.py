@@ -569,10 +569,12 @@ async def dynamic_toolset_search_load(recorder: BenchmarkRecorder) -> dict[str, 
 
 
 async def mcp_tool_discovery_call(recorder: BenchmarkRecorder) -> dict[str, MetricValue]:
+    shared_cache: dict[str, Any] = {}
     transport = FakeMCPTransport()
     connector = MCPConnector(
         [_trusted_mcp_spec()],
         transports={"tickets": transport},
+        _tool_cache=shared_cache,
     )
     recorder.observe_event()
     tools, discovery_ms = await time_async(lambda: connector.list_tools("tickets"))
@@ -580,17 +582,29 @@ async def mcp_tool_discovery_call(recorder: BenchmarkRecorder) -> dict[str, Metr
     call_result, call_ms = await time_async(
         lambda: connector.call_tool_result("tickets", "lookup", {"ticket_id": "T-1"})
     )
+    second_transport = FakeMCPTransport()
+    second_connector = MCPConnector(
+        [_trusted_mcp_spec()],
+        transports={"tickets": second_transport},
+        _tool_cache=shared_cache,
+    )
+    _, shared_cache_hit_ms = await time_async(
+        lambda: second_connector.list_tools("tickets")
+    )
     recorder.mark_final_output()
-    events = connector.drain_events()
+    events = [*connector.drain_events(), *second_connector.drain_events()]
     await connector.stop()
+    await second_connector.stop()
 
     recorder.record("event_count", len(events))
     return {
         "mcp_discovery_ms": discovery_ms,
         "mcp_cache_hit_ms": cache_hit_ms,
+        "mcp_shared_cache_hit_ms": shared_cache_hit_ms,
         "mcp_call_ms": call_ms,
         "mcp_tool_count": len(tools),
         "mcp_request_count": len(transport.requests),
+        "mcp_shared_cache_request_count": len(second_transport.requests),
         "mcp_output_bytes": len(call_result.rendered_content().encode("utf-8")),
     }
 

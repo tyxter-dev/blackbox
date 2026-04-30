@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -168,12 +168,10 @@ class MCPConnector:
             await client.stop()
             self._emit_lifecycle(EventTypes.MCP_SERVER_STOPPED, spec)
             self._clients.pop(server_name, None)
-        if server is None:
-            self._tool_cache.clear()
-        else:
-            self._tool_cache = {
-                key: entry for key, entry in self._tool_cache.items() if entry.server != server
-            }
+        # Stopping a transport should not invalidate discovery results. Tool
+        # schemas are keyed by server identity/protocol/auth shape and expire
+        # through TTL or explicit refresh, which lets callers share caches
+        # across short-lived connector instances.
 
     async def refresh_tools(self, server: str) -> list[dict[str, Any]]:
         self._invalidate_cache(server, reason="refresh")
@@ -461,6 +459,7 @@ class MCPConnector:
         )
         cached = self._tool_cache.get(cache_key)
         if cached is not None and not cached.expired():
+            self._load_cached_tools(cached)
             self._emit_cache(EventTypes.MCP_TOOLS_CACHE_HIT, spec, cached)
             return
         if cached is not None:
@@ -470,9 +469,14 @@ class MCPConnector:
             EventTypes.MCP_TOOLS_CACHE_MISS,
             data={"server": server, "server_label": server, "transport": spec.transport},
         )
-        await self._discover_tools(server)
+        await self._discover_tools(server, extra_cache_keys=[cache_key])
 
-    async def _discover_tools(self, server: str) -> None:
+    async def _discover_tools(
+        self,
+        server: str,
+        *,
+        extra_cache_keys: Iterable[str] = (),
+    ) -> None:
         spec = self._server_spec(server)
         client = self._client_for(server)
         server_policy = effective_server_trust_policy(spec)
@@ -583,16 +587,22 @@ class MCPConnector:
                 session_info.protocol_version if session_info is not None else None
             ),
         )
-        self._tool_cache[cache_key] = MCPToolCacheEntry(
-            server=server,
-            tools=definitions,
-            ttl_seconds=spec.tool_cache_ttl_seconds,
-            session_id=session_info.session_id if session_info is not None else None,
-            protocol_version=(
-                session_info.protocol_version if session_info is not None else None
-            ),
-            key=cache_key,
-        )
+        for key in {cache_key, *extra_cache_keys}:
+            self._tool_cache[key] = MCPToolCacheEntry(
+                server=server,
+                tools=definitions,
+                ttl_seconds=spec.tool_cache_ttl_seconds,
+                session_id=session_info.session_id if session_info is not None else None,
+                protocol_version=(
+                    session_info.protocol_version if session_info is not None else None
+                ),
+                key=key,
+            )
+
+    def _load_cached_tools(self, entry: MCPToolCacheEntry) -> None:
+        for ref, definition in entry.tools.items():
+            if isinstance(ref, str) and isinstance(definition, MCPToolDefinition):
+                self._tools[ref] = definition
 
     def _client_for(self, server: str) -> MCPClient:
         existing = self._clients.get(server)

@@ -12,6 +12,7 @@ from agent_runtime.mcp import (
     MCPServerTrustPolicy,
     MCPTrustLevel,
 )
+from agent_runtime.mcp.cache import MCPToolCacheEntry
 from agent_runtime.tools.registry import ToolRegistry
 from agent_runtime.tools.runtime import ToolRuntime
 
@@ -198,6 +199,37 @@ async def test_mcp_connector_discovers_and_calls_managed_transport() -> None:
         EventTypes.MCP_TOOLS_CACHE_HIT,
         EventTypes.MCP_CALL_STARTED,
         EventTypes.MCP_CALL_COMPLETED,
+    ]
+
+
+async def test_mcp_connector_can_share_discovery_cache_between_instances() -> None:
+    shared_cache: dict[str, MCPToolCacheEntry] = {}
+    first_transport = _FakeTransport()
+    first = MCPConnector(
+        [_trusted_ticket_spec()],
+        transports={"tickets": first_transport},
+        _tool_cache=shared_cache,
+    )
+    await first.list_tools("tickets")
+
+    second_transport = _FakeTransport()
+    second = MCPConnector(
+        [_trusted_ticket_spec()],
+        transports={"tickets": second_transport},
+        _tool_cache=shared_cache,
+    )
+    tools = await second.list_tools("tickets")
+    result = await second.call_tool("tickets", "lookup", {"ticket_id": "T-2"})
+
+    assert tools[0]["ref"] == "mcp:tickets.lookup"
+    assert result == {"content": [{"type": "text", "text": {"ticket_id": "T-2"}}]}
+    assert [request[0] for request in first_transport.requests].count("tools/list") == 1
+    assert [request[0] for request in second_transport.requests] == [
+        "initialize",
+        "tools/call",
+    ]
+    assert EventTypes.MCP_TOOLS_CACHE_HIT in [
+        event.type for event in second.drain_events()
     ]
 
 
