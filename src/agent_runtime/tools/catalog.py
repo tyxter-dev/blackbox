@@ -33,29 +33,50 @@ class ToolCatalogEntry:
     negative_examples: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     token_count: int = 0
+    _searchable_text: str = field(init=False, repr=False)
+    _searchable_words: set[str] = field(init=False, repr=False)
+    _name_lower: str = field(init=False, repr=False)
+    _description_lower: str = field(init=False, repr=False)
+    _category_lower: str = field(init=False, repr=False)
+    _tags_lower: list[str] = field(init=False, repr=False)
+    _scopes_lower: list[str] = field(init=False, repr=False)
+    _examples_lower: str = field(init=False, repr=False)
+    _name_words: set[str] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._name_lower = self.name.lower()
+        self._description_lower = self.description.lower()
+        self._category_lower = (self.category or "").lower()
+        self._tags_lower = [tag.lower() for tag in self.tags]
+        self._scopes_lower = [scope.lower() for scope in self.scopes]
+        self._examples_lower = " ".join([*self.examples, *self.negative_examples]).lower()
+        self._name_words = set(
+            self._name_lower.replace("_", " ").replace("-", " ").split()
+        )
+        self._searchable_text = " ".join(
+            [
+                self._name_lower,
+                self._description_lower,
+                self._category_lower,
+                " ".join(self._tags_lower),
+                " ".join(self._scopes_lower),
+                self._examples_lower,
+            ]
+        )
+        self._searchable_words = set(
+            self._searchable_text.replace("_", " ").replace("-", " ").split()
+        )
 
     def matches_query(self, query: str) -> bool:
         tokens = query.lower().split()
         if not tokens:
             return False
-        searchable = " ".join(
-            [
-                self.name,
-                self.description,
-                self.category or "",
-                " ".join(self.tags),
-                " ".join(self.scopes),
-                " ".join(self.examples),
-                " ".join(self.negative_examples),
-            ]
-        ).lower()
-        searchable_words = set(searchable.replace("_", " ").replace("-", " ").split())
         matched = 0
         for token in tokens:
-            if token in searchable:
+            if token in self._searchable_text:
                 matched += 1
                 continue
-            if any(word in token for word in searchable_words if len(word) >= 3):
+            if any(word in token for word in self._searchable_words if len(word) >= 3):
                 matched += 1
         required = max(1, -(-len(tokens) // 2))
         return matched >= required
@@ -66,33 +87,29 @@ class ToolCatalogEntry:
         if not query.strip():
             return 0.0
         query_lower = query.lower().strip()
-        if query_lower == self.name.lower():
+        if query_lower == self._name_lower:
             return 1.0
 
         tokens = query_lower.split()
-        name_lower = self.name.lower()
-        desc_lower = self.description.lower()
-        category_lower = (self.category or "").lower()
-        tags_lower = [tag.lower() for tag in self.tags]
-        scopes_lower = [scope.lower() for scope in self.scopes]
-        examples_lower = " ".join([*self.examples, *self.negative_examples]).lower()
-        name_words = set(name_lower.replace("_", " ").replace("-", " ").split())
 
         total = 0.0
         for token in tokens:
-            if token in name_lower:
-                total += 3.0 * (len(token) / max(len(name_lower), 1))
-            elif any(token in word or word in token for word in name_words if len(word) >= 3):
+            if token in self._name_lower:
+                total += 3.0 * (len(token) / max(len(self._name_lower), 1))
+            elif any(token in word or word in token for word in self._name_words if len(word) >= 3):
                 total += 0.9
-            if any(token == tag or token in tag or tag in token for tag in tags_lower):
+            if any(token == tag or token in tag or tag in token for tag in self._tags_lower):
                 total += 2.0
-            if any(token == scope or token in scope or scope in token for scope in scopes_lower):
+            if any(
+                token == scope or token in scope or scope in token
+                for scope in self._scopes_lower
+            ):
                 total += 1.5
-            if token in desc_lower:
-                total += 1.0 * (len(token) / max(len(desc_lower), 1))
-            if category_lower and token in category_lower:
+            if token in self._description_lower:
+                total += 1.0 * (len(token) / max(len(self._description_lower), 1))
+            if self._category_lower and token in self._category_lower:
                 total += 1.0
-            if token in examples_lower:
+            if token in self._examples_lower:
                 total += 0.5
 
         return min(1.0, total / max(len(tokens) * 9.0, 1.0))

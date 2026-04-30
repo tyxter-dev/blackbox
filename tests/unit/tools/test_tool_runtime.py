@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 
+import agent_runtime.tools.registry as registry_module
 from agent_runtime.core.errors import ToolExecutionError
 from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
 
@@ -131,3 +133,32 @@ def test_tool_registry_clone_is_isolated() -> None:
 
     assert [tool.name for tool in registry.all_tools()] == ["base"]
     assert sorted(tool.name for tool in clone.all_tools()) == ["base", "dynamic"]
+
+
+def test_tool_registry_caches_provider_tools_until_mutation(
+    monkeypatch: Any,
+) -> None:
+    calls = 0
+    original = registry_module._tool_metadata
+
+    def counting_metadata(tool: Any) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return original(tool)
+
+    registry = ToolRegistry()
+    registry.register(lambda: "base", name="base", description="Base tool.", risk="low")
+    monkeypatch.setattr(registry_module, "_tool_metadata", counting_metadata)
+
+    first = registry.to_provider_tools()
+    first[0]["metadata"]["risk"] = "mutated"
+    second = registry.to_provider_tools()
+
+    assert calls == 1
+    assert second[0]["metadata"]["risk"] == "low"
+
+    registry.register(lambda: "extra", name="extra", description="Extra tool.")
+    third = registry.to_provider_tools()
+
+    assert calls == 3
+    assert [tool["name"] for tool in third] == ["base", "extra"]

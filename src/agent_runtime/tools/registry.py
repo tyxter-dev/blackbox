@@ -41,6 +41,7 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._tools: dict[str, ToolDefinition] = {}
+        self._provider_tools_cache: list[dict[str, Any]] | None = None
 
     def register(
         self,
@@ -87,6 +88,7 @@ class ToolRegistry:
             ],
         )
         self._tools[tool_name] = definition
+        self._provider_tools_cache = None
         return definition
 
     def get(self, name: str) -> ToolDefinition:
@@ -97,6 +99,7 @@ class ToolRegistry:
 
     def add(self, definition: ToolDefinition) -> ToolDefinition:
         self._tools[definition.name] = definition
+        self._provider_tools_cache = None
         return definition
 
     def all_tools(self) -> list[ToolDefinition]:
@@ -105,6 +108,11 @@ class ToolRegistry:
     def clone(self) -> ToolRegistry:
         clone = ToolRegistry()
         clone._tools = dict(self._tools)
+        clone._provider_tools_cache = (
+            [_copy_provider_tool(tool) for tool in self._provider_tools_cache]
+            if self._provider_tools_cache is not None
+            else None
+        )
         return clone
 
     def to_provider_tools(self) -> list[dict[str, Any]]:
@@ -112,16 +120,11 @@ class ToolRegistry:
 
         Real providers should convert this into native function/tool definitions.
         """
-        return [
-            {
-                "type": "function",
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.parameters,
-                "metadata": _tool_metadata(tool),
-            }
-            for tool in self.all_tools()
-        ]
+        if self._provider_tools_cache is None:
+            self._provider_tools_cache = [
+                _provider_tool_payload(tool) for tool in self.all_tools()
+            ]
+        return [_copy_provider_tool(tool) for tool in self._provider_tools_cache]
 
 
 def _scope_prompt_fragment(tool_name: str, fragment: PromptFragment) -> PromptFragment:
@@ -172,3 +175,21 @@ def _tool_metadata(tool: ToolDefinition) -> dict[str, Any]:
     if tool.negative_examples:
         metadata["negative_examples"] = list(tool.negative_examples)
     return metadata
+
+
+def _provider_tool_payload(tool: ToolDefinition) -> dict[str, Any]:
+    return {
+        "type": "function",
+        "name": tool.name,
+        "description": tool.description,
+        "parameters": tool.parameters,
+        "metadata": _tool_metadata(tool),
+    }
+
+
+def _copy_provider_tool(tool: dict[str, Any]) -> dict[str, Any]:
+    copied = dict(tool)
+    metadata = copied.get("metadata")
+    if isinstance(metadata, dict):
+        copied["metadata"] = dict(metadata)
+    return copied
