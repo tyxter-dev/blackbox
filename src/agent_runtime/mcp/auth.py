@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from agent_runtime.mcp.spec import MCPServerSpec
@@ -28,6 +29,19 @@ class LegacyMCPAuthProvider(Protocol):
     async def authorization_header(self, server: MCPServerSpec) -> str | None: ...
 
 
+@runtime_checkable
+class MCPOAuthTokenProvider(Protocol):
+    """Supplies OAuth bearer tokens for remote HTTP MCP servers."""
+
+    async def token_for(
+        self,
+        spec: MCPServerSpec,
+        *,
+        challenge: MCPAuthChallenge | None = None,
+        force_refresh: bool = False,
+    ) -> MCPAuthToken | str: ...
+
+
 @dataclass(slots=True, frozen=True)
 class MCPAuthChallenge:
     server: str
@@ -37,7 +51,32 @@ class MCPAuthChallenge:
     scope: str | None = None
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(slots=True, frozen=True, repr=False)
+class MCPAuthToken:
+    access_token: str
+    token_type: str = "Bearer"
+    expires_at: float | None = None
+    scope: str | None = None
+
+    def expired(self, *, skew_seconds: float = 60.0) -> bool:
+        if self.expires_at is None:
+            return False
+        return time.time() >= self.expires_at - skew_seconds
+
+    def authorization_header(self) -> str:
+        return f"{self.token_type} {self.access_token}"
+
+    def __repr__(self) -> str:
+        return (
+            "MCPAuthToken("
+            f"token_type={self.token_type!r}, "
+            f"expires_at={self.expires_at!r}, "
+            f"scope={self.scope!r}, "
+            "access_token='<redacted>')"
+        )
+
+
+@dataclass(slots=True, frozen=True, repr=False)
 class StaticBearerMCPAuthProvider:
     token: str
 
@@ -50,6 +89,48 @@ class StaticBearerMCPAuthProvider:
         challenge: MCPAuthChallenge,
     ) -> dict[str, str] | None:
         return await self.headers_for(spec)
+
+    def __repr__(self) -> str:
+        return "StaticBearerMCPAuthProvider(token='<redacted>')"
+
+
+@dataclass(slots=True)
+class OAuthBearerMCPAuthProvider:
+    """Caches and refreshes OAuth bearer tokens for HTTP MCP requests."""
+
+    token_provider: MCPOAuthTokenProvider
+    refresh_skew_seconds: float = 60.0
+    _tokens: dict[str, MCPAuthToken] = field(default_factory=dict, repr=False)
+
+    async def headers_for(self, spec: MCPServerSpec) -> dict[str, str]:
+        token = self._tokens.get(spec.name)
+        if token is None or token.expired(skew_seconds=self.refresh_skew_seconds):
+            token = await self._fetch_token(spec, challenge=None, force_refresh=False)
+        return {"Authorization": token.authorization_header()}
+
+    async def handle_auth_challenge(
+        self,
+        spec: MCPServerSpec,
+        challenge: MCPAuthChallenge,
+    ) -> dict[str, str] | None:
+        token = await self._fetch_token(spec, challenge=challenge, force_refresh=True)
+        return {"Authorization": token.authorization_header()}
+
+    async def _fetch_token(
+        self,
+        spec: MCPServerSpec,
+        *,
+        challenge: MCPAuthChallenge | None,
+        force_refresh: bool,
+    ) -> MCPAuthToken:
+        raw = await self.token_provider.token_for(
+            spec,
+            challenge=challenge,
+            force_refresh=force_refresh,
+        )
+        token = raw if isinstance(raw, MCPAuthToken) else MCPAuthToken(access_token=raw)
+        self._tokens[spec.name] = token
+        return token
 
 
 async def auth_headers_for(

@@ -1,4 +1,12 @@
-from agent_runtime.mcp.auth import MCPAuthChallenge, MCPAuthProvider, StaticBearerMCPAuthProvider
+from agent_runtime.core.errors import MCPAuthenticationError
+from agent_runtime.mcp.auth import (
+    MCPAuthChallenge,
+    MCPAuthProvider,
+    MCPAuthToken,
+    MCPOAuthTokenProvider,
+    OAuthBearerMCPAuthProvider,
+    StaticBearerMCPAuthProvider,
+)
 from agent_runtime.mcp.client import MCPClient, MCPSessionInfo
 from agent_runtime.mcp.compat import (
     MCP_PROTOCOL_COMPATIBILITY_MATRIX,
@@ -40,10 +48,13 @@ __all__ = [
     "MCPApprovalMode",
     "MCPAuthChallenge",
     "MCPAuthProvider",
+    "MCPAuthToken",
+    "MCPAuthenticationError",
     "MCPCallResult",
     "MCPCapabilityRisk",
     "MCPClient",
     "MCPConnector",
+    "MCPOAuthTokenProvider",
     "MCPProtocolVersionSupport",
     "MCPRouteMode",
     "MCPServerRiskProfile",
@@ -58,6 +69,7 @@ __all__ = [
     "MCPTrustDecision",
     "MCPTrustEvaluator",
     "MCPTrustLevel",
+    "OAuthBearerMCPAuthProvider",
     "StaticBearerMCPAuthProvider",
     "StdioMCPTransport",
     "StreamableHTTPMCPTransport",

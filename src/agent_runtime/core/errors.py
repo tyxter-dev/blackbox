@@ -155,6 +155,29 @@ class MCPError(AgentRuntimeError):
     """Raised by MCP connector or remote MCP failures."""
 
 
+class MCPAuthenticationError(MCPError):
+    """Raised when a remote MCP server rejects or requires authentication."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        server: str | None = None,
+        status_code: int | None = None,
+        www_authenticate: str | None = None,
+        resource_metadata_url: str | None = None,
+        scope: str | None = None,
+        safe_to_retry: bool = True,
+    ) -> None:
+        super().__init__(message)
+        self.server = server
+        self.status_code = status_code
+        self.www_authenticate = www_authenticate
+        self.resource_metadata_url = resource_metadata_url
+        self.scope = scope
+        self.safe_to_retry = safe_to_retry
+
+
 class RealtimeError(AgentRuntimeError):
     """Base class for realtime session failures."""
 

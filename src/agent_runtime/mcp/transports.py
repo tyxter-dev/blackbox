@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import urllib.error
 import urllib.request
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from agent_runtime.core.errors import MCPError
+from agent_runtime.core.errors import MCPAuthenticationError, MCPError
 from agent_runtime.mcp.auth import (
     LegacyMCPAuthProvider,
     MCPAuthChallenge,
@@ -327,24 +328,31 @@ class StreamableHTTPMCPTransport(JsonRPCTransport):
                 timeout_seconds,
             )
         except _HTTPAuthRequiredError as exc:
-            challenge = MCPAuthChallenge(
-                server=self.spec.name,
-                status_code=exc.status_code,
-                www_authenticate=exc.www_authenticate,
-            )
+            challenge = _auth_challenge_from_http(self.spec.name, exc)
             handler = getattr(self.auth_provider, "handle_auth_challenge", None)
             if not callable(handler):
-                raise MCPError("HTTP MCP server requires authentication.") from exc
+                raise _authentication_error(self.spec, challenge, refreshed=False) from exc
             refreshed = await handler(self.spec, challenge)
             if refreshed is None:
-                raise MCPError("HTTP MCP server requires authentication.") from exc
+                raise _authentication_error(self.spec, challenge, refreshed=False) from exc
             auth_headers.update(refreshed)
-            return await asyncio.to_thread(
-                self._roundtrip_sync,
-                payload,
-                auth_headers,
-                timeout_seconds,
-            )
+            try:
+                return await asyncio.to_thread(
+                    self._roundtrip_sync,
+                    payload,
+                    auth_headers,
+                    timeout_seconds,
+                )
+            except _HTTPAuthRequiredError as refreshed_exc:
+                refreshed_challenge = _auth_challenge_from_http(
+                    self.spec.name,
+                    refreshed_exc,
+                )
+                raise _authentication_error(
+                    self.spec,
+                    refreshed_challenge,
+                    refreshed=True,
+                ) from refreshed_exc
 
     def _roundtrip_sync(
         self,
@@ -383,7 +391,7 @@ class StreamableHTTPMCPTransport(JsonRPCTransport):
                 response_body = response.read().decode("utf-8")
                 content_type = response.headers.get("Content-Type", "")
         except urllib.error.HTTPError as exc:
-            if exc.code == 401:
+            if exc.code in {401, 403}:
                 raise _HTTPAuthRequiredError(
                     exc.code,
                     exc.headers.get("WWW-Authenticate"),
@@ -435,6 +443,50 @@ def _mcp_name_header(payload: dict[str, Any]) -> str | None:
         return None
     value = params.get("name") or params.get("uri")
     return str(value) if value is not None else None
+
+
+def _auth_challenge_from_http(
+    server: str,
+    error: _HTTPAuthRequiredError,
+) -> MCPAuthChallenge:
+    header = error.www_authenticate
+    return MCPAuthChallenge(
+        server=server,
+        status_code=error.status_code,
+        www_authenticate=header,
+        resource_metadata_url=(
+            _www_authenticate_param(header, "resource_metadata")
+            or _www_authenticate_param(header, "resource")
+        ),
+        scope=_www_authenticate_param(header, "scope"),
+    )
+
+
+def _authentication_error(
+    spec: MCPServerSpec,
+    challenge: MCPAuthChallenge,
+    *,
+    refreshed: bool,
+) -> MCPAuthenticationError:
+    status = challenge.status_code
+    return MCPAuthenticationError(
+        "HTTP MCP authentication failed for "
+        f"server '{spec.name}' with status {status}. "
+        "Provide valid MCP credentials or configure an auth provider that can refresh them.",
+        server=spec.name,
+        status_code=status,
+        www_authenticate=challenge.www_authenticate,
+        resource_metadata_url=challenge.resource_metadata_url,
+        scope=challenge.scope,
+        safe_to_retry=not refreshed,
+    )
+
+
+def _www_authenticate_param(header: str | None, name: str) -> str | None:
+    if not header:
+        return None
+    match = re.search(rf'{re.escape(name)}="?([^",]+)"?', header)
+    return match.group(1) if match is not None else None
 
 
 def transport_for_spec(
