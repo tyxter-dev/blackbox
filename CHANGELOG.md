@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Slice 19 — MCP production compatibility hardening
+
+MCP is now represented as a formal production compatibility boundary rather
+than only a local tool convenience.
+
+- Adds an MCP protocol compatibility matrix and routes client negotiation
+  through the declared supported versions.
+- Adds OAuth bearer token refresh support for remote HTTP MCP servers and a
+  typed `MCPAuthenticationError` that carries safe retry/challenge metadata.
+- Adds `MCPTrustPolicyPresets.local_only(...)`,
+  `.enterprise_remote(...)`, and `.provider_native_allowed(...)` for common
+  production trust postures.
+- Expands MCP policy and approval metadata with server, tool, ref, scopes,
+  risks, trust level, route mode, and trust fingerprint.
+- Isolates MCP tool-list caches by auth identity and credential fingerprints,
+  and invalidates cached discovery when a server emits a tools/listChanged
+  notification.
+- Redacts MCP call failure events by default, enforces per-tool output limits
+  over server defaults, and adds transport timeout cancellation coverage.
+- Normalizes provider-native RemoteMCP metadata so OpenAI/Anthropic MCP items
+  expose comparable server/tool/ref/route fields to local MCP dispatch.
+- Adds unit/golden coverage for protocol negotiation, auth refresh, cache
+  invalidation, trust presets, redaction, output limits, and metadata parity.
+
 ### Slice 18 — Provider-native tool and structured-output hardening
 
 Provider capability profiles now distinguish model-version support for
