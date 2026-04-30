@@ -41,13 +41,29 @@ class PatchArtifact:
     id: str = field(default_factory=lambda: f"patch_{uuid4().hex}")
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_artifact(self) -> Artifact:
+    def to_artifact(self, *, lazy: bool = False) -> Artifact:
+        metadata = dict(self.metadata)
+        if lazy:
+            metadata.update(
+                {
+                    "lazy": True,
+                    "diff_bytes": len(self.diff.encode("utf-8")),
+                    "change_count": len(self.changes),
+                }
+            )
+            return Artifact(
+                type="patch",
+                name=self.summary,
+                data=None,
+                id=self.id,
+                metadata=metadata,
+            )
         return Artifact(
             type="patch",
             name=self.summary,
             data={"diff": self.diff, "changes": list(self.changes)},
             id=self.id,
-            metadata=dict(self.metadata),
+            metadata=metadata,
         )
 
 

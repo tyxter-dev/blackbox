@@ -71,6 +71,22 @@ def test_event_drops_raw_by_default_keeps_when_requested() -> None:
     assert kept.raw.payload == {"id": "resp_1"}
 
 
+def test_event_raw_retention_honors_storage_allowed_flag() -> None:
+    raw = RawEnvelope(
+        provider="openai",
+        payload={"large": "payload"},
+        sensitivity="sensitive",
+        storage_allowed=False,
+    )
+    event = AgentEvent(type=EventTypes.MODEL_TEXT_DELTA, raw=raw, run_id="r")
+
+    kept = event_from_dict(event_to_dict(event, keep_raw=True))
+
+    assert isinstance(kept.raw, RawEnvelope)
+    assert kept.raw.payload == "<raw-retention-disabled>"
+    assert kept.raw.redaction_status == "redacted"
+
+
 # --- JSONL event store ----------------------------------------------------
 
 async def test_jsonl_event_store_round_trip(tmp_path: Path) -> None:

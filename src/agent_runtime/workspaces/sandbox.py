@@ -52,6 +52,7 @@ class SandboxWorkspaceProvider:
     _sessions: dict[str, SandboxSession] = field(default_factory=dict)
     _approved_operations: set[str] = field(default_factory=set)
     _denied_operations: set[str] = field(default_factory=set)
+    _materialized_artifacts: dict[str, Artifact] = field(default_factory=dict)
 
     def capabilities(self) -> WorkspaceProviderCapabilities:
         supports_ports = bool(getattr(self.client, "supports_ports", True))
@@ -236,9 +237,11 @@ class SandboxWorkspaceProvider:
             ws=ws,
             data={"patch_id": artifact.id, "summary": patch.summary},
         )
-        as_artifact = artifact.to_artifact()
-        self.artifacts.append(as_artifact)
-        self._emit(EventTypes.ARTIFACT_CREATED, ws=ws, data={"artifact": as_artifact})
+        materialized = artifact.to_artifact()
+        lazy_artifact = artifact.to_artifact(lazy=True)
+        self._materialized_artifacts[artifact.id] = materialized
+        self.artifacts.append(lazy_artifact)
+        self._emit(EventTypes.ARTIFACT_CREATED, ws=ws, data={"artifact": lazy_artifact})
         return artifact
 
     async def run_command(self, ws: WorkspaceRef, spec: CommandSpec) -> CommandResult:
@@ -555,8 +558,14 @@ class SandboxWorkspaceProvider:
             )
 
     def _artifact_for_ref(self, ref: ArtifactRef) -> Artifact:
+        materialized = self._materialized_artifacts.get(ref.id)
+        if materialized is not None:
+            return materialized
         for artifact in self.artifacts:
             if artifact.id == ref.id or (ref.uri is not None and artifact.uri == ref.uri):
+                materialized = self._materialized_artifacts.get(artifact.id)
+                if materialized is not None:
+                    return materialized
                 return artifact
         if ref.uri is not None:
             return Artifact(

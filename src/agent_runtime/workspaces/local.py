@@ -64,6 +64,7 @@ class LocalWorkspaceProvider:
     _open: dict[str, WorkspaceRef] = field(default_factory=dict)
     _approved_operations: set[str] = field(default_factory=set)
     _denied_operations: set[str] = field(default_factory=set)
+    _materialized_artifacts: dict[str, Artifact] = field(default_factory=dict)
 
     def capabilities(self) -> WorkspaceProviderCapabilities:
         return WorkspaceProviderCapabilities(
@@ -254,9 +255,11 @@ class LocalWorkspaceProvider:
             ws=ws,
             data={"patch_id": artifact.id, "summary": patch.summary},
         )
-        as_artifact = artifact.to_artifact()
-        self.artifacts.append(as_artifact)
-        self._emit(EventTypes.ARTIFACT_CREATED, ws=ws, data={"artifact": as_artifact})
+        materialized = artifact.to_artifact()
+        lazy_artifact = artifact.to_artifact(lazy=True)
+        self._materialized_artifacts[artifact.id] = materialized
+        self.artifacts.append(lazy_artifact)
+        self._emit(EventTypes.ARTIFACT_CREATED, ws=ws, data={"artifact": lazy_artifact})
         return artifact
 
     async def run_command(self, ws: WorkspaceRef, spec: CommandSpec) -> CommandResult:
@@ -282,9 +285,14 @@ class LocalWorkspaceProvider:
         artifacts = list(result.artifacts)
         extra_artifact = self._command_output_artifact(ws, spec, result)
         if extra_artifact is not None:
-            artifacts.append(extra_artifact)
-            self.artifacts.append(extra_artifact)
-            self._emit(EventTypes.ARTIFACT_CREATED, ws=ws, data={"artifact": extra_artifact})
+            lazy_artifact = _lazy_workspace_artifact(
+                extra_artifact,
+                data_bytes=len((result.stdout + result.stderr).encode("utf-8")),
+            )
+            self._materialized_artifacts[extra_artifact.id] = extra_artifact
+            artifacts.append(lazy_artifact)
+            self.artifacts.append(lazy_artifact)
+            self._emit(EventTypes.ARTIFACT_CREATED, ws=ws, data={"artifact": lazy_artifact})
         if artifacts != result.artifacts:
             result = replace(result, artifacts=artifacts)
         self._emit(
@@ -561,8 +569,14 @@ class LocalWorkspaceProvider:
         )
 
     def _artifact_for_ref(self, ref: ArtifactRef) -> Artifact:
+        materialized = self._materialized_artifacts.get(ref.id)
+        if materialized is not None:
+            return materialized
         for artifact in self.artifacts:
             if artifact.id == ref.id or (ref.uri is not None and artifact.uri == ref.uri):
+                materialized = self._materialized_artifacts.get(artifact.id)
+                if materialized is not None:
+                    return materialized
                 return artifact
         if ref.uri is not None:
             return Artifact(
@@ -573,6 +587,15 @@ class LocalWorkspaceProvider:
                 metadata={"provider": ref.provider or self.provider_id},
             )
         raise WorkspaceError(f"Unknown artifact: {ref.id}")
+
+
+def _lazy_workspace_artifact(artifact: Artifact, *, data_bytes: int | None = None) -> Artifact:
+    if artifact.data is None:
+        return artifact
+    metadata = {**dict(artifact.metadata), "lazy": True}
+    if data_bytes is not None:
+        metadata["data_bytes"] = data_bytes
+    return replace(artifact, data=None, metadata=metadata)
 
 
 class WorkspaceRuntime(LocalWorkspaceProvider):

@@ -109,7 +109,7 @@ def event_to_dict(
         "provider_span_id": event.provider_span_id,
         "provider_request_id": event.provider_request_id,
         "data": _safe_value(event.data, keep_media=keep_media),
-        "raw": _safe_value(event.raw, keep_media=keep_media) if keep_raw else None,
+        "raw": _event_raw_to_dict(event.raw, keep_media=keep_media) if keep_raw else None,
         "timestamp": event.timestamp.isoformat(),
     }
 
@@ -740,6 +740,12 @@ def _safe_value(value: Any, *, keep_media: bool = False) -> Any:
     if isinstance(value, list | tuple | set | frozenset):
         return [_safe_value(item, keep_media=keep_media) for item in value]
     return repr(value)
+
+
+def _event_raw_to_dict(value: Any, *, keep_media: bool = False) -> Any:
+    if isinstance(value, RawEnvelope) and not value.storage_allowed:
+        return _safe_value(value.redacted("<raw-retention-disabled>"), keep_media=keep_media)
+    return _safe_value(value, keep_media=keep_media)
 
 
 def _hydrate_value(value: Any) -> Any:
