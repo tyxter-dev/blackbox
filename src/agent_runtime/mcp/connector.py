@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent_runtime.core.errors import ApprovalError, MCPError
+from agent_runtime.core.errors import ApprovalError, MCPAuthenticationError, MCPError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.policy import Policy, PolicyDecision, PolicyRequest
 from agent_runtime.core.raw import RawEnvelope
@@ -229,6 +229,7 @@ class MCPConnector:
             call_result = self._apply_output_limit(definition, call_result)
             call_result = self._apply_trust_metadata(definition, call_result)
         except Exception as exc:
+            spec = self._server_spec(definition.server)
             self._emit(
                 EventTypes.MCP_CALL_FAILED,
                 data={
@@ -237,7 +238,8 @@ class MCPConnector:
                     "tool": definition.name,
                     "name": definition.name,
                     "ref": definition.ref,
-                    "error": str(exc),
+                    "error": _safe_error_message(exc, spec),
+                    "error_type": type(exc).__name__,
                 },
             )
             raise
@@ -995,3 +997,36 @@ def _string_list(*values: Any) -> list[str]:
         if isinstance(value, (list, tuple, set, frozenset)):
             items.update(str(item) for item in value)
     return sorted(items)
+
+
+def _safe_error_message(exc: Exception, spec: MCPServerSpec) -> str:
+    if isinstance(exc, MCPAuthenticationError):
+        status = exc.status_code or "unknown"
+        return (
+            f"HTTP MCP authentication failed for server '{spec.name}' "
+            f"with status {status}."
+        )
+    message = str(exc)
+    if not spec.redact:
+        return message
+    redacted = _redact_known_secret_values(message, spec)
+    if redacted != message:
+        return redacted
+    return f"{type(exc).__name__}: <redacted>"
+
+
+def _redact_known_secret_values(message: str, spec: MCPServerSpec) -> str:
+    redacted = message
+    values: list[str] = []
+    if spec.authorization:
+        values.append(spec.authorization)
+    for value in spec.headers.values():
+        values.append(value)
+    for value in spec.env.values():
+        values.append(value)
+    if spec.auth_identity:
+        values.append(spec.auth_identity)
+    for value in values:
+        if value:
+            redacted = redacted.replace(value, "<redacted>")
+    return redacted

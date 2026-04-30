@@ -1038,7 +1038,20 @@ def _mcp_block_data(block: Any, *, block_type: str) -> dict[str, Any]:
         data["output"] = content
     if is_error is not None:
         data["is_error"] = is_error
+    _add_common_mcp_metadata(data)
     return data
+
+
+def _add_common_mcp_metadata(data: dict[str, Any]) -> None:
+    server = data.get("server_label")
+    name = data.get("name")
+    if isinstance(server, str):
+        data.setdefault("server", server)
+    if isinstance(name, str):
+        data.setdefault("tool", name)
+    if isinstance(server, str) and isinstance(name, str):
+        data.setdefault("ref", f"mcp:{server}.{name}")
+    data.setdefault("route_mode", "provider_native")
 
 
 def _hosted_block_data(block: Any, *, block_type: str) -> dict[str, Any]:

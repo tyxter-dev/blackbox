@@ -248,6 +248,8 @@ async def test_mcp_items_include_typed_run_item_data() -> None:
     list_event = next(e for e in result.events if e.item_id == "mcpl_1")
     assert list_event.type == EventTypes.MCP_LIST_TOOLS_COMPLETED
     assert list_event.data["server_label"] == "github"
+    assert list_event.data["server"] == "github"
+    assert list_event.data["route_mode"] == "provider_native"
     assert list_event.data["item"].type == ItemTypes.MCP_LIST_TOOLS
 
     completed = next(
@@ -256,6 +258,10 @@ async def test_mcp_items_include_typed_run_item_data() -> None:
         if e.type == EventTypes.MCP_CALL_COMPLETED and e.item_id == "mcp_1"
     )
     assert completed.data["name"] == "list_issues"
+    assert completed.data["server"] == "github"
+    assert completed.data["tool"] == "list_issues"
+    assert completed.data["ref"] == "mcp:github.list_issues"
+    assert completed.data["route_mode"] == "provider_native"
     assert completed.data["arguments"] == {"state": "open"}
     assert completed.data["output"] == '{"count": 2}'
     assert completed.data["item"].type == ItemTypes.MCP_CALL
@@ -263,6 +269,7 @@ async def test_mcp_items_include_typed_run_item_data() -> None:
 
     approval_event = next(e for e in result.events if e.item_id == "mcpr_1")
     assert approval_event.type == EventTypes.MCP_APPROVAL_REQUIRED
+    assert approval_event.data["ref"] == "mcp:github.delete_repo"
     assert approval_event.data["item"].type == ItemTypes.MCP_APPROVAL_REQUEST
     assert approval_event.data["item"].status == "requires_action"
 

@@ -946,7 +946,20 @@ def _mcp_item_data(item: Any, *, item_type: str) -> dict[str, Any]:
             data[key] = _parse_arguments(value)
         else:
             data[key] = value
+    _add_common_mcp_metadata(data)
     return data
+
+
+def _add_common_mcp_metadata(data: dict[str, Any]) -> None:
+    server = data.get("server_label")
+    name = data.get("name")
+    if isinstance(server, str):
+        data.setdefault("server", server)
+    if isinstance(name, str):
+        data.setdefault("tool", name)
+    if isinstance(server, str) and isinstance(name, str):
+        data.setdefault("ref", f"mcp:{server}.{name}")
+    data.setdefault("route_mode", "provider_native")
 
 
 def _mcp_item_status(item: Any, *, item_type: str) -> ItemStatus:

@@ -99,6 +99,18 @@ class _ListChangedTransport(_FakeTransport):
         self.notification_handler("notifications/tools/list_changed", None)
 
 
+class _LargeOutputTransport(_FakeTransport):
+    async def request(
+        self,
+        method: str,
+        params: dict[str, object] | None = None,
+    ) -> object:
+        if method == "tools/call":
+            self.requests.append((method, params))
+            return {"content": [{"type": "text", "text": "abcdef"}]}
+        return await super().request(method, params)
+
+
 def test_mcp_server_spec_represents_prd_transport_names() -> None:
     specs = [
         MCPServerSpec(name="local", transport="stdio", command="mcp-server"),
@@ -245,6 +257,31 @@ async def test_mcp_connector_surfaces_required_approval() -> None:
     assert events[0].data["ref"] == "mcp:tickets.lookup"
 
 
+async def test_mcp_call_failed_event_redacts_errors_by_default() -> None:
+    connector = MCPConnector(
+        [
+            MCPServerSpec(
+                name="tickets",
+                transport="stdio",
+                authorization="Bearer secret-token",
+            )
+        ]
+    )
+
+    def fail() -> None:
+        raise MCPError("upstream rejected Bearer secret-token")
+
+    connector.register_tool("tickets", "lookup", fail)
+
+    with pytest.raises(MCPError):
+        await connector.call_tool("tickets", "lookup")
+
+    events = connector.drain_events()
+    failed = next(event for event in events if event.type == EventTypes.MCP_CALL_FAILED)
+    assert failed.data["error"] == "upstream rejected <redacted>"
+    assert failed.data["error_type"] == "MCPError"
+
+
 async def test_mcp_connector_discovers_and_calls_managed_transport() -> None:
     transport = _FakeTransport()
     connector = MCPConnector(
@@ -370,6 +407,43 @@ async def test_mcp_list_changed_notification_invalidates_discovery_cache() -> No
         if event.type == EventTypes.MCP_TOOLS_CACHE_INVALIDATED
     ]
     assert invalidated[-1].data["reason"] == "list_changed"
+
+
+async def test_mcp_tool_policy_output_limit_overrides_server_limit() -> None:
+    connector = MCPConnector(
+        [
+            _trusted_ticket_spec(
+                max_output_bytes=100,
+                tool_policies={
+                    "lookup": MCPToolTrustPolicy(
+                        ref="lookup",
+                        trust_level=MCPTrustLevel.TRUSTED,
+                        approval_mode=MCPApprovalMode.NEVER,
+                        max_output_bytes=4,
+                    )
+                },
+            )
+        ],
+        transports={"tickets": _LargeOutputTransport()},
+    )
+
+    result = await connector.call_tool_result(
+        "tickets",
+        "lookup",
+        {"ticket_id": "T-1"},
+    )
+
+    assert result.rendered_content() == "abcd"
+    assert result.metadata["truncated"] is True
+    assert result.metadata["max_output_bytes"] == 4
+    assert result.metadata["mcp"]["server"] == "tickets"
+    assert result.metadata["mcp"]["tool"] == "lookup"
+    assert result.metadata["mcp"]["ref"] == "mcp:tickets.lookup"
+    assert result.metadata["mcp"]["route_mode"] == "local_only"
+    truncated = [
+        event for event in connector.drain_events() if event.type == EventTypes.MCP_OUTPUT_TRUNCATED
+    ]
+    assert truncated[0].data["max_output_bytes"] == 4
 
 
 async def test_mcp_connector_refreshes_cache_and_stops_transport() -> None:

@@ -199,6 +199,10 @@ async def test_mcp_blocks_map_to_typed_run_items() -> None:
     assert started.data["item"].type == ItemTypes.MCP_CALL
     assert started.data["call_id"] == "mcptoolu_1"
     assert started.data["server_label"] == "github"
+    assert started.data["server"] == "github"
+    assert started.data["tool"] == "list_issues"
+    assert started.data["ref"] == "mcp:github.list_issues"
+    assert started.data["route_mode"] == "provider_native"
     assert started.data["arguments"] == {"state": "open"}
 
     completed = next(e for e in result.events if e.type == EventTypes.MCP_CALL_COMPLETED)
@@ -212,7 +216,11 @@ async def test_mcp_blocks_map_to_typed_run_items() -> None:
             "mcp_item_type": "mcp_tool_use",
             "call_id": "mcptoolu_1",
             "server_label": "github",
+            "server": "github",
             "name": "list_issues",
+            "tool": "list_issues",
+            "ref": "mcp:github.list_issues",
+            "route_mode": "provider_native",
             "arguments": {"state": "open"},
         },
         {
@@ -220,6 +228,7 @@ async def test_mcp_blocks_map_to_typed_run_items() -> None:
             "call_id": "mcptoolu_1",
             "output": [{"type": "text", "text": "2 issues"}],
             "is_error": False,
+            "route_mode": "provider_native",
         },
     ]
 
