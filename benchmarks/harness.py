@@ -111,6 +111,7 @@ class BenchmarkSuiteResult:
             },
             "metadata": dict(self.metadata),
             "results": [result.to_dict() for result in self.results],
+            "trends": scenario_trends(self.results),
             "summary": self.summary(),
         }
 
@@ -347,6 +348,43 @@ def aggregate_metric(results: Iterable[BenchmarkResult], metric: str) -> dict[st
         "p95": percentile(samples, 0.95),
         "max": round(max(samples), 3),
     }
+
+
+def scenario_trends(
+    results: Iterable[BenchmarkResult],
+) -> dict[str, dict[str, dict[str, float | int | None]]]:
+    grouped: dict[str, list[BenchmarkResult]] = {}
+    for result in results:
+        if not result.success:
+            continue
+        grouped.setdefault(result.scenario, []).append(result)
+
+    trends: dict[str, dict[str, dict[str, float | int | None]]] = {}
+    for scenario, scenario_results in sorted(grouped.items()):
+        metric_names = sorted(
+            {
+                metric
+                for result in scenario_results
+                for metric, value in result.metrics.items()
+                if isinstance(value, int | float)
+            }
+        )
+        scenario_metrics: dict[str, dict[str, float | int | None]] = {}
+        for metric in metric_names:
+            samples = [
+                float(value)
+                for result in scenario_results
+                if isinstance(value := result.metrics.get(metric), int | float)
+            ]
+            if not samples:
+                continue
+            scenario_metrics[metric] = {
+                "samples": len(samples),
+                "p50": percentile(samples, 0.50),
+                "p95": percentile(samples, 0.95),
+            }
+        trends[scenario] = scenario_metrics
+    return trends
 
 
 def run(coro: Coroutine[Any, Any, Any]) -> Any:

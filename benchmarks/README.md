@@ -8,6 +8,7 @@ offline and uses fake model, agent, MCP, and workspace providers.
 
 ```bash
 python benchmarks/run_perf.py --output benchmarks/results/perf_results.json
+python benchmarks/run_perf.py --repeat 5 --output benchmarks/results/perf_results.json
 python -m pytest tests/perf -q
 ```
 
@@ -97,9 +98,19 @@ The report shape is stable for trend tracking:
       "budget_checks": []
     }
   ],
+  "trends": {
+    "text_only_run": {
+      "wall_time_ms": {"samples": 5, "p50": 10.0, "p95": 12.0}
+    }
+  },
   "summary": {"scenario_count": 10, "failed_count": 0}
 }
 ```
+
+Trend values are calculated per scenario from the JSON results in the current
+report. A normal single-run CI report has one sample per scenario; local
+`--repeat N` runs add enough samples for p50/p95 movement before changing
+strict budgets.
 
 ## Optimization Watchlist
 
@@ -112,3 +123,8 @@ Use these benchmarks to evaluate the current P0 optimization targets:
 - Add bounded queues/backpressure for streaming consumers.
 - Precompute capability/profile validation where possible.
 - Lazily materialize large workspace artifacts.
+
+The strict CI gate must keep explicit fail budgets for `text_only_run`,
+`structured_output_run`, `five_parallel_local_tool_calls`,
+`dynamic_toolset_search_load`, and `mcp_tool_discovery_call`, including
+memory-growth budgets for each and first-event budgets for tool-heavy streams.

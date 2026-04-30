@@ -31,12 +31,19 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     budgets = load_budgets(args.budgets)
     scenarios = _select_scenarios(offline_scenarios(), args.scenario)
+    scenarios = _repeat_scenarios(scenarios, args.repeat)
     metadata: dict[str, Any] = {"network_requested": args.include_network}
     network_skipped: list[str] = []
     if args.include_network:
         network_scenarios, network_skipped = credentialed_network_scenarios()
-        scenarios.extend(_select_scenarios(network_scenarios, args.scenario))
+        scenarios.extend(
+            _repeat_scenarios(
+                _select_scenarios(network_scenarios, args.scenario),
+                args.repeat,
+            )
+        )
         metadata["network_skipped"] = network_skipped
+    metadata["repeat"] = args.repeat
     suite = run(
         run_many(
             scenarios,
@@ -80,6 +87,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Include credential-gated network provider scenarios.",
     )
     parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Run each selected scenario this many times for local p50/p95 trends.",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Exit non-zero when a budget check reaches fail severity.",
@@ -95,6 +108,15 @@ def _select_scenarios(
         return list(scenarios)
     wanted = set(selected)
     return [entry for entry in scenarios if entry[0] in wanted]
+
+
+def _repeat_scenarios(
+    scenarios: list[ScenarioEntry],
+    repeat: int,
+) -> list[ScenarioEntry]:
+    if repeat < 1:
+        raise ValueError("--repeat must be at least 1")
+    return [entry for _ in range(repeat) for entry in scenarios]
 
 
 def _strict_enabled(args: argparse.Namespace) -> bool:
@@ -138,6 +160,20 @@ def _print_summary(
             print(
                 f"      {check.severity}: {check.metric}={check.value} "
                 f"(warn>{check.warn_above}, fail>{check.fail_above})"
+            )
+    trends = suite.to_dict().get("trends")
+    if isinstance(trends, dict):
+        print("trends:")
+        for scenario, metrics in trends.items():
+            if not isinstance(metrics, dict):
+                continue
+            wall = metrics.get("wall_time_ms")
+            if not isinstance(wall, dict):
+                continue
+            print(
+                f"      {scenario} wall_time_ms "
+                f"p50={wall.get('p50')} p95={wall.get('p95')} "
+                f"n={wall.get('samples')}"
             )
     skipped = suite.metadata.get("network_skipped")
     if isinstance(skipped, list) and skipped:

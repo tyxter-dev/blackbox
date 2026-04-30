@@ -8,12 +8,14 @@
     "text_only_run": {
       "warn": {
         "wall_time_ms": 250.0,
+        "memory_growth_kib": 2048.0,
         "time_to_first_event_ms": 100.0,
         "time_to_final_output_ms": 250.0,
         "trace_export_ms": 50.0
       },
       "fail": {
         "wall_time_ms": 1000.0,
+        "memory_growth_kib": 8192.0,
         "time_to_first_event_ms": 500.0,
         "time_to_final_output_ms": 1000.0,
         "trace_export_ms": 250.0
@@ -22,11 +24,13 @@
     "structured_output_run": {
       "warn": {
         "wall_time_ms": 300.0,
+        "memory_growth_kib": 2048.0,
         "output_validation_ms": 75.0,
         "time_to_final_output_ms": 300.0
       },
       "fail": {
         "wall_time_ms": 1250.0,
+        "memory_growth_kib": 8192.0,
         "output_validation_ms": 300.0,
         "time_to_final_output_ms": 1250.0
       }
@@ -58,21 +62,27 @@
     "five_parallel_local_tool_calls": {
       "warn": {
         "wall_time_ms": 450.0,
+        "memory_growth_kib": 2048.0,
+        "time_to_first_event_ms": 125.0,
         "time_to_final_output_ms": 450.0
       },
       "fail": {
         "wall_time_ms": 1800.0,
+        "memory_growth_kib": 8192.0,
+        "time_to_first_event_ms": 600.0,
         "time_to_final_output_ms": 1800.0
       }
     },
     "dynamic_toolset_search_load": {
       "warn": {
         "wall_time_ms": 500.0,
+        "memory_growth_kib": 4096.0,
         "tool_search_ms": 100.0,
         "tool_load_ms": 100.0
       },
       "fail": {
         "wall_time_ms": 2000.0,
+        "memory_growth_kib": 16384.0,
         "tool_search_ms": 400.0,
         "tool_load_ms": 400.0
       }
@@ -80,11 +90,13 @@
     "mcp_tool_discovery_call": {
       "warn": {
         "wall_time_ms": 500.0,
+        "memory_growth_kib": 2048.0,
         "mcp_discovery_ms": 150.0,
         "mcp_cache_hit_ms": 50.0
       },
       "fail": {
         "wall_time_ms": 2000.0,
+        "memory_growth_kib": 8192.0,
         "mcp_discovery_ms": 600.0,
         "mcp_cache_hit_ms": 250.0
       }
