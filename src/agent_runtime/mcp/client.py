@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from agent_runtime.core.errors import MCPError
+from agent_runtime.mcp.compat import (
+    validate_negotiated_protocol_version,
+    validate_requested_protocol_versions,
+)
 from agent_runtime.mcp.spec import MCPServerSpec
 from agent_runtime.mcp.transports import MCPTransportClient
 
@@ -32,6 +36,7 @@ class MCPClient:
 
         Initialization failures stop the transport before raising.
         """
+        validate_requested_protocol_versions(self.spec)
         await self.transport.start()
         if self.initialized and self.session_info is not None:
             return self.session_info
@@ -52,12 +57,11 @@ class MCPClient:
             await self.transport.stop()
             raise MCPError("MCP initialize returned a non-object result.")
         negotiated = str(result.get("protocolVersion") or self.spec.protocol_version)
-        if negotiated not in (
-            self.spec.protocol_version,
-            *self.spec.protocol_version_fallbacks,
-        ):
+        try:
+            negotiated = validate_negotiated_protocol_version(negotiated, spec=self.spec)
+        except MCPError:
             await self.transport.stop()
-            raise MCPError(f"MCP server negotiated unsupported protocol version: {negotiated}")
+            raise
         set_protocol_version = getattr(self.transport, "set_protocol_version", None)
         if callable(set_protocol_version):
             set_protocol_version(negotiated)

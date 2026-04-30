@@ -1,5 +1,13 @@
 from agent_runtime.mcp.auth import MCPAuthChallenge, MCPAuthProvider, StaticBearerMCPAuthProvider
 from agent_runtime.mcp.client import MCPClient, MCPSessionInfo
+from agent_runtime.mcp.compat import (
+    MCP_PROTOCOL_COMPATIBILITY_MATRIX,
+    SUPPORTED_MCP_PROTOCOL_VERSIONS,
+    MCPProtocolVersionSupport,
+    is_mcp_protocol_version_supported,
+    mcp_protocol_matrix,
+    supported_protocol_versions_for,
+)
 from agent_runtime.mcp.connector import MCPCallResult, MCPConnector, MCPToolDefinition
 from agent_runtime.mcp.spec import MCPServerSpec
 from agent_runtime.mcp.toolset import MCPToolset, resolve_mcp_route, to_remote_mcp
@@ -25,6 +33,8 @@ from agent_runtime.mcp.trust import (
 )
 
 __all__ = [
+    "MCP_PROTOCOL_COMPATIBILITY_MATRIX",
+    "SUPPORTED_MCP_PROTOCOL_VERSIONS",
     "DefaultMCPTrustEvaluator",
     "LegacySSEMCPTransport",
     "MCPApprovalMode",
@@ -34,6 +44,7 @@ __all__ = [
     "MCPCapabilityRisk",
     "MCPClient",
     "MCPConnector",
+    "MCPProtocolVersionSupport",
     "MCPRouteMode",
     "MCPServerRiskProfile",
     "MCPServerSpec",
@@ -50,7 +61,10 @@ __all__ = [
     "StaticBearerMCPAuthProvider",
     "StdioMCPTransport",
     "StreamableHTTPMCPTransport",
+    "is_mcp_protocol_version_supported",
+    "mcp_protocol_matrix",
     "resolve_mcp_route",
+    "supported_protocol_versions_for",
     "to_remote_mcp",
     "trust_fingerprint",
 ]
