@@ -92,6 +92,24 @@ def _validate_output(
                 cause=exc,
             ) from exc
         return data
+    if dataclasses.is_dataclass(output_type):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise OutputValidationError(
+                f"Final output is not valid JSON for {output_type.__name__}",
+                raw_text=text,
+                cause=exc,
+            ) from exc
+        try:
+            return output_type(**data)
+        except TypeError as exc:
+            raise OutputValidationError(
+                f"Final output cannot be coerced to {output_type.__name__}: {exc}",
+                raw_text=text,
+                cause=exc,
+            ) from exc
+
     pydantic_base: type[Any] | None
     try:
         from pydantic import BaseModel as _PydanticBaseModel
@@ -110,24 +128,6 @@ def _validate_output(
         except Exception as exc:
             raise OutputValidationError(
                 f"Final output failed validation against {output_type.__name__}: {exc}",
-                raw_text=text,
-                cause=exc,
-            ) from exc
-
-    if dataclasses.is_dataclass(output_type):
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise OutputValidationError(
-                f"Final output is not valid JSON for {output_type.__name__}",
-                raw_text=text,
-                cause=exc,
-            ) from exc
-        try:
-            return output_type(**data)
-        except TypeError as exc:
-            raise OutputValidationError(
-                f"Final output cannot be coerced to {output_type.__name__}: {exc}",
                 raw_text=text,
                 cause=exc,
             ) from exc
