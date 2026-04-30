@@ -42,6 +42,10 @@ class EventStore(Protocol):
 
     async def append(self, event: AgentEvent) -> None: ...
 
+    async def append_many(self, events: Iterable[AgentEvent]) -> None:
+        """Append a burst of events with one backend write where supported."""
+        ...
+
     async def list_events(
         self,
         run_id: str,
@@ -120,6 +124,10 @@ class InMemoryEventStore:
             return
         bucket = self._events_by_run.setdefault(event.run_id, [])
         bucket.append(event)
+
+    async def append_many(self, events: Iterable[AgentEvent]) -> None:
+        for event in events:
+            await self.append(event)
 
     async def list_events(
         self,
@@ -304,11 +312,18 @@ class JSONLEventStore:
         return self._path
 
     async def append(self, event: AgentEvent) -> None:
-        if event.run_id is None:
+        await self.append_many([event])
+
+    async def append_many(self, events: Iterable[AgentEvent]) -> None:
+        lines = [
+            json.dumps(event_to_dict(event, keep_raw=self._keep_raw))
+            for event in events
+            if event.run_id is not None
+        ]
+        if not lines:
             return
-        line = json.dumps(event_to_dict(event, keep_raw=self._keep_raw))
         async with self._lock:
-            await asyncio.to_thread(self._append_line, line)
+            await asyncio.to_thread(self._append_lines, lines)
 
     async def list_events(
         self,
@@ -335,10 +350,11 @@ class JSONLEventStore:
                 break
         return events
 
-    def _append_line(self, line: str) -> None:
+    def _append_lines(self, lines: list[str]) -> None:
         with self._path.open("a", encoding="utf-8") as fh:
-            fh.write(line)
-            fh.write("\n")
+            for line in lines:
+                fh.write(line)
+                fh.write("\n")
 
     def _read_lines(self) -> list[dict[str, Any]]:
         if not self._path.exists():

@@ -94,6 +94,27 @@ async def test_jsonl_event_store_round_trip(tmp_path: Path) -> None:
     assert [e.data["delta"] for e in limited] == ["a"]
 
 
+async def test_jsonl_event_store_append_many_batches_events(tmp_path: Path) -> None:
+    store = JSONLEventStore(tmp_path / "events.jsonl")
+    events = [
+        AgentEvent(
+            type=EventTypes.MODEL_TEXT_DELTA,
+            run_id="run_batch",
+            sequence=index,
+            data={"delta": str(index)},
+        )
+        for index in range(5)
+    ]
+    events.append(AgentEvent(type=EventTypes.MODEL_TEXT_DELTA, data={"delta": "skip"}))
+
+    await store.append_many(events)
+
+    lines = (tmp_path / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 5
+    loaded = await store.list_events("run_batch")
+    assert [event.data["delta"] for event in loaded] == ["0", "1", "2", "3", "4"]
+
+
 async def test_jsonl_event_store_persists_across_instances(tmp_path: Path) -> None:
     path = tmp_path / "events.jsonl"
     first = JSONLEventStore(path)

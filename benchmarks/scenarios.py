@@ -828,8 +828,7 @@ async def _record_runtime_result_metrics(
 
 
 async def _append_events(store: InMemoryEventStore | JSONLEventStore, events: list[AgentEvent]) -> None:
-    for event in events:
-        await store.append(event)
+    await store.append_many(events)
 
 
 def _trusted_mcp_spec() -> MCPServerSpec:
