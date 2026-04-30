@@ -29,6 +29,7 @@ from agent_runtime.core.results import AgentResult, OutputSpec, OutputStrategy, 
 from agent_runtime.core.state import ProviderState
 from agent_runtime.core.stores import (
     EventStore,
+    EventStoreBatcher,
     InMemoryEventStore,
     InMemoryRunStore,
     InMemorySessionStore,
@@ -1172,6 +1173,12 @@ class AgentRuntime:
             ),
         )
         self._active_loops[run_id] = loop
+        event_recorder = EventStoreBatcher(self.event_store)
+
+        async def record_stream_event(event: AgentEvent) -> None:
+            await event_recorder.append(event)
+            await self.observability.emit_event(event)
+
         try:
             sequence = 0
             for event in _prompt_events(run_plan, prompt_bundle):
@@ -1182,7 +1189,7 @@ class AgentRuntime:
                     preserve_sequence=False,
                 )
                 sequence += 1
-                await self._record_event(stamped)
+                await record_stream_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
             for event in routing_events:
@@ -1193,7 +1200,7 @@ class AgentRuntime:
                     preserve_sequence=False,
                 )
                 sequence += 1
-                await self._record_event(stamped)
+                await record_stream_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
             for event in tool_choice_events:
@@ -1204,7 +1211,7 @@ class AgentRuntime:
                     preserve_sequence=False,
                 )
                 sequence += 1
-                await self._record_event(stamped)
+                await record_stream_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
             if opened_workspace is not None:
@@ -1217,7 +1224,7 @@ class AgentRuntime:
                         preserve_sequence=False,
                     )
                     sequence += 1
-                    await self._record_event(stamped)
+                    await record_stream_event(stamped)
                     routing_history_events.append(stamped)
                     yield stamped
 
@@ -1234,7 +1241,7 @@ class AgentRuntime:
                     preserve_sequence=False,
                 )
                 sequence += 1
-                await self._record_event(stamped)
+                await record_stream_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
             if opened_workspace is not None and not workspace_preserve:
@@ -1249,10 +1256,11 @@ class AgentRuntime:
                             preserve_sequence=False,
                         )
                         sequence += 1
-                        await self._record_event(stamped)
+                        await record_stream_event(stamped)
                         routing_history_events.append(stamped)
                         yield stamped
         finally:
+            await event_recorder.flush()
             self._active_loops.pop(run_id, None)
             for connector in active_mcp_connectors:
                 await connector.stop()

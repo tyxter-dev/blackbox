@@ -127,7 +127,10 @@ class InMemoryEventStore:
 
     async def append_many(self, events: Iterable[AgentEvent]) -> None:
         for event in events:
-            await self.append(event)
+            if event.run_id is None:
+                continue
+            bucket = self._events_by_run.setdefault(event.run_id, [])
+            bucket.append(event)
 
     async def list_events(
         self,
@@ -149,6 +152,31 @@ class InMemoryEventStore:
 
     def clear(self) -> None:
         self._events_by_run.clear()
+
+
+@dataclass(slots=True)
+class EventStoreBatcher:
+    """Small async buffer that writes event bursts through ``append_many``."""
+
+    store: EventStore
+    max_batch_size: int = 32
+    _pending: list[AgentEvent] = field(default_factory=list)
+
+    async def append(self, event: AgentEvent) -> None:
+        self._pending.append(event)
+        if len(self._pending) >= self.max_batch_size:
+            await self.flush()
+
+    async def flush(self) -> None:
+        if not self._pending:
+            return
+        pending = self._pending
+        self._pending = []
+        try:
+            await self.store.append_many(pending)
+        except Exception:
+            self._pending = [*pending, *self._pending]
+            raise
 
 
 @dataclass

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from agent_runtime import AgentResult, AgentRuntime, EventTypes
 from agent_runtime.core.events import AgentEvent
-from agent_runtime.core.stores import EventStore, InMemoryEventStore, InMemoryRunStore
+from agent_runtime.core.stores import (
+    EventStore,
+    EventStoreBatcher,
+    InMemoryEventStore,
+    InMemoryRunStore,
+)
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
 
@@ -20,6 +25,59 @@ async def test_in_memory_event_store_round_trip() -> None:
 
     after = await store.list_events("run_1", after_sequence=0)
     assert [e.data["delta"] for e in after] == ["b"]
+
+
+async def test_in_memory_event_store_append_many_batches_without_append_calls() -> None:
+    class NoPerEventAppendStore(InMemoryEventStore):
+        async def append(self, event: AgentEvent) -> None:
+            raise AssertionError("append_many should not delegate per event")
+
+    store = NoPerEventAppendStore()
+    await store.append_many(
+        [
+            AgentEvent(type=EventTypes.MODEL_TEXT_DELTA, run_id="run_1", sequence=0),
+            AgentEvent(type=EventTypes.MODEL_TEXT_DELTA, run_id="run_1", sequence=1),
+            AgentEvent(type=EventTypes.MODEL_TEXT_DELTA, sequence=2),
+        ]
+    )
+
+    stored = await store.list_events("run_1")
+    assert [event.sequence for event in stored] == [0, 1]
+
+
+async def test_event_store_batcher_flushes_on_batch_size_and_close() -> None:
+    class CountingStore:
+        def __init__(self) -> None:
+            self.batches: list[list[AgentEvent]] = []
+
+        async def append(self, event: AgentEvent) -> None:
+            self.batches.append([event])
+
+        async def append_many(self, events: list[AgentEvent]) -> None:
+            self.batches.append(list(events))
+
+        async def list_events(
+            self,
+            run_id: str,
+            *,
+            after_sequence: int | None = None,
+            limit: int | None = None,
+        ) -> list[AgentEvent]:
+            return []
+
+    store = CountingStore()
+    batcher = EventStoreBatcher(store, max_batch_size=2)
+
+    await batcher.append(AgentEvent(type=EventTypes.MODEL_TEXT_DELTA, run_id="run_1"))
+    assert store.batches == []
+
+    await batcher.append(AgentEvent(type=EventTypes.MODEL_TEXT_DELTA, run_id="run_1"))
+    assert [len(batch) for batch in store.batches] == [2]
+
+    await batcher.append(AgentEvent(type=EventTypes.MODEL_TEXT_DELTA, run_id="run_1"))
+    await batcher.flush()
+
+    assert [len(batch) for batch in store.batches] == [2, 1]
 
 
 async def test_runtime_appends_events_to_store_during_run() -> None:

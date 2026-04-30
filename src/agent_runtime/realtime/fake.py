@@ -8,6 +8,7 @@ from uuid import uuid4
 from agent_runtime.core.content import AudioPart, ImagePart
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.sessions import InvocationRef
+from agent_runtime.core.streams import bounded_queue
 from agent_runtime.realtime.capabilities import (
     RealtimeCapabilities,
     RealtimeCapabilityProfile,
@@ -21,10 +22,14 @@ from agent_runtime.realtime.provider import (
 )
 
 
+def _event_queue() -> asyncio.Queue[AgentEvent | None]:
+    return bounded_queue()
+
+
 @dataclass(slots=True)
 class _FakeSession:
     ref: RealtimeSessionRef
-    queue: asyncio.Queue[AgentEvent | None] = field(default_factory=asyncio.Queue)
+    queue: asyncio.Queue[AgentEvent | None] = field(default_factory=_event_queue)
     closed: bool = False
     response_count: int = 0
     audio_chunks: int = 0

@@ -24,7 +24,12 @@ from agent_runtime.core.capabilities import AgentCapabilities
 from agent_runtime.core.errors import ProviderNotConfiguredError, UnsupportedFeatureError
 from agent_runtime.core.events import AgentEvent, EventTypes
 from agent_runtime.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
+from agent_runtime.core.streams import bounded_queue
 from agent_runtime.providers.base import AgentSpec, TaskSpec
+
+
+def _sdk_event_queue() -> asyncio.Queue[dict[str, Any] | None]:
+    return bounded_queue()
 
 
 @runtime_checkable
@@ -467,7 +472,7 @@ class _SDKSession:
     id: str
     client: Any
     task: TaskSpec
-    queue: asyncio.Queue[dict[str, Any] | None] = field(default_factory=asyncio.Queue)
+    queue: asyncio.Queue[dict[str, Any] | None] = field(default_factory=_sdk_event_queue)
     events: list[dict[str, Any]] = field(default_factory=list)
     artifacts: list[dict[str, Any]] = field(default_factory=list)
     approvals: dict[str, asyncio.Future[ApprovalDecision]] = field(default_factory=dict)
