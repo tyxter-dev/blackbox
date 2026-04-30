@@ -8,9 +8,11 @@ from agent_runtime.mcp import (
     DefaultMCPTrustEvaluator,
     MCPApprovalMode,
     MCPConnector,
+    MCPRouteMode,
     MCPServerSpec,
     MCPServerTrustPolicy,
     MCPTrustLevel,
+    MCPTrustPolicyPresets,
 )
 
 
@@ -59,6 +61,33 @@ def test_unknown_server_defaults_to_untrusted() -> None:
     assert decision.allowed is True
     assert decision.trust_level == MCPTrustLevel.UNTRUSTED
     assert decision.approval_required is True
+
+
+def test_trust_policy_presets_define_production_postures() -> None:
+    local = MCPTrustPolicyPresets.local_only(
+        "filesystem",
+        allowed_tools=frozenset({"read_file"}),
+    )
+    enterprise = MCPTrustPolicyPresets.enterprise_remote(
+        "github",
+        allowed_domains=frozenset({"github.com"}),
+        allowed_scopes=frozenset({"issues:read"}),
+    )
+    provider_native = MCPTrustPolicyPresets.provider_native_allowed(
+        "github",
+        allowed_domains=frozenset({"github.com"}),
+    )
+
+    assert local.route_mode == MCPRouteMode.LOCAL_ONLY
+    assert local.allowed_tools == frozenset({"read_file"})
+    assert local.approval_mode == MCPApprovalMode.HIGH_RISK_TOOL
+    assert local.require_sandbox is True
+    assert enterprise.trust_level == MCPTrustLevel.TRUSTED
+    assert enterprise.allowed_domains == frozenset({"github.com"})
+    assert enterprise.allowed_scopes == frozenset({"issues:read"})
+    assert enterprise.route_mode == MCPRouteMode.LOCAL_ONLY
+    assert provider_native.route_mode == MCPRouteMode.PROVIDER_NATIVE_ALLOWED
+    assert provider_native.require_sandbox is False
 
 
 async def test_blocked_server_cannot_start() -> None:

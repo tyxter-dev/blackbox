@@ -159,6 +159,78 @@ class MCPTrustEvaluator(Protocol):
     ) -> MCPTrustDecision: ...
 
 
+class MCPTrustPolicyPresets:
+    """Factory methods for common production MCP trust postures."""
+
+    @staticmethod
+    def local_only(
+        server: str,
+        *,
+        trust_level: MCPTrustLevel = MCPTrustLevel.REVIEWED,
+        allowed_tools: frozenset[str] | None = None,
+        denied_tools: frozenset[str] = frozenset(),
+        allowed_scopes: frozenset[str] = frozenset(),
+        max_output_bytes: int | None = 64_000,
+    ) -> MCPServerTrustPolicy:
+        return MCPServerTrustPolicy(
+            server=server,
+            trust_level=trust_level,
+            route_mode=MCPRouteMode.LOCAL_ONLY,
+            allowed_tools=allowed_tools,
+            denied_tools=denied_tools,
+            allowed_scopes=allowed_scopes,
+            approval_mode=MCPApprovalMode.HIGH_RISK_TOOL,
+            require_sandbox=True,
+            max_output_bytes=max_output_bytes,
+            redact_secrets=True,
+        )
+
+    @staticmethod
+    def enterprise_remote(
+        server: str,
+        *,
+        allowed_domains: frozenset[str],
+        allowed_scopes: frozenset[str] = frozenset(),
+        allowed_tools: frozenset[str] | None = None,
+        max_output_bytes: int | None = 128_000,
+    ) -> MCPServerTrustPolicy:
+        return MCPServerTrustPolicy(
+            server=server,
+            trust_level=MCPTrustLevel.TRUSTED,
+            route_mode=MCPRouteMode.LOCAL_ONLY,
+            allowed_tools=allowed_tools,
+            allowed_scopes=allowed_scopes,
+            allowed_domains=allowed_domains,
+            approval_mode=MCPApprovalMode.EXTERNAL_SIDE_EFFECT,
+            require_sandbox=True,
+            max_output_bytes=max_output_bytes,
+            redact_secrets=True,
+        )
+
+    @staticmethod
+    def provider_native_allowed(
+        server: str,
+        *,
+        trust_level: MCPTrustLevel = MCPTrustLevel.TRUSTED,
+        allowed_domains: frozenset[str] = frozenset(),
+        allowed_scopes: frozenset[str] = frozenset(),
+        allowed_tools: frozenset[str] | None = None,
+        max_output_bytes: int | None = 64_000,
+    ) -> MCPServerTrustPolicy:
+        return MCPServerTrustPolicy(
+            server=server,
+            trust_level=trust_level,
+            route_mode=MCPRouteMode.PROVIDER_NATIVE_ALLOWED,
+            allowed_tools=allowed_tools,
+            allowed_scopes=allowed_scopes,
+            allowed_domains=allowed_domains,
+            approval_mode=MCPApprovalMode.POLICY,
+            require_sandbox=False,
+            max_output_bytes=max_output_bytes,
+            redact_secrets=True,
+        )
+
+
 class DefaultMCPTrustEvaluator:
     """Conservative local trust evaluator for MCP server and tool exposure."""
 

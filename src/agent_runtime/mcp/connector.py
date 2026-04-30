@@ -396,18 +396,13 @@ class MCPConnector:
             )
         if self.policy is None:
             return
+        policy_metadata = self._policy_metadata(definition)
         decision: PolicyDecision = await self.policy.check(
             PolicyRequest(
                 checkpoint="before_mcp_call",
                 action=definition.ref,
                 arguments=arguments,
-                metadata={
-                    "server": definition.server,
-                    "tool": definition.name,
-                    "transport": spec.transport,
-                    "read_only": definition.metadata.get("read_only"),
-                    "destructive": definition.metadata.get("destructive"),
-                },
+                metadata=policy_metadata,
             )
         )
         if decision.verdict == "allow":
@@ -554,6 +549,9 @@ class MCPConnector:
                         "approval_required": tool_decision.approval_required,
                         "reasons": list(tool_decision.reasons),
                         "risks": list(tool_decision.metadata.get("risks") or []),
+                        "required_scopes": list(
+                            tool_decision.metadata.get("required_scopes") or []
+                        ),
                         "max_output_bytes": (
                             tool_policy.max_output_bytes
                             if tool_policy is not None
@@ -741,6 +739,7 @@ class MCPConnector:
         definition: MCPToolDefinition,
         reason: str | None,
     ) -> None:
+        policy_metadata = self._policy_metadata(definition)
         data = {
             "server": definition.server,
             "server_label": definition.server,
@@ -748,6 +747,11 @@ class MCPConnector:
             "name": definition.name,
             "ref": definition.ref,
             "reason": reason,
+            "scopes": policy_metadata["scopes"],
+            "risks": policy_metadata["risks"],
+            "trust_level": policy_metadata["trust_level"],
+            "route_mode": policy_metadata["route_mode"],
+            "fingerprint": policy_metadata["fingerprint"],
         }
         self._emit(EventTypes.MCP_APPROVAL_REQUIRED, data=data)
         self._emit(
@@ -757,9 +761,36 @@ class MCPConnector:
                 "action": definition.ref,
                 "arguments": {},
                 "reason": reason,
-                "metadata": {"server": definition.server, "tool": definition.name},
+                "metadata": policy_metadata,
             },
         )
+
+    def _policy_metadata(self, definition: MCPToolDefinition) -> dict[str, Any]:
+        spec = self._server_spec(definition.server)
+        trust = definition.metadata.get("trust")
+        trust_info = trust if isinstance(trust, dict) else {}
+        scopes = _string_list(
+            trust_info.get("required_scopes"),
+            definition.metadata.get("required_scopes"),
+            definition.metadata.get("scopes"),
+        )
+        risks = _string_list(trust_info.get("risks"), definition.metadata.get("risks"))
+        return {
+            "server": definition.server,
+            "server_label": definition.server,
+            "tool": definition.name,
+            "name": definition.name,
+            "ref": definition.ref,
+            "transport": spec.transport,
+            "scopes": scopes,
+            "risks": risks,
+            "read_only": definition.metadata.get("read_only"),
+            "destructive": definition.metadata.get("destructive"),
+            "trust_level": trust_info.get("trust_level"),
+            "route_mode": trust_info.get("route_mode"),
+            "approval_required": trust_info.get("approval_required"),
+            "fingerprint": trust_info.get("fingerprint") or trust_fingerprint(spec),
+        }
 
     def _tool_policy_for(
         self,
@@ -896,3 +927,16 @@ class MCPConnector:
             raw=result.raw,
             metadata=metadata,
         )
+
+
+def _string_list(*values: Any) -> list[str]:
+    items: set[str] = set()
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str):
+            items.add(value)
+            continue
+        if isinstance(value, (list, tuple, set, frozenset)):
+            items.update(str(item) for item in value)
+    return sorted(items)

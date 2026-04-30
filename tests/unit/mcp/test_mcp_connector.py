@@ -7,9 +7,11 @@ from agent_runtime.core.events import EventTypes
 from agent_runtime.core.policy import PolicyDecision, PolicyRequest
 from agent_runtime.mcp import (
     MCPApprovalMode,
+    MCPCapabilityRisk,
     MCPConnector,
     MCPServerSpec,
     MCPServerTrustPolicy,
+    MCPToolTrustPolicy,
     MCPTrustLevel,
 )
 from agent_runtime.mcp.cache import MCPToolCacheEntry
@@ -149,6 +151,39 @@ async def test_mcp_connector_gates_calls_with_policy() -> None:
     assert [event.type for event in connector.drain_events()] == [
         EventTypes.MCP_CALL_FAILED
     ]
+
+
+async def test_mcp_policy_request_includes_scope_risk_and_trust_metadata() -> None:
+    policy = _ScriptedPolicy(PolicyDecision.deny("blocked"))
+    spec = _trusted_ticket_spec(
+        tool_policies={
+            "lookup": MCPToolTrustPolicy(
+                ref="lookup",
+                trust_level=MCPTrustLevel.TRUSTED,
+                risks=frozenset({MCPCapabilityRisk.EXTERNAL_AUTH}),
+                required_scopes=frozenset({"tickets.read"}),
+                approval_mode=MCPApprovalMode.NEVER,
+            )
+        }
+    )
+    connector = MCPConnector(
+        [spec],
+        policy=policy,
+        transports={"tickets": _FakeTransport()},
+    )
+
+    with pytest.raises(MCPError):
+        await connector.call_tool("tickets", "lookup", {"ticket_id": "T-1"})
+
+    metadata = policy.seen[0].metadata
+    assert metadata["server"] == "tickets"
+    assert metadata["tool"] == "lookup"
+    assert metadata["ref"] == "mcp:tickets.lookup"
+    assert metadata["scopes"] == ["tickets.read"]
+    assert metadata["risks"] == ["external_auth"]
+    assert metadata["trust_level"] == "trusted"
+    assert metadata["route_mode"] == "local_only"
+    assert isinstance(metadata["fingerprint"], str)
 
 
 async def test_mcp_connector_surfaces_required_approval() -> None:
