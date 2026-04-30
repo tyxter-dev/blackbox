@@ -31,12 +31,14 @@ def mcp_tool_cache_key(
     *,
     session_id: str | None = None,
     protocol_version: str | None = None,
+    auth_cache_identity: str | None = None,
 ) -> str:
     """Return a stable discovery-cache key for a server/session/protocol identity.
 
-    Secret values are omitted while auth presence, tool filters, and endpoints
-    still contribute to cache identity.
+    Secret values are omitted while one-way auth fingerprints, tool filters,
+    and endpoints still contribute to cache identity.
     """
+    authorization_header = _authorization_header(spec.headers)
     identity: dict[str, Any] = {
         "server": spec.name,
         "transport": spec.transport,
@@ -46,7 +48,20 @@ def mcp_tool_cache_key(
         "denied_tools": sorted(spec.denied_tools or ()),
         "auth": {
             "authorization": spec.authorization is not None,
+            "authorization_hash": (
+                _stable_hash(spec.authorization) if spec.authorization is not None else None
+            ),
             "auth_provider_name": spec.auth_provider_name,
+            "auth_identity_hash": (
+                _stable_hash(auth_cache_identity)
+                if auth_cache_identity is not None
+                else None
+            ),
+            "authorization_header_hash": (
+                _stable_hash(authorization_header)
+                if authorization_header is not None
+                else None
+            ),
             "headers": sorted(spec.headers),
         },
         "trust_fingerprint": trust_fingerprint(spec),
@@ -66,3 +81,10 @@ def mcp_tool_cache_key(
 def _stable_hash(value: Any) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _authorization_header(headers: dict[str, str]) -> str | None:
+    for key, value in headers.items():
+        if key.lower() == "authorization":
+            return value
+    return None

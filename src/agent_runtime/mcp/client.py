@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,6 +31,7 @@ class MCPClient:
     transport: MCPTransportClient
     initialized: bool = False
     session_info: MCPSessionInfo | None = None
+    notification_handler: Callable[[str, dict[str, Any] | None], None] | None = None
 
     async def start(self) -> MCPSessionInfo:
         """Start the transport, negotiate protocol, and cache session metadata.
@@ -37,6 +39,9 @@ class MCPClient:
         Initialization failures stop the transport before raising.
         """
         validate_requested_protocol_versions(self.spec)
+        set_notification_handler = getattr(self.transport, "set_notification_handler", None)
+        if callable(set_notification_handler):
+            set_notification_handler(self._handle_notification)
         await self.transport.start()
         if self.initialized and self.session_info is not None:
             return self.session_info
@@ -107,6 +112,14 @@ class MCPClient:
 
     def _client_capabilities(self) -> dict[str, Any]:
         return {"roots": {"listChanged": False}, "sampling": {}}
+
+    def _handle_notification(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+    ) -> None:
+        if self.notification_handler is not None:
+            self.notification_handler(method, params)
 
     async def _request(
         self,

@@ -380,6 +380,7 @@ def trust_fingerprint(server_spec: object) -> str:
         "auth": {
             "authorization": getattr(server_spec, "authorization", None) is not None,
             "auth_provider_name": getattr(server_spec, "auth_provider_name", None),
+            "auth_identity": getattr(server_spec, "auth_identity", None) is not None,
             "headers": sorted(getattr(server_spec, "headers", {}) or {}),
             "env_keys": sorted(getattr(server_spec, "env", {}) or {}),
         },

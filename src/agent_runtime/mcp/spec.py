@@ -46,6 +46,7 @@ class MCPServerSpec:
     headers: dict[str, str] = field(default_factory=dict)
     authorization: str | None = None
     auth_provider_name: str | None = None
+    auth_identity: str | None = None
     protocol_version: str = "2025-11-25"
     protocol_version_fallbacks: tuple[str, ...] = ("2025-06-18", "2025-03-26")
     timeout_seconds: float = 30.0
@@ -142,6 +143,7 @@ class MCPServerSpec:
             "headers": redact_mapping(self.headers),
             "authorization": "<redacted>" if self.authorization else None,
             "auth_provider_name": self.auth_provider_name,
+            "auth_identity": "<redacted>" if self.auth_identity else None,
             "protocol_version": self.protocol_version,
             "protocol_version_fallbacks": self.protocol_version_fallbacks,
             "timeout_seconds": self.timeout_seconds,

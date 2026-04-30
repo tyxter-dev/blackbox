@@ -56,6 +56,7 @@ def test_secret_fields_are_redacted_from_repr_and_serialization() -> None:
         headers={"Authorization": "Bearer secret", "X-Plain": "ok"},
         env={"API_TOKEN": "secret"},
         authorization="Bearer secret",
+        auth_identity="tenant-secret",
     )
 
     rendered = repr(spec)
@@ -66,3 +67,4 @@ def test_secret_fields_are_redacted_from_repr_and_serialization() -> None:
     assert redacted["headers"]["Authorization"] == "<redacted>"
     assert redacted["env"]["API_TOKEN"] == "<redacted>"
     assert redacted["authorization"] == "<redacted>"
+    assert redacted["auth_identity"] == "<redacted>"

@@ -5,7 +5,7 @@ import json
 import re
 import urllib.error
 import urllib.request
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
@@ -107,6 +107,7 @@ class StdioMCPTransport(JsonRPCTransport):
     _stderr_task: asyncio.Task[None] | None = None
     _pending: dict[int, asyncio.Future[Any]] = field(default_factory=dict)
     _write_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _notification_handler: Callable[[str, dict[str, Any] | None], None] | None = None
 
     @property
     def session_id(self) -> str | None:
@@ -133,6 +134,12 @@ class StdioMCPTransport(JsonRPCTransport):
         )
         self._stdout_task = asyncio.create_task(self._read_stdout())
         self._stderr_task = asyncio.create_task(self._drain_stderr())
+
+    def set_notification_handler(
+        self,
+        handler: Callable[[str, dict[str, Any] | None], None] | None,
+    ) -> None:
+        self._notification_handler = handler
 
     async def stop(self) -> None:
         """Shut down the stdio server process and fail pending requests.
@@ -238,6 +245,14 @@ class StdioMCPTransport(JsonRPCTransport):
                 future = self._pending.pop(request_id, None)
                 if future is not None and not future.done():
                     future.set_result(message)
+                continue
+            method = message.get("method")
+            params = message.get("params")
+            if isinstance(method, str) and self._notification_handler is not None:
+                self._notification_handler(
+                    method,
+                    dict(params) if isinstance(params, dict) else None,
+                )
 
     async def _drain_stderr(self) -> None:
         if self.process is None or self.process.stderr is None:

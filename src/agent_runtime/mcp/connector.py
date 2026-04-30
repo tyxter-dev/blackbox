@@ -175,8 +175,7 @@ class MCPConnector:
 
     async def refresh_tools(self, server: str) -> list[dict[str, Any]]:
         self._invalidate_cache(server, reason="refresh")
-        for ref in [ref for ref, definition in self._tools.items() if definition.server == server and definition.function is None]:
-            self._tools.pop(ref, None)
+        self._clear_discovered_tools(server)
         await self._discover_tools(server)
         return await self.list_tools(server)
 
@@ -451,6 +450,7 @@ class MCPConnector:
             protocol_version=(
                 session_info.protocol_version if session_info is not None else None
             ),
+            auth_cache_identity=self._auth_cache_identity(spec),
         )
         cached = self._tool_cache.get(cache_key)
         if cached is not None and not cached.expired():
@@ -460,6 +460,7 @@ class MCPConnector:
         if cached is not None:
             self._emit_cache(EventTypes.MCP_TOOLS_CACHE_INVALIDATED, spec, cached, reason="ttl")
             self._tool_cache.pop(cache_key, None)
+            self._clear_discovered_tools(server)
         self._emit(
             EventTypes.MCP_TOOLS_CACHE_MISS,
             data={"server": server, "server_label": server, "transport": spec.transport},
@@ -584,6 +585,7 @@ class MCPConnector:
             protocol_version=(
                 session_info.protocol_version if session_info is not None else None
             ),
+            auth_cache_identity=self._auth_cache_identity(spec),
         )
         for key in {cache_key, *extra_cache_keys}:
             self._tool_cache[key] = MCPToolCacheEntry(
@@ -614,9 +616,36 @@ class MCPConnector:
             transport = transport_for_spec(spec, auth_provider=self.auth_provider)
         else:
             self._validate_and_evaluate_server(spec)
-        client = MCPClient(spec=spec, transport=transport)
+
+        def handle_notification(
+            method: str,
+            params: dict[str, Any] | None,
+            server_name: str = server,
+        ) -> None:
+            self._handle_notification(server_name, method, params)
+
+        client = MCPClient(
+            spec=spec,
+            transport=transport,
+            notification_handler=handle_notification,
+        )
         self._clients[server] = client
         return client
+
+    def _handle_notification(
+        self,
+        server: str,
+        method: str,
+        params: dict[str, Any] | None,
+    ) -> None:
+        if method not in {
+            "notifications/tools/list_changed",
+            "notifications/tools/listChanged",
+            "tools/listChanged",
+        }:
+            return
+        self._invalidate_cache(server, reason="list_changed")
+        self._clear_discovered_tools(server)
 
     def _validate_and_evaluate_server(self, spec: MCPServerSpec) -> None:
         if spec.name in self._server_decisions:
@@ -733,6 +762,32 @@ class MCPConnector:
         for key, entry in removed:
             self._tool_cache.pop(key, None)
             self._emit_cache(EventTypes.MCP_TOOLS_CACHE_INVALIDATED, spec, entry, reason=reason)
+
+    def _clear_discovered_tools(self, server: str) -> None:
+        for ref in [
+            ref
+            for ref, definition in self._tools.items()
+            if definition.server == server and definition.function is None
+        ]:
+            self._tools.pop(ref, None)
+
+    def _auth_cache_identity(self, spec: MCPServerSpec) -> str | None:
+        parts: list[str] = []
+        if spec.auth_identity:
+            parts.append(f"identity:{spec.auth_identity}")
+        if spec.auth_provider_name:
+            parts.append(f"provider:{spec.auth_provider_name}")
+        if self.auth_provider is not None:
+            cache_identity = getattr(self.auth_provider, "cache_identity_for", None)
+            if callable(cache_identity):
+                value = cache_identity(spec)
+                if isinstance(value, str) and value:
+                    parts.append(f"provider_identity:{value}")
+                else:
+                    parts.append(f"provider_instance:{id(self.auth_provider)}")
+            else:
+                parts.append(f"provider_instance:{id(self.auth_provider)}")
+        return "|".join(parts) if parts else None
 
     def _emit_approval_required(
         self,

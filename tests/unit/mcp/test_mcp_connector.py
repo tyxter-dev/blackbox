@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 import pytest
 
 from agent_runtime.core.errors import ApprovalError, MCPError
@@ -57,6 +60,43 @@ class _FakeTransport:
             assert params is not None
             return {"content": [{"type": "text", "text": params["arguments"]}]}
         raise AssertionError(method)
+
+
+class _ListChangedTransport(_FakeTransport):
+    def __init__(self) -> None:
+        super().__init__()
+        self.tool_names = ["lookup"]
+        self.notification_handler: Callable[[str, dict[str, Any] | None], None] | None = None
+
+    def set_notification_handler(
+        self,
+        handler: Callable[[str, dict[str, Any] | None], None],
+    ) -> None:
+        self.notification_handler = handler
+
+    async def request(
+        self,
+        method: str,
+        params: dict[str, object] | None = None,
+    ) -> object:
+        if method == "tools/list":
+            self.requests.append((method, params))
+            return {
+                "tools": [
+                    {
+                        "name": name,
+                        "description": f"{name} tool.",
+                        "inputSchema": {"type": "object"},
+                    }
+                    for name in self.tool_names
+                ]
+            }
+        return await super().request(method, params)
+
+    def emit_list_changed(self) -> None:
+        if self.notification_handler is None:
+            raise AssertionError("notification handler was not registered")
+        self.notification_handler("notifications/tools/list_changed", None)
 
 
 def test_mcp_server_spec_represents_prd_transport_names() -> None:
@@ -266,6 +306,70 @@ async def test_mcp_connector_can_share_discovery_cache_between_instances() -> No
     assert EventTypes.MCP_TOOLS_CACHE_HIT in [
         event.type for event in second.drain_events()
     ]
+
+
+async def test_mcp_discovery_cache_is_isolated_by_auth_identity() -> None:
+    shared_cache: dict[str, MCPToolCacheEntry] = {}
+    first_transport = _FakeTransport()
+    first = MCPConnector(
+        [_trusted_ticket_spec(auth_identity="tenant-a")],
+        transports={"tickets": first_transport},
+        _tool_cache=shared_cache,
+    )
+    await first.list_tools("tickets")
+
+    second_transport = _FakeTransport()
+    second = MCPConnector(
+        [_trusted_ticket_spec(auth_identity="tenant-b")],
+        transports={"tickets": second_transport},
+        _tool_cache=shared_cache,
+    )
+    await second.list_tools("tickets")
+
+    assert [request[0] for request in second_transport.requests] == [
+        "initialize",
+        "tools/list",
+    ]
+    assert EventTypes.MCP_TOOLS_CACHE_HIT not in [
+        event.type for event in second.drain_events()
+    ]
+
+
+async def test_mcp_list_changed_notification_invalidates_discovery_cache() -> None:
+    transport = _ListChangedTransport()
+    connector = MCPConnector(
+        [
+            MCPServerSpec(
+                name="tickets",
+                transport="stdio",
+                command="fake",
+                trust_policy=MCPServerTrustPolicy(
+                    server="tickets",
+                    trust_level=MCPTrustLevel.TRUSTED,
+                    allowed_tools=frozenset({"lookup", "create"}),
+                    approval_mode=MCPApprovalMode.NEVER,
+                ),
+            )
+        ],
+        transports={"tickets": transport},
+    )
+
+    first = await connector.list_tools("tickets")
+    second = await connector.list_tools("tickets")
+    transport.tool_names = ["create"]
+    transport.emit_list_changed()
+    refreshed = await connector.list_tools("tickets")
+
+    assert [tool["name"] for tool in first] == ["lookup"]
+    assert [tool["name"] for tool in second] == ["lookup"]
+    assert [tool["name"] for tool in refreshed] == ["create"]
+    assert [request[0] for request in transport.requests].count("tools/list") == 2
+    invalidated = [
+        event
+        for event in connector.drain_events()
+        if event.type == EventTypes.MCP_TOOLS_CACHE_INVALIDATED
+    ]
+    assert invalidated[-1].data["reason"] == "list_changed"
 
 
 async def test_mcp_connector_refreshes_cache_and_stops_transport() -> None:

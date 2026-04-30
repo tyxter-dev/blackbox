@@ -116,6 +116,15 @@ class OAuthBearerMCPAuthProvider:
         token = await self._fetch_token(spec, challenge=challenge, force_refresh=True)
         return {"Authorization": token.authorization_header()}
 
+    def cache_identity_for(self, spec: MCPServerSpec) -> str | None:
+        if spec.auth_identity:
+            return spec.auth_identity
+        identity_for = getattr(self.token_provider, "cache_identity_for", None)
+        if callable(identity_for):
+            value = identity_for(spec)
+            return value if isinstance(value, str) and value else None
+        return None
+
     async def _fetch_token(
         self,
         spec: MCPServerSpec,
