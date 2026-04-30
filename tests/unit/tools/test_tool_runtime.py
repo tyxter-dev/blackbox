@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 import agent_runtime.tools.registry as registry_module
+import agent_runtime.tools.runtime as runtime_module
 from agent_runtime.core.errors import ToolExecutionError
 from agent_runtime.tools import ToolRegistry, ToolResult, ToolRuntime
 
@@ -36,6 +37,34 @@ async def test_tool_runtime_injects_context_without_schema_visibility() -> None:
     provider_tools = registry.to_provider_tools()
     assert provider_tools[0]["parameters"] == definition.parameters
     assert "user_id" not in provider_tools[0]["parameters"]["properties"]
+
+
+async def test_tool_runtime_uses_registered_context_parameter_cache(
+    monkeypatch: Any,
+) -> None:
+    registry = ToolRegistry()
+    registry.register(
+        greet,
+        name="greet",
+        description="Greet a user.",
+        parameters={
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    )
+
+    def fail_signature_call(_value: Any) -> Any:
+        raise AssertionError("tool dispatch should not inspect signatures")
+
+    monkeypatch.setattr(runtime_module.inspect, "signature", fail_signature_call)
+
+    result = await ToolRuntime(registry, context={"user_id": "u_123"}).call(
+        "greet",
+        {"name": "Diego"},
+    )
+
+    assert result.payload == {"user_id": "u_123"}
 
 
 # --- error handling and result coercion -------------------------------------

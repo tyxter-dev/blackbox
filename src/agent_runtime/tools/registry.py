@@ -17,6 +17,7 @@ class ToolDefinition:
     name: str
     description: str
     function: ToolCallable
+    context_parameters: tuple[str, ...] = field(default_factory=tuple)
     parameters: dict[str, Any] = field(default_factory=lambda: {"type": "object", "properties": {}})
     category: str | None = None
     tags: list[str] = field(default_factory=list)
@@ -70,6 +71,7 @@ class ToolRegistry:
             name=tool_name,
             description=description or inspect.getdoc(function) or tool_name,
             function=function,
+            context_parameters=tuple(inspect.signature(function).parameters),
             parameters=parameters or {"type": "object", "properties": {}},
             category=category,
             tags=tags or [],

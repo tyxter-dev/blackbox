@@ -78,9 +78,8 @@ class ToolRuntime:
         return self._coerce_result(raw)
 
     def _inject_context(self, definition: ToolDefinition, arguments: dict[str, Any]) -> dict[str, Any]:
-        signature = inspect.signature(definition.function)
         kwargs = dict(arguments)
-        for name in signature.parameters:
+        for name in definition.context_parameters:
             if name not in kwargs and name in self.context:
                 kwargs[name] = self.context[name]
         return kwargs
