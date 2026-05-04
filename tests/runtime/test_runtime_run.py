@@ -236,6 +236,9 @@ async def test_run_dispatches_three_tools_in_one_turn() -> None:
 
     completed = [e for e in result.events if e.type == EventTypes.TOOL_CALL_COMPLETED]
     assert len(completed) == 3
+    assert completed[0].data["arguments"] == {"retrieval_source": "source_A"}
+    assert completed[1].data["arguments"] == {"key_identifier": "key_B"}
+    assert completed[2].data["arguments"] == {"vault_name": "vault_C"}
     assert "alpha-BRAVO-charlie123" in result.output
 
 

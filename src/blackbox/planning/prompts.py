@@ -130,6 +130,7 @@ class PromptSpec:
     mode: PromptMode = "base"
     channel: str | None = None
     cache_sections: bool = True
+    base_cacheable: bool = True
     parity: PromptParityMode = "warn"
     include_fragment_metadata: bool = True
     section_style: SectionStyle | None = None
@@ -332,7 +333,7 @@ class PromptComposer:
                     id="base.instructions",
                     content=plan.base_instructions,
                     placement="system",
-                    cacheable=True,
+                    cacheable=prompt_spec.base_cacheable,
                     source="caller",
                 )
             )

@@ -58,6 +58,31 @@ async def test_tool_aware_prompt_adds_enabled_tool_fragments_to_model_request() 
     assert any(event.type == EventTypes.PROMPT_BUNDLE_CREATED for event in result.events)
 
 
+async def test_prompt_spec_can_mark_base_instructions_uncacheable() -> None:
+    runtime, scripted = _runtime()
+    scripted.queue(text_only_turn("done"))
+
+    result = await runtime.run(
+        provider="scripted:test",
+        input="Hello.",
+        instructions="Current customer context: Ana.",
+        prompt=PromptSpec(mode="base", base_cacheable=False),
+    )
+
+    cache_sections = [
+        event.data
+        for event in result.events
+        if event.type == EventTypes.PROMPT_CACHE_SECTION_CREATED
+    ]
+    assert cache_sections == [
+        {
+            "section_id": "base.instructions",
+            "cacheable": False,
+            "content_length": len("Current customer context: Ana."),
+        }
+    ]
+
+
 async def test_prompt_parity_error_blocks_fragments_that_require_disabled_tools() -> None:
     runtime, scripted = _runtime()
     runtime.tools.register(lambda: ToolResult(content="task"), name="create_task")

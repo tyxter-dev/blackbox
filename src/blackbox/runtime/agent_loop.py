@@ -547,6 +547,7 @@ class AgentLoop:
                 completed_data: dict[str, Any] = {
                     "call_id": call.call_id,
                     "name": call.name,
+                    "arguments": dict(call.arguments),
                     "content": result.content,
                 }
                 if result.payload is not None:
