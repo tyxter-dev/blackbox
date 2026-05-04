@@ -39,6 +39,25 @@ async def test_tool_runtime_injects_context_without_schema_visibility() -> None:
     assert "user_id" not in provider_tools[0]["parameters"]["properties"]
 
 
+async def test_tool_runtime_overrides_model_supplied_hidden_context() -> None:
+    registry = ToolRegistry()
+    registry.register(
+        greet,
+        name="greet",
+        description="Greet a user.",
+        parameters={
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    )
+
+    runtime = ToolRuntime(registry, context={"user_id": "u_real"})
+    result = await runtime.call("greet", {"name": "Diego", "user_id": "u_hallucinated"})
+
+    assert result.payload == {"user_id": "u_real"}
+
+
 async def test_tool_runtime_uses_registered_context_parameter_cache(
     monkeypatch: Any,
 ) -> None:

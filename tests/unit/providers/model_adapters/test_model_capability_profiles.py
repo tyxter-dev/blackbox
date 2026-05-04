@@ -210,6 +210,8 @@ def test_provider_profiles_expose_new_adapter_mappings() -> None:
     assert gemini.controls["reasoning_effort"].status == "supported"
     assert xai.hosted_tools["web_search"].status == "supported"
     assert xai.output_strategies["provider_native"].status == "supported"
+    assert xai.controls["instructions"].status == "supported"
+    assert xai.controls["instructions"].native_name == "input.role=system"
     assert xai.summary.supports_structured_output is True
 
 

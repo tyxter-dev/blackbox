@@ -10,6 +10,7 @@ from blackbox import (
     PromptSpec,
 )
 from blackbox.core.errors import ConfigurationError
+from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
 from blackbox.tools import ToolResult
 from tests.fixtures.scripted_model import ScriptedModelProvider, text_only_turn
 
@@ -130,6 +131,29 @@ async def test_plan_run_builds_prompt_without_executing_model() -> None:
     assert plan.prompt is not None
     assert "Use query_customers" in plan.prompt.instructions
     assert plan.prompt.metadata["fragment_ids"] == ["crm.customer.lookup"]
+
+
+async def test_xai_prompt_fragments_are_selected_as_system_input_guidance() -> None:
+    runtime = AgentRuntime()
+    runtime.registry.register_model(XAIResponsesProvider(api_key="x"))
+    runtime.prompt_fragments.register(
+        PromptFragment(
+            id="crm.runtime.guidance",
+            text="Follow CRM behavior rules.",
+            source="test",
+        )
+    )
+
+    plan = await runtime.plan_run(
+        provider="xai:grok-test",
+        input="Help a customer.",
+        prompt=PromptSpec(mode="tool_aware"),
+    )
+
+    assert plan.prompt is not None
+    assert plan.prompt.metadata["fragment_ids"] == ["crm.runtime.guidance"]
+    assert plan.prompt.metadata["skipped_fragment_ids"] == []
+    assert "Follow CRM behavior rules." in plan.prompt.instructions
 
 
 async def test_section_style_xml_wraps_sections_in_tags() -> None:

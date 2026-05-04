@@ -82,8 +82,9 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
             },
             controls={
                 "instructions": CapabilityDetail(
-                    status="unsupported",
-                    reason="xAI Responses adapter strips instructions before request dispatch.",
+                    status="supported",
+                    native_name="input.role=system",
+                    reason="xAI Responses accepts system guidance as an input item.",
                 ),
                 "temperature": CapabilityDetail(status="supported", native_name="temperature"),
                 "top_p": CapabilityDetail(status="supported", native_name="top_p"),
@@ -117,7 +118,9 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
         for hosted_tool in request.hosted_tools:
             _validate_xai_hosted_tool(hosted_tool)
         kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
-        kwargs.pop("instructions", None)
+        instructions = kwargs.pop("instructions", None)
+        if isinstance(instructions, str) and instructions.strip():
+            kwargs["input"] = _prepend_system_input(kwargs["input"], instructions)
         if "tools" in kwargs:
             kwargs["tools"] = [_sanitize_xai_tool(tool) for tool in kwargs["tools"]]
         return kwargs
@@ -135,6 +138,13 @@ def _sanitize_xai_tool(tool: Any) -> Any:
     if not isinstance(tool, dict):
         return tool
     return _strip_xai_schema_strictness(tool)
+
+
+def _prepend_system_input(input_value: Any, instructions: str) -> list[Any]:
+    system_item = {"role": "system", "content": instructions}
+    if isinstance(input_value, list):
+        return [system_item, *input_value]
+    return [system_item, {"role": "user", "content": input_value}]
 
 
 def _strip_xai_schema_strictness(value: Any) -> Any:

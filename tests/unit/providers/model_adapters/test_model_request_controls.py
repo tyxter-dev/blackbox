@@ -146,7 +146,7 @@ def test_openai_rejects_cache_bypass() -> None:
         OpenAIResponsesProvider._build_request_kwargs(request)
 
 
-def test_xai_drops_unsupported_instructions_control() -> None:
+def test_xai_maps_instructions_control_to_system_input_item() -> None:
     request = TurnRequest(
         model="grok-test",
         input="hi",
@@ -156,7 +156,26 @@ def test_xai_drops_unsupported_instructions_control() -> None:
     kwargs = XAIResponsesProvider._build_request_kwargs(request)
 
     assert "instructions" not in kwargs
+    assert kwargs["input"] == [
+        {"role": "system", "content": "Be brief."},
+        {"role": "user", "content": "hi"},
+    ]
     assert kwargs["temperature"] == 0.2
+
+
+def test_xai_prepends_system_input_item_to_list_input() -> None:
+    request = TurnRequest(
+        model="grok-test",
+        input=[{"type": "function_call_output", "call_id": "call_1", "output": "done"}],
+        controls=ModelRequestControls(instructions="Use the CRM policy."),
+    )
+
+    kwargs = XAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["input"] == [
+        {"role": "system", "content": "Use the CRM policy."},
+        {"type": "function_call_output", "call_id": "call_1", "output": "done"},
+    ]
 
 
 def test_xai_sanitizes_openai_strict_tool_schema() -> None:

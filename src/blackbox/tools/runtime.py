@@ -79,8 +79,12 @@ class ToolRuntime:
 
     def _inject_context(self, definition: ToolDefinition, arguments: dict[str, Any]) -> dict[str, Any]:
         kwargs = dict(arguments)
+        schema_properties = definition.parameters.get("properties")
+        visible_parameters = set(schema_properties) if isinstance(schema_properties, dict) else set()
         for name in definition.context_parameters:
-            if name not in kwargs and name in self.context:
+            if name in kwargs and name not in visible_parameters and name in self.context:
+                kwargs[name] = self.context[name]
+            elif name not in kwargs and name in self.context:
                 kwargs[name] = self.context[name]
         return kwargs
 
