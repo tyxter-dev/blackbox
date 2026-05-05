@@ -852,6 +852,31 @@ Discovered MCP tools can also be bridged into a local `ToolRegistry`:
 await connector.register_runtime_tools(runtime.tools.registry)
 ```
 
+Blackbox can also author local stdio MCP servers for first-party adapters around
+internal code or external APIs:
+
+```python
+from pydantic import BaseModel, Field
+
+from blackbox.mcp import MCPServer
+
+
+class AddArgs(BaseModel):
+    left: int = Field(ge=0)
+    right: int = Field(ge=0)
+
+
+server = MCPServer("calc")
+
+
+@server.tool(description="Add two numbers.", input_model=AddArgs)
+def add(args: AddArgs) -> dict[str, int]:
+    return {"total": args.left + args.right}
+
+
+raise SystemExit(server.run_stdio())
+```
+
 `MCPToolset` routes a configured MCP server through the high-level runtime.
 `mode="local"` exposes discovered tools as namespaced local tools, while
 `mode="provider_native"` passes a remote server to providers that support

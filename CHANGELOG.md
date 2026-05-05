@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Slice 21 — MCP server authoring helpers
+
+Blackbox now includes a small first-party SDK for authoring local stdio MCP
+servers.
+
+- Adds `MCPServer`, `MCPServerTool`, `MCPServerResult`, and `MCPToolError` for
+  decorator-based MCP tool registration.
+- Supports Pydantic v2 input models for JSON-schema exposure and argument
+  validation without making Pydantic a hard runtime dependency.
+- Normalizes handler returns into MCP text/structured-content payloads and
+  converts business failures into `isError` tool results.
+- Covers JSON-RPC initialize/list/call handling and a real `MCPConnector`
+  stdio discovery/call path.
+
 ### Packaging — Blackbox rename and MIT license
 
 - Renamed the public distribution and import package from `agent-runtime-core`

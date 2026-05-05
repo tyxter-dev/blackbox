@@ -7,6 +7,7 @@ declarations.
 ## Belongs Here
 
 - MCP server specs and safety validation.
+- MCP server authoring helpers for first-party stdio adapters.
 - MCP auth providers and auth challenges.
 - MCP clients, connectors, tool cache, and transports.
 - Runtime MCP toolset routing.
@@ -46,3 +47,36 @@ the model adapters still own final provider API mapping.
   approval decisions using the same event stream as local tools.
 - MCP call failure events redact by default; output limits apply first from
   per-tool policy, then from server policy/spec defaults.
+
+## Server Authoring
+
+`server.py` provides a small first-party authoring layer for local stdio MCP
+servers. It is intentionally narrow: register tools, expose JSON schemas,
+validate optional Pydantic input models, normalize structured results, and serve
+the line-delimited stdio protocol used by blackbox transports.
+
+```python
+from pydantic import BaseModel, Field
+
+from blackbox.mcp import MCPServer
+
+
+class CreateCharge(BaseModel):
+    amount: int = Field(gt=0)
+    description: str
+
+
+server = MCPServer("payments")
+
+
+@server.tool(description="Create a payment charge.", input_model=CreateCharge)
+def create_charge(args: CreateCharge) -> dict[str, object]:
+    return {"amount": args.amount, "status": "pending"}
+
+
+raise SystemExit(server.run_stdio())
+```
+
+Tool handler failures that should reach the caller as MCP tool errors can raise
+`MCPToolError`. Unexpected handler exceptions are contained as `isError` tool
+results instead of crashing the server process.

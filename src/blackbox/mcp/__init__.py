@@ -17,6 +17,21 @@ from blackbox.mcp.compat import (
     supported_protocol_versions_for,
 )
 from blackbox.mcp.connector import MCPCallResult, MCPConnector, MCPToolDefinition
+from blackbox.mcp.server import (
+    MCPServer,
+    MCPServerResult,
+    MCPServerTool,
+    MCPToolError,
+    json_safe,
+    jsonrpc_error,
+    mcp_error_result,
+    mcp_json_result,
+    mcp_text_result,
+    normalize_mcp_result,
+    pydantic_model_schema,
+    validate_pydantic_model,
+    validation_errors,
+)
 from blackbox.mcp.spec import MCPServerSpec
 from blackbox.mcp.toolset import MCPToolset, resolve_mcp_route, to_remote_mcp
 from blackbox.mcp.transports import (
@@ -58,12 +73,16 @@ __all__ = [
     "MCPOAuthTokenProvider",
     "MCPProtocolVersionSupport",
     "MCPRouteMode",
+    "MCPServer",
+    "MCPServerResult",
     "MCPServerRiskProfile",
     "MCPServerSpec",
+    "MCPServerTool",
     "MCPServerTrustPolicy",
     "MCPSessionInfo",
     "MCPTaint",
     "MCPToolDefinition",
+    "MCPToolError",
     "MCPToolTrustPolicy",
     "MCPToolset",
     "MCPTransportClient",
@@ -76,9 +95,18 @@ __all__ = [
     "StdioMCPTransport",
     "StreamableHTTPMCPTransport",
     "is_mcp_protocol_version_supported",
+    "json_safe",
+    "jsonrpc_error",
+    "mcp_error_result",
+    "mcp_json_result",
     "mcp_protocol_matrix",
+    "mcp_text_result",
+    "normalize_mcp_result",
+    "pydantic_model_schema",
     "resolve_mcp_route",
     "supported_protocol_versions_for",
     "to_remote_mcp",
     "trust_fingerprint",
+    "validate_pydantic_model",
+    "validation_errors",
 ]
