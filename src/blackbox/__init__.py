@@ -150,6 +150,11 @@ from blackbox.planning.run_plan import (
     ResolvedRunSpec,
     ResolvedTool,
 )
+from blackbox.pricing import (
+    BUNDLED_PRICING_CATALOG_VERSION,
+    bundled_model_catalog,
+    bundled_provider_pricing,
+)
 from blackbox.providers.base import (
     AgentProvider,
     AgentSpec,
@@ -241,6 +246,7 @@ from blackbox.workspace_agents import (
 from blackbox.workspaces import WorkspaceSpec
 
 __all__ = [
+    "BUNDLED_PRICING_CATALOG_VERSION",
     "AgentCapabilities",
     "AgentEvent",
     "AgentMessage",
@@ -417,6 +423,8 @@ __all__ = [
     "WorkspaceSpec",
     "agent_response_messages",
     "assert_prompt_tool_parity",
+    "bundled_model_catalog",
+    "bundled_provider_pricing",
     "conversational_response",
     "create_openai_vector_store",
     "create_runtime_with_default_providers",

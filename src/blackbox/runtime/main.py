@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator, Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 from uuid import uuid4
 
 from blackbox.core.accounting import (
@@ -53,6 +53,7 @@ from blackbox.planning.run_plan import (
     ResolvedRunSpec,
     resolved_hosted_tools,
 )
+from blackbox.pricing import bundled_model_catalog
 from blackbox.providers.base import CompactionControl, ModelCacheControl, ToolSearchControl
 from blackbox.providers.model_adapters.capability_validation import resolve_output_strategy
 from blackbox.providers.registry import ProviderRef, ProviderRegistry
@@ -131,6 +132,7 @@ from blackbox.tools.toolsets import (
 from blackbox.workspaces.spec import WorkspaceSpec
 
 T = TypeVar("T")
+PricingMode = Literal["bundled", "empty"]
 
 class AgentRuntime:
     """Top-level runtime.
@@ -154,10 +156,11 @@ class AgentRuntime:
         session_store: SessionStore | None = None,
         provider_cache_store: ProviderCacheStore | None = None,
         observability: ObservabilityPreset | None = None,
+        pricing: ModelCatalog | PricingMode | None = "bundled",
     ) -> None:
         self.registry = registry or ProviderRegistry()
         self.observability = observability or ObservabilityPreset.disabled()
-        self.model_catalog = ModelCatalog()
+        self.model_catalog = _coerce_model_catalog(pricing)
         self.event_store: EventStore = event_store or InMemoryEventStore()
         self.run_store: RunStore = run_store or InMemoryRunStore()
         self.session_store: SessionStore = session_store or InMemorySessionStore()
@@ -2039,6 +2042,16 @@ def _coerce_workspace(value: Any) -> Any | None:
     if isinstance(value, Mapping):
         return WorkspaceSpec(**dict(value))
     return value
+
+
+def _coerce_model_catalog(pricing: ModelCatalog | PricingMode | None) -> ModelCatalog:
+    if isinstance(pricing, ModelCatalog):
+        return pricing
+    if pricing == "bundled":
+        return bundled_model_catalog()
+    if pricing is None or pricing == "empty":
+        return ModelCatalog()
+    raise ConfigurationError("pricing must be 'bundled', 'empty', None, or ModelCatalog.")
 
 
 def _routing_enabled(tool_routing: ToolRoutingSpec | None) -> bool:
