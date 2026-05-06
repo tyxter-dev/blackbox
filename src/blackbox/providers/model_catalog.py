@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-ModelLifecycle = Literal["active", "preview", "deprecated", "retired", "unknown"]
+ModelLifecycle = Literal["active", "deprecating", "deprecated", "preview", "retired", "unknown"]
 
 
 @dataclass(slots=True, frozen=True)
