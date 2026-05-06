@@ -167,6 +167,12 @@ from blackbox.providers.base import (
     TurnRequest,
     TurnResult,
 )
+from blackbox.providers.catalog import (
+    BUNDLED_PROVIDER_MODEL_CATALOG_VERSION,
+    bundled_provider_model_catalog,
+    bundled_provider_models,
+)
+from blackbox.providers.model_catalog import ModelLifecycle, ProviderModel, ProviderModelCatalog
 from blackbox.providers.registry import ProviderRef, ProviderRegistry
 from blackbox.realtime import (
     AudioConfig,
@@ -247,6 +253,7 @@ from blackbox.workspaces import WorkspaceSpec
 
 __all__ = [
     "BUNDLED_PRICING_CATALOG_VERSION",
+    "BUNDLED_PROVIDER_MODEL_CATALOG_VERSION",
     "AgentCapabilities",
     "AgentEvent",
     "AgentMessage",
@@ -322,6 +329,7 @@ __all__ = [
     "ModelCapabilities",
     "ModelCapabilityProfile",
     "ModelCatalog",
+    "ModelLifecycle",
     "ModelPricing",
     "ModelProvider",
     "ModelRequestControls",
@@ -347,6 +355,8 @@ __all__ = [
     "ProviderCacheRuntime",
     "ProviderCacheStore",
     "ProviderCacheUsage",
+    "ProviderModel",
+    "ProviderModelCatalog",
     "ProviderNativePart",
     "ProviderRef",
     "ProviderRegistry",
@@ -424,6 +434,8 @@ __all__ = [
     "agent_response_messages",
     "assert_prompt_tool_parity",
     "bundled_model_catalog",
+    "bundled_provider_model_catalog",
+    "bundled_provider_models",
     "bundled_provider_pricing",
     "conversational_response",
     "create_openai_vector_store",

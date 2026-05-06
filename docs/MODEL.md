@@ -293,12 +293,13 @@ original item type and raw payload preserved.
 | M-P1-1 | Provider-native structured output | Implemented for OpenAI and Gemini, unsupported where not mapped | Strategy support is capability-gated and fallbacks are resolved before dispatch. |
 | M-P1-2 | Hosted tool mapping | Implemented, provider-dependent | Typed hosted tools map to native provider payloads or fail before dispatch. |
 | M-P1-3 | Remote MCP mapping | Implemented for OpenAI and Anthropic | `RemoteMCP` maps to provider-native remote MCP configuration where supported. |
-| M-P1-4 | Usage, cache, and cost metadata | Implemented | Usage normalizes into result metadata with cache token splits and tool-call counts; bundled or user provider-price catalogs estimate provider API cost, user billable catalogs or markup policies estimate billable price, and cache-hit metrics are exposed when provider usage includes cached tokens. |
+| M-P1-4 | Usage, cache, and cost metadata | Implemented | Usage normalizes into result metadata with cache token splits and tool-call counts; bundled or user provider-price catalogs estimate provider API cost, user billable catalogs or markup policies estimate billable price, and cache-hit metrics are exposed when provider usage includes cached tokens. Provider model aliases can route pricing lookups to canonical model IDs without making pricing own model identity. |
 | M-P1-5 | Model-specific capability profiles | Implemented, mostly static | Profiles can vary by model/API version/provider once adapters expose dynamic data. |
 | M-P1-6 | Request controls | Implemented, provider-dependent | Instructions, temperature, max tokens, tool choice, cache, reasoning, verbosity, tool search, compaction, store/background, include, and extra controls are mapped or rejected. |
 | M-P1-7 | Artifact refs | Partial | `TurnRequest.artifacts` exists; adapters should define provider-visible file/artifact input mapping. |
 | M-P1-8 | Golden event tests | Implemented | Provider event mappings have offline golden coverage. |
 | M-P1-9 | Hosted client-executed tool continuation | Implemented for supported local handlers | Shell, patch, and computer-style hosted calls can be handled by runtime callbacks and fed back to the model. |
+| M-P1-10 | Provider model catalog | Implemented, bundled static catalog | `ProviderModelCatalog` exposes provider-native model identity metadata separately from pricing, including aliases, lifecycle, replacement hints, modalities, capacity hints, and source provenance. |
 
 ### P2 - Later
 
@@ -306,7 +307,7 @@ original item type and raw payload preserved.
 |---|---|---|
 | M-P2-1 | Typed multimodal input parts | Image/audio/video/file content parts are first-class, not ad hoc dicts. |
 | M-P2-2 | Provider-side cache lifecycle | Partially implemented | `runtime.caches` persists provider cache records, supports invalidation/expiry eviction, and creates/deletes Gemini context caches where APIs support it. |
-| M-P2-3 | Dynamic provider discovery | Capability profiles can be populated from provider metadata or model lists. |
+| M-P2-3 | Dynamic provider discovery | Capability profiles and provider model catalogs can be populated from provider metadata or live model-list APIs. |
 | M-P2-4 | Realtime turns | Realtime/audio session surfaces live beside normal model turns, not inside this protocol unchanged. |
 | M-P2-5 | Provider eval metadata | Adapters can emit eval-related events or metadata where the provider exposes them. |
 

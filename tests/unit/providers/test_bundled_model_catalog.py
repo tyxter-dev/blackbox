@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import blackbox
 from blackbox.providers.catalog import (
     BUNDLED_PROVIDER_MODEL_CATALOG_VERSION,
     bundled_provider_model_catalog,
@@ -73,3 +74,9 @@ def test_bundled_provider_model_catalog_accepts_user_models() -> None:
     assert model is not None
     assert model.model == "custom-prod"
     assert model.source == "tenant"
+
+
+def test_provider_model_catalog_is_exported_from_public_entrypoint() -> None:
+    catalog = blackbox.bundled_provider_model_catalog()
+
+    assert isinstance(catalog, blackbox.ProviderModelCatalog)

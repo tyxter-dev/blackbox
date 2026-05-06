@@ -526,9 +526,25 @@ provider-specific values override the common controls.
 Provider adapters normalize token usage onto `result.metadata["usage"]` when
 the provider returns usage data. The same usage view includes cache read/write
 token splits, reasoning tokens where available, and runtime-counted tool calls.
-`AgentRuntime()` seeds `runtime.model_catalog` with a bundled provider-cost
-catalog for common OpenAI, Anthropic, Gemini, and xAI text models, so known
-models also receive `result.metadata["provider_cost"]`. The older
+`AgentRuntime()` also seeds `runtime.provider_model_catalog` with model identity
+metadata for common OpenAI, Anthropic, Gemini, and xAI models. That catalog is
+not monetary: it owns aliases, lifecycle, modalities, source URLs, and capacity
+hints.
+
+```python
+model = runtime.provider_model_catalog.get(
+    provider="xai",
+    model="grok-4-1-fast-reasoning",
+)
+assert model is not None
+print(model.lifecycle, model.replacement_model)
+```
+
+Separately, `runtime.model_catalog` is the pricing catalog. By default it is
+seeded with bundled provider costs for known text models, so known models also
+receive `result.metadata["provider_cost"]`. The pricing catalog reuses provider
+model aliases when resolving bundled prices, but it remains the monetary
+surface. The older
 `result.metadata["cost"]` key remains a compatibility alias for provider API
 cost.
 

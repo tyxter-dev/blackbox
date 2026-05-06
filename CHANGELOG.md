@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Slice 23 — Provider model catalog
+
+Blackbox now keeps provider model identity separate from monetary pricing.
+
+- Adds `ProviderModel` and `ProviderModelCatalog` for provider-native model
+  metadata such as aliases, lifecycle, replacements, modalities, context
+  windows, output limits, and source provenance.
+- Seeds `AgentRuntime()` with a bundled provider model catalog for common
+  OpenAI, Anthropic, Gemini, and xAI models.
+- Reuses provider model aliases when bundled pricing estimates costs, while
+  keeping `ModelCatalog` as the provider-cost/billable pricing catalog.
+- Marks xAI Grok 4.1 fast models as deprecating with their May 15, 2026
+  retirement metadata and replacement hints.
+
 ### Slice 22 — Provider-cost and billable pricing catalogs
 
 Blackbox now separates raw API cost estimates from application billable price.
