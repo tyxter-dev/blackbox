@@ -65,6 +65,7 @@ from blackbox.runtime.event_metadata import (
     _event_usage,
     _hosted_tool_metadata_from_events,
     _mcp_metadata_from_events,
+    _pricing_metadata,
     _prompt_metadata_from_events,
     _provider_cache_metadata,
     _tool_choice_metadata_from_events,
@@ -181,6 +182,7 @@ class AgentRuntime:
             run_store=self.run_store,
             session_store=self.session_store,
             workspaces=self.workspaces,
+            model_catalog=self.model_catalog,
             observability=self.observability,
         )
         self.caches = ProviderCacheRuntime(self.registry, self.provider_cache_store)
@@ -1648,12 +1650,14 @@ class AgentRuntime:
             provider_usage = usage_provider_details(usage)
             if provider_usage is not None:
                 metadata["usage_provider_details"] = provider_usage
-            if usage is not None and completed_provider is not None and completed_model is not None:
-                cost = self.model_catalog.estimate_cost(
-                    provider=completed_provider, model=completed_model, usage=usage
+            metadata.update(
+                _pricing_metadata(
+                    model_catalog=self.model_catalog,
+                    provider=completed_provider,
+                    model=completed_model,
+                    usage=usage,
                 )
-                if cost is not None:
-                    metadata["cost"] = cost
+            )
             cache_metadata = await _provider_cache_metadata(
                 provider=completed_provider,
                 model=completed_model,

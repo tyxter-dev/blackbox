@@ -66,6 +66,8 @@ async def test_model_runtime_collects_usage_and_estimates_cost() -> None:
     assert result.metadata["cache"]["requested"] is False
     assert result.metadata["cache"]["hit"] is True
     assert result.metadata["accounting"]["usage"] == result.metadata["usage"]
+    assert result.metadata["provider_cost"] == result.metadata["cost"]
+    assert result.metadata["accounting"]["provider_cost"] == result.metadata["provider_cost"]
     assert result.metadata["usage_provider_details"]["input_tokens"] == 100
     assert result.metadata["usage_provider_details"]["input_tokens_details"] == {
         "cached_tokens": 20
@@ -91,11 +93,17 @@ async def test_blackbox_result_metadata_includes_usage_and_cost() -> None:
     runtime.model_catalog.register_pricing(
         ModelPricing(provider="openai", model="gpt-test", input_per_million=1, output_per_million=2)
     )
+    runtime.model_catalog.register_billing_policy(
+        MarkupPolicy(multiplier=1.5, round_to="0.000001")
+    )
 
     result: AgentResult[str] = await runtime.run(provider="openai:gpt-test", input="ping")
 
     assert result.metadata["usage"]["total_tokens"] == 15
+    assert result.metadata["provider_cost"] == result.metadata["cost"]
     assert result.metadata["cost"]["total"] == 0.00002
+    assert result.metadata["billable"]["total"] == 0.00003
+    assert result.metadata["accounting"]["billable"] == result.metadata["billable"]
 
 
 async def test_model_runtime_tracks_cache_records_for_explicit_cache_key() -> None:

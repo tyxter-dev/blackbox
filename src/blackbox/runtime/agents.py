@@ -7,6 +7,7 @@ from typing import Any, TypeVar, cast
 from uuid import uuid4
 
 from blackbox.core.accounting import (
+    ModelCatalog,
     ModelUsage,
     add_usage,
     usage_provider_details,
@@ -48,6 +49,7 @@ from blackbox.runtime.event_metadata import (
     _event_usage,
     _hosted_tool_metadata_from_events,
     _mcp_metadata_from_events,
+    _pricing_metadata,
     _tool_usage_from_events,
 )
 from blackbox.runtime.output import _resolve_output_spec, _validate_output
@@ -83,6 +85,7 @@ class AgentRuntimeFacade:
     run_store: RunStore | None = None
     session_store: SessionStore | None = None
     workspaces: WorkspaceRuntimeFacade | None = None
+    model_catalog: ModelCatalog = field(default_factory=ModelCatalog)
     observability: ObservabilityPreset = field(
         default_factory=ObservabilityPreset.disabled
     )
@@ -552,6 +555,14 @@ class AgentRuntimeFacade:
         provider_usage = usage_provider_details(usage)
         if provider_usage is not None:
             result_metadata["usage_provider_details"] = provider_usage
+        result_metadata.update(
+            _pricing_metadata(
+                model_catalog=self.model_catalog,
+                provider=session.provider,
+                model=session.model,
+                usage=usage,
+            )
+        )
         if messages:
             result_metadata["message_count"] = len(messages)
         hosted_metadata = _hosted_tool_metadata_from_events(events)

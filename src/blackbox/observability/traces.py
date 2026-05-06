@@ -345,7 +345,7 @@ def model_turn_span_from_events(
         else None
     )
     attributes: dict[str, Any] = {}
-    for key in ("usage", "cost", "mcp", "hosted_tools"):
+    for key in ("usage", "provider_cost", "billable", "cost", "mcp", "hosted_tools"):
         if key in metadata:
             attributes[key] = metadata[key]
     return TraceSpan(
@@ -402,7 +402,7 @@ def _root_span(
         "event_types": sorted({event.type for event in events}),
     }
     _attach_correlation_attributes(attributes, events)
-    for key in ("usage", "cost"):
+    for key in ("usage", "provider_cost", "billable", "cost"):
         if key in metadata:
             attributes[key] = metadata[key]
     return TraceSpan(
@@ -434,7 +434,14 @@ def _span_from_group(
     kind = first.span_kind or infer_span_kind(first.type)
     attributes = _attributes_from_events(events)
     if kind == SpanKinds.MODEL:
-        for key in ("usage", "cost", "mcp", "hosted_tools"):
+        for key in (
+            "usage",
+            "provider_cost",
+            "billable",
+            "cost",
+            "mcp",
+            "hosted_tools",
+        ):
             if key in metadata:
                 attributes[key] = metadata[key]
 

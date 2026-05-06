@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from blackbox.core.accounting import ModelUsage
+from blackbox.core.accounting import ModelCatalog, ModelUsage
 from blackbox.core.cache import (
     ProviderCacheStore,
     cache_usage_from_usage,
@@ -310,12 +310,41 @@ def _event_call_key(event: AgentEvent) -> str:
 
 def _attach_accounting_metadata(metadata: dict[str, Any]) -> None:
     accounting: dict[str, Any] = {}
-    for key in ("usage", "cost", "cache"):
+    for key in ("usage", "provider_cost", "billable", "cost", "cache"):
         value = metadata.get(key)
         if value is not None:
             accounting[key] = value
     if accounting:
         metadata["accounting"] = accounting
+
+
+def _pricing_metadata(
+    *,
+    model_catalog: ModelCatalog,
+    provider: str | None,
+    model: str | None,
+    usage: Any,
+) -> dict[str, Any]:
+    if provider is None or model is None or usage is None:
+        return {}
+    metadata: dict[str, Any] = {}
+    provider_cost = model_catalog.estimate_provider_cost(
+        provider=provider,
+        model=model,
+        usage=usage,
+    )
+    if provider_cost is not None:
+        metadata["provider_cost"] = provider_cost
+        metadata["cost"] = provider_cost
+    billable = model_catalog.estimate_billable(
+        provider=provider,
+        model=model,
+        usage=usage,
+        provider_cost=provider_cost,
+    )
+    if billable is not None:
+        metadata["billable"] = billable
+    return metadata
 
 
 def _event_usage(event: AgentEvent) -> Any:

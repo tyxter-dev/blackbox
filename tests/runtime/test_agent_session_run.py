@@ -5,7 +5,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from blackbox import AgentRuntime, AgentSessionResult, EventTypes
+from blackbox import AgentRuntime, AgentSessionResult, EventTypes, MarkupPolicy, ModelPricing
 from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
 from blackbox.workspaces import WorkspaceRef, WorkspaceSpec
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient
@@ -42,11 +42,23 @@ async def test_agents_run_collects_session_result_with_output_and_artifacts() ->
     )
     runtime = AgentRuntime()
     runtime.registry.register_agent(ClaudeCodeAgentProvider(client=client))
+    runtime.model_catalog.register_pricing(
+        ModelPricing(
+            provider="claude-code",
+            model="claude-test",
+            input_per_million=1,
+            output_per_million=2,
+        )
+    )
+    runtime.model_catalog.register_billing_policy(
+        MarkupPolicy(multiplier=2, round_to="0.000001")
+    )
 
     result: AgentSessionResult[PatchSummary] = await runtime.agents.run(
         provider="claude-code",
         agent="repo-fixer",
         task="Fix failing tests",
+        model="claude-test",
         workspace=WorkspaceSpec.local("."),
         output_type=PatchSummary,
     )
@@ -68,6 +80,10 @@ async def test_agents_run_collects_session_result_with_output_and_artifacts() ->
     assert result.provider_state.continuation["last_event_id"] == "evt_3"
     assert result.usage is not None
     assert result.usage.total_tokens == 15
+    assert result.metadata["provider_cost"] == result.metadata["cost"]
+    assert result.metadata["provider_cost"]["total"] == 0.00002
+    assert result.metadata["billable"]["total"] == 0.00004
+    assert result.metadata["accounting"]["billable"] == result.metadata["billable"]
     assert result.trace["spans"]
     assert isinstance(client.started_tasks[0].workspace, WorkspaceRef)
     assert client.started_tasks[0].workspace.kind == "local"
