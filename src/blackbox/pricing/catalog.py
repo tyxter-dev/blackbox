@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from blackbox.core.accounting import MarkupPolicy, ModelCatalog, ModelPricing
+from blackbox.providers.catalog import bundled_provider_model_catalog
+from blackbox.providers.model_catalog import ProviderModelCatalog
 
 BUNDLED_PRICING_CATALOG_VERSION = "2026-05-06"
 BUNDLED_PRICING_RETRIEVED_AT = "2026-05-06"
@@ -34,13 +36,30 @@ def bundled_model_catalog(
     billing_policy: MarkupPolicy | None = None,
     extra_provider_pricing: Iterable[ModelPricing] = (),
     extra_billable_pricing: Iterable[ModelPricing] = (),
+    provider_models: ProviderModelCatalog | None = None,
 ) -> ModelCatalog:
     """Build a model catalog seeded with bundled provider API costs."""
     catalog = ModelCatalog(billing_policy=billing_policy)
     catalog.register_many(bundled_provider_pricing())
     catalog.register_many(list(extra_provider_pricing))
     catalog.register_many(list(extra_billable_pricing), kind="billable")
+    _register_provider_model_aliases(
+        catalog,
+        provider_models or bundled_provider_model_catalog(),
+    )
     return catalog
+
+
+def _register_provider_model_aliases(
+    catalog: ModelCatalog,
+    provider_models: ProviderModelCatalog,
+) -> None:
+    for model in provider_models.list():
+        catalog.register_model_aliases(
+            provider=model.provider,
+            model=model.model,
+            aliases=model.aliases,
+        )
 
 
 def _pricing(

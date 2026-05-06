@@ -55,7 +55,9 @@ from blackbox.planning.run_plan import (
 )
 from blackbox.pricing import bundled_model_catalog
 from blackbox.providers.base import CompactionControl, ModelCacheControl, ToolSearchControl
+from blackbox.providers.catalog import bundled_provider_model_catalog
 from blackbox.providers.model_adapters.capability_validation import resolve_output_strategy
+from blackbox.providers.model_catalog import ProviderModelCatalog
 from blackbox.providers.registry import ProviderRef, ProviderRegistry
 from blackbox.runtime.agents import AgentRuntimeFacade
 from blackbox.runtime.caches import ProviderCacheRuntime
@@ -157,10 +159,15 @@ class AgentRuntime:
         provider_cache_store: ProviderCacheStore | None = None,
         observability: ObservabilityPreset | None = None,
         pricing: ModelCatalog | PricingMode | None = "bundled",
+        provider_model_catalog: ProviderModelCatalog | None = None,
     ) -> None:
         self.registry = registry or ProviderRegistry()
         self.observability = observability or ObservabilityPreset.disabled()
-        self.model_catalog = _coerce_model_catalog(pricing)
+        self.provider_model_catalog = provider_model_catalog or bundled_provider_model_catalog()
+        self.model_catalog = _coerce_model_catalog(
+            pricing,
+            provider_model_catalog=self.provider_model_catalog,
+        )
         self.event_store: EventStore = event_store or InMemoryEventStore()
         self.run_store: RunStore = run_store or InMemoryRunStore()
         self.session_store: SessionStore = session_store or InMemorySessionStore()
@@ -2044,11 +2051,15 @@ def _coerce_workspace(value: Any) -> Any | None:
     return value
 
 
-def _coerce_model_catalog(pricing: ModelCatalog | PricingMode | None) -> ModelCatalog:
+def _coerce_model_catalog(
+    pricing: ModelCatalog | PricingMode | None,
+    *,
+    provider_model_catalog: ProviderModelCatalog,
+) -> ModelCatalog:
     if isinstance(pricing, ModelCatalog):
         return pricing
     if pricing == "bundled":
-        return bundled_model_catalog()
+        return bundled_model_catalog(provider_models=provider_model_catalog)
     if pricing is None or pricing == "empty":
         return ModelCatalog()
     raise ConfigurationError("pricing must be 'bundled', 'empty', None, or ModelCatalog.")

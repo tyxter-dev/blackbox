@@ -427,6 +427,70 @@ def test_model_catalog_estimates_billable_markup_from_provider_cost() -> None:
     assert billable["total"] == 0.0013
 
 
+def test_model_catalog_resolves_provider_pricing_aliases() -> None:
+    catalog = ModelCatalog()
+    catalog.register_pricing(
+        ModelPricing(
+            provider="openai",
+            model="gpt-example",
+            input_per_million=1,
+            output_per_million=2,
+        )
+    )
+    catalog.register_model_alias(
+        provider="openai",
+        alias="gpt-example-20260101",
+        model="gpt-example",
+    )
+
+    estimate = catalog.estimate_provider_cost(
+        provider="openai",
+        model="gpt-example-20260101",
+        usage=ModelUsage(input_tokens=100, output_tokens=50),
+    )
+
+    assert estimate is not None
+    assert estimate["model"] == "gpt-example"
+    assert estimate["total"] == 0.0002
+
+
+def test_model_catalog_resolves_billable_pricing_aliases_before_markup() -> None:
+    catalog = ModelCatalog()
+    catalog.register_pricing(
+        ModelPricing(
+            provider="openai",
+            model="gpt-example",
+            input_per_million=1,
+            output_per_million=2,
+        )
+    )
+    catalog.register_billable_pricing(
+        ModelPricing(
+            provider="openai",
+            model="gpt-example",
+            input_per_million=10,
+            output_per_million=20,
+            source="tenant-catalog",
+        )
+    )
+    catalog.register_billing_policy(MarkupPolicy(multiplier=100))
+    catalog.register_model_alias(
+        provider="openai",
+        alias="gpt-example-20260101",
+        model="gpt-example",
+    )
+
+    billable = catalog.estimate_billable(
+        provider="openai",
+        model="gpt-example-20260101",
+        usage=ModelUsage(input_tokens=100, output_tokens=50),
+    )
+
+    assert billable is not None
+    assert billable["source"] == "tenant-catalog"
+    assert billable["total"] == 0.002
+
+
 def test_billable_pricing_catalog_overrides_markup_policy() -> None:
     catalog = ModelCatalog()
     catalog.register_pricing(

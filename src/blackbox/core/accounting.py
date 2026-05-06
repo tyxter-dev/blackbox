@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal
@@ -244,6 +245,7 @@ class ModelCatalog:
 
     _pricing: dict[tuple[str, str], ModelPricing] = field(default_factory=dict)
     _billable_pricing: dict[tuple[str, str], ModelPricing] = field(default_factory=dict)
+    _aliases: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
     billing_policy: MarkupPolicy | None = None
 
     def register_pricing(self, pricing: ModelPricing) -> None:
@@ -254,6 +256,19 @@ class ModelCatalog:
 
     def register_billable_pricing(self, pricing: ModelPricing) -> None:
         self._billable_pricing[(pricing.provider, pricing.model)] = pricing
+
+    def register_model_alias(self, *, provider: str, alias: str, model: str) -> None:
+        self._aliases[(provider, alias)] = (provider, model)
+
+    def register_model_aliases(
+        self,
+        *,
+        provider: str,
+        model: str,
+        aliases: Iterable[str],
+    ) -> None:
+        for alias in aliases:
+            self.register_model_alias(provider=provider, alias=alias, model=model)
 
     def register_many(
         self,
@@ -278,7 +293,7 @@ class ModelCatalog:
     def estimate_provider_cost(
         self, *, provider: str, model: str, usage: ModelUsage | dict[str, Any]
     ) -> dict[str, Any] | None:
-        pricing = self._pricing.get((provider, model))
+        pricing = self._provider_pricing(provider=provider, model=model)
         if pricing is None:
             return None
         normalized = usage if isinstance(usage, ModelUsage) else usage_from_mapping(usage)
@@ -293,7 +308,7 @@ class ModelCatalog:
         provider_cost: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         normalized = usage if isinstance(usage, ModelUsage) else usage_from_mapping(usage)
-        billable_pricing = self._billable_pricing.get((provider, model))
+        billable_pricing = self._billable_pricing_for(provider=provider, model=model)
         if billable_pricing is not None:
             return billable_pricing.estimate(normalized, kind="billable")
         if self.billing_policy is None:
@@ -306,6 +321,28 @@ class ModelCatalog:
         if effective_provider_cost is None:
             return None
         return self.billing_policy.apply(effective_provider_cost)
+
+    def _provider_pricing(self, *, provider: str, model: str) -> ModelPricing | None:
+        return self._lookup_pricing(self._pricing, provider=provider, model=model)
+
+    def _billable_pricing_for(self, *, provider: str, model: str) -> ModelPricing | None:
+        return self._lookup_pricing(self._billable_pricing, provider=provider, model=model)
+
+    def _lookup_pricing(
+        self,
+        pricing: dict[tuple[str, str], ModelPricing],
+        *,
+        provider: str,
+        model: str,
+    ) -> ModelPricing | None:
+        key = (provider, model)
+        exact = pricing.get(key)
+        if exact is not None:
+            return exact
+        canonical = self._aliases.get(key)
+        if canonical is None:
+            return None
+        return pricing.get(canonical)
 
 
 def usage_from_mapping(value: dict[str, Any] | None) -> ModelUsage:
