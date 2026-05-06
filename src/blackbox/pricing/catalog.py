@@ -11,6 +11,7 @@ BUNDLED_PRICING_SOURCE = "blackbox-bundled"
 _OPENAI_PRICING_URL = "https://openai.com/api/pricing/"
 _ANTHROPIC_PRICING_URL = "https://docs.claude.com/en/docs/about-claude/pricing"
 _GEMINI_PRICING_URL = "https://ai.google.dev/gemini-api/docs/pricing"
+_XAI_PRICING_URL = "https://docs.x.ai/docs/models"
 
 
 def bundled_provider_pricing() -> list[ModelPricing]:
@@ -24,6 +25,7 @@ def bundled_provider_pricing() -> list[ModelPricing]:
     pricing.extend(_openai_pricing())
     pricing.extend(_anthropic_pricing())
     pricing.extend(_gemini_pricing())
+    pricing.extend(_xai_pricing())
     return pricing
 
 
@@ -184,5 +186,24 @@ def _gemini_pricing() -> list[ModelPricing]:
             cached_input_per_million=0.01,
             output_per_million=0.40,
             source_url=_GEMINI_PRICING_URL,
+        ),
+    ]
+
+
+def _xai_pricing() -> list[ModelPricing]:
+    return [
+        _pricing(
+            provider="xai",
+            model="grok-4-1-fast-reasoning",
+            input_per_million=0.20,
+            output_per_million=0.50,
+            source_url=_XAI_PRICING_URL,
+        ),
+        _pricing(
+            provider="xai",
+            model="grok-4-1-fast-non-reasoning",
+            input_per_million=0.20,
+            output_per_million=0.50,
+            source_url=_XAI_PRICING_URL,
         ),
     ]

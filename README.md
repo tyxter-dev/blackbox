@@ -527,8 +527,8 @@ Provider adapters normalize token usage onto `result.metadata["usage"]` when
 the provider returns usage data. The same usage view includes cache read/write
 token splits, reasoning tokens where available, and runtime-counted tool calls.
 `AgentRuntime()` seeds `runtime.model_catalog` with a bundled provider-cost
-catalog for common OpenAI, Anthropic, and Gemini text models, so known models
-also receive `result.metadata["provider_cost"]`. The older
+catalog for common OpenAI, Anthropic, Gemini, and xAI text models, so known
+models also receive `result.metadata["provider_cost"]`. The older
 `result.metadata["cost"]` key remains a compatibility alias for provider API
 cost.
 

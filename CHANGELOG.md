@@ -13,8 +13,8 @@ Blackbox now separates raw API cost estimates from application billable price.
   `accounting` metadata from high-level runs, direct model turns, and
   agent-session result collection.
 - Seeds `AgentRuntime()` with a bundled provider-cost catalog for common
-  OpenAI, Anthropic, and Gemini text models, with opt-out via `pricing=None` or
-  `pricing="empty"`.
+  OpenAI, Anthropic, Gemini, and xAI text models, with opt-out via
+  `pricing=None` or `pricing="empty"`.
 - Keeps user-registered provider pricing ahead of bundled rates and includes
   source/catalog provenance on bundled estimates.
 - Leaves batch discounts, long-context premiums, hosted-tool charges, storage

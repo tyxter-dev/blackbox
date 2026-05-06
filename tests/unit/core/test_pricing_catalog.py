@@ -20,17 +20,23 @@ def test_bundled_provider_pricing_contains_common_models_with_provenance() -> No
     openai = by_key[("openai", "gpt-5.4")]
     anthropic = by_key[("anthropic", "claude-haiku-4-5-20251001")]
     gemini = by_key[("google", "gemini-2.5-flash")]
+    xai = by_key[("xai", "grok-4-1-fast-reasoning")]
 
     assert openai.input_per_million == 2.5
     assert openai.cached_input_per_million == 0.25
     assert anthropic.cache_creation_input_per_million == 1.25
     assert anthropic.cache_read_input_per_million == 0.1
     assert gemini.cached_input_per_million == 0.03
-    assert {openai.source, anthropic.source, gemini.source} == {"blackbox-bundled"}
+    assert xai.input_per_million == 0.2
+    assert xai.output_per_million == 0.5
+    assert {openai.source, anthropic.source, gemini.source, xai.source} == {
+        "blackbox-bundled"
+    }
     assert {
         openai.catalog_version,
         anthropic.catalog_version,
         gemini.catalog_version,
+        xai.catalog_version,
     } == {BUNDLED_PRICING_CATALOG_VERSION}
 
 
