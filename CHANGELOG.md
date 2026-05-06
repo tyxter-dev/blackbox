@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Slice 22 — Provider-cost and billable pricing catalogs
+
+Blackbox now separates raw API cost estimates from application billable price.
+
+- Adds provider-cost and billable pricing paths to `ModelCatalog`, with
+  `MarkupPolicy` for common markup/minimum/rounding cases and user billable
+  catalogs for custom resale rates.
+- Emits `provider_cost`, optional `billable`, legacy `cost`, and grouped
+  `accounting` metadata from high-level runs, direct model turns, and
+  agent-session result collection.
+- Seeds `AgentRuntime()` with a bundled provider-cost catalog for common
+  OpenAI, Anthropic, and Gemini text models, with opt-out via `pricing=None` or
+  `pricing="empty"`.
+- Keeps user-registered provider pricing ahead of bundled rates and includes
+  source/catalog provenance on bundled estimates.
+- Leaves batch discounts, long-context premiums, hosted-tool charges, storage
+  charges, and regional pricing as explicit future catalog dimensions.
+
 ### Slice 21 — MCP server authoring helpers
 
 Blackbox now includes a small first-party SDK for authoring local stdio MCP

@@ -293,7 +293,7 @@ original item type and raw payload preserved.
 | M-P1-1 | Provider-native structured output | Implemented for OpenAI and Gemini, unsupported where not mapped | Strategy support is capability-gated and fallbacks are resolved before dispatch. |
 | M-P1-2 | Hosted tool mapping | Implemented, provider-dependent | Typed hosted tools map to native provider payloads or fail before dispatch. |
 | M-P1-3 | Remote MCP mapping | Implemented for OpenAI and Anthropic | `RemoteMCP` maps to provider-native remote MCP configuration where supported. |
-| M-P1-4 | Usage, cache, and cost metadata | Implemented | Usage normalizes into result metadata with cache token splits and tool-call counts; optional catalog pricing estimates cost; cache-hit metrics are exposed when provider usage includes cached tokens. |
+| M-P1-4 | Usage, cache, and cost metadata | Implemented | Usage normalizes into result metadata with cache token splits and tool-call counts; bundled or user provider-price catalogs estimate provider API cost, user billable catalogs or markup policies estimate billable price, and cache-hit metrics are exposed when provider usage includes cached tokens. |
 | M-P1-5 | Model-specific capability profiles | Implemented, mostly static | Profiles can vary by model/API version/provider once adapters expose dynamic data. |
 | M-P1-6 | Request controls | Implemented, provider-dependent | Instructions, temperature, max tokens, tool choice, cache, reasoning, verbosity, tool search, compaction, store/background, include, and extra controls are mapped or rejected. |
 | M-P1-7 | Artifact refs | Partial | `TurnRequest.artifacts` exists; adapters should define provider-visible file/artifact input mapping. |

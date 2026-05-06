@@ -526,8 +526,13 @@ provider-specific values override the common controls.
 Provider adapters normalize token usage onto `result.metadata["usage"]` when
 the provider returns usage data. The same usage view includes cache read/write
 token splits, reasoning tokens where available, and runtime-counted tool calls.
-Register prices in `runtime.model_catalog` to also receive
-`result.metadata["cost"]`:
+`AgentRuntime()` seeds `runtime.model_catalog` with a bundled provider-cost
+catalog for common OpenAI, Anthropic, and Gemini text models, so known models
+also receive `result.metadata["provider_cost"]`. The older
+`result.metadata["cost"]` key remains a compatibility alias for provider API
+cost.
+
+Applications can override provider costs with their own API contract rates:
 
 ```python
 from blackbox import ModelPricing
@@ -540,8 +545,26 @@ runtime.model_catalog.register_pricing(ModelPricing(
 ))
 ```
 
-The runtime does not ship hard-coded prices; applications should register the
-current prices they want to account against.
+Applications that charge their own users can add a separate billable catalog or
+a markup policy. Billable prices are emitted as `result.metadata["billable"]`
+and grouped with provider cost in `result.metadata["accounting"]`:
+
+```python
+from blackbox import MarkupPolicy
+
+runtime.model_catalog.register_billing_policy(
+    MarkupPolicy(multiplier=1.5, minimum_charge=0.001, round_to="0.000001")
+)
+```
+
+Provider-cost precedence is: user-registered provider pricing, bundled provider
+pricing, then usage-only metadata when no price is known. Billable precedence is:
+user billable pricing, markup policy over provider cost, then no billable
+estimate. Use `AgentRuntime(pricing=None)` or `AgentRuntime(pricing="empty")` to
+disable bundled provider prices. Bundled prices carry source URL, catalog
+version, and retrieval metadata and are estimates, not invoices; they do not
+model batch discounts, long-context premiums, hosted-tool charges, storage
+charges, or regional pricing.
 
 Cache usage is summarized in `result.metadata["cache"]` when cache controls are
 requested or the provider reports cached tokens. Explicit cache keys and
