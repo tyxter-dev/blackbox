@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any, Literal
+
+PriceKind = Literal["provider_cost", "billable"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -67,8 +70,18 @@ class ModelPricing:
     cache_creation_input_per_million: float | None = None
     reasoning_output_per_million: float | None = None
     currency: str = "USD"
+    source: str = "user"
+    catalog_version: str | None = None
+    effective_at: str | None = None
+    retrieved_at: str | None = None
+    source_url: str | None = None
 
-    def estimate(self, usage: ModelUsage) -> dict[str, Any]:
+    def estimate(
+        self,
+        usage: ModelUsage,
+        *,
+        kind: PriceKind = "provider_cost",
+    ) -> dict[str, Any]:
         cache_read = usage.cache_read_input_tokens
         cache_creation = usage.cache_creation_input_tokens
         split_cached = cache_read + cache_creation
@@ -94,10 +107,47 @@ class ModelPricing:
             if self.reasoning_output_per_million is not None
             else 0.0
         )
-        return {
+        line_items = [
+            _line_item(
+                name="input",
+                quantity=billable_input,
+                rate_per_million=self.input_per_million,
+                amount=input_cost,
+            ),
+            _line_item(
+                name="cache_read_input",
+                quantity=cache_read + legacy_cached,
+                rate_per_million=cache_read_rate,
+                amount=cache_read_cost,
+            ),
+            _line_item(
+                name="cache_creation_input",
+                quantity=cache_creation,
+                rate_per_million=cache_creation_rate,
+                amount=cache_creation_cost,
+            ),
+            _line_item(
+                name="output",
+                quantity=usage.output_tokens,
+                rate_per_million=self.output_per_million,
+                amount=output_cost,
+            ),
+        ]
+        if self.reasoning_output_per_million is not None:
+            line_items.append(
+                _line_item(
+                    name="reasoning_output",
+                    quantity=usage.reasoning_tokens,
+                    rate_per_million=self.reasoning_output_per_million,
+                    amount=reasoning_cost,
+                )
+            )
+        estimate: dict[str, Any] = {
+            "kind": kind,
             "provider": self.provider,
             "model": self.model,
             "currency": self.currency,
+            "source": self.source,
             "input": input_cost,
             "cached_input": cache_read_cost + cache_creation_cost,
             "cache_read_input": cache_read_cost,
@@ -106,6 +156,80 @@ class ModelPricing:
             "reasoning_output": reasoning_cost,
             "total": input_cost + cache_read_cost + cache_creation_cost + output_cost
             + reasoning_cost,
+            "line_items": [item for item in line_items if item["quantity"] > 0],
+        }
+        _attach_pricing_source(estimate, self)
+        return estimate
+
+
+@dataclass(slots=True, frozen=True)
+class MarkupPolicy:
+    """Billable pricing policy derived from provider cost."""
+
+    multiplier: float = 1.0
+    fixed_per_run: float = 0.0
+    minimum_charge: float | None = None
+    round_to: str | None = None
+    currency: str | None = None
+    source: str = "user"
+    name: str = "markup"
+
+    def apply(self, provider_cost: dict[str, Any]) -> dict[str, Any]:
+        base_total = _float(provider_cost.get("total"))
+        subtotal = base_total * self.multiplier + self.fixed_per_run
+        minimum_adjustment = 0.0
+        if self.minimum_charge is not None and subtotal < self.minimum_charge:
+            minimum_adjustment = self.minimum_charge - subtotal
+            subtotal = self.minimum_charge
+        total = _round_amount(subtotal, self.round_to)
+        currency = str(provider_cost.get("currency") or self.currency or "USD")
+        line_items = [
+            {
+                "name": "provider_cost",
+                "amount": base_total,
+                "currency": currency,
+            }
+        ]
+        markup_amount = base_total * (self.multiplier - 1.0)
+        if markup_amount:
+            line_items.append(
+                {
+                    "name": "markup",
+                    "multiplier": self.multiplier,
+                    "amount": markup_amount,
+                    "currency": currency,
+                }
+            )
+        if self.fixed_per_run:
+            line_items.append(
+                {
+                    "name": "fixed_per_run",
+                    "amount": self.fixed_per_run,
+                    "currency": currency,
+                }
+            )
+        if minimum_adjustment:
+            line_items.append(
+                {
+                    "name": "minimum_charge_adjustment",
+                    "amount": minimum_adjustment,
+                    "currency": currency,
+                }
+            )
+        return {
+            "kind": "billable",
+            "provider": provider_cost.get("provider"),
+            "model": provider_cost.get("model"),
+            "currency": self.currency or currency,
+            "source": self.source,
+            "pricing_policy": self.name,
+            "provider_cost_total": base_total,
+            "multiplier": self.multiplier,
+            "fixed_per_run": self.fixed_per_run,
+            "minimum_charge": self.minimum_charge,
+            "round_to": self.round_to,
+            "total": total,
+            "line_items": line_items,
         }
 
 
@@ -119,22 +243,69 @@ class ModelCatalog:
     """
 
     _pricing: dict[tuple[str, str], ModelPricing] = field(default_factory=dict)
+    _billable_pricing: dict[tuple[str, str], ModelPricing] = field(default_factory=dict)
+    billing_policy: MarkupPolicy | None = None
 
     def register_pricing(self, pricing: ModelPricing) -> None:
+        self.register_provider_pricing(pricing)
+
+    def register_provider_pricing(self, pricing: ModelPricing) -> None:
         self._pricing[(pricing.provider, pricing.model)] = pricing
 
-    def register_many(self, pricing: list[ModelPricing]) -> None:
+    def register_billable_pricing(self, pricing: ModelPricing) -> None:
+        self._billable_pricing[(pricing.provider, pricing.model)] = pricing
+
+    def register_many(
+        self,
+        pricing: list[ModelPricing],
+        *,
+        kind: PriceKind = "provider_cost",
+    ) -> None:
         for item in pricing:
-            self.register_pricing(item)
+            if kind == "billable":
+                self.register_billable_pricing(item)
+            else:
+                self.register_provider_pricing(item)
+
+    def register_billing_policy(self, policy: MarkupPolicy | None) -> None:
+        self.billing_policy = policy
 
     def estimate_cost(
+        self, *, provider: str, model: str, usage: ModelUsage | dict[str, Any]
+    ) -> dict[str, Any] | None:
+        return self.estimate_provider_cost(provider=provider, model=model, usage=usage)
+
+    def estimate_provider_cost(
         self, *, provider: str, model: str, usage: ModelUsage | dict[str, Any]
     ) -> dict[str, Any] | None:
         pricing = self._pricing.get((provider, model))
         if pricing is None:
             return None
         normalized = usage if isinstance(usage, ModelUsage) else usage_from_mapping(usage)
-        return pricing.estimate(normalized)
+        return pricing.estimate(normalized, kind="provider_cost")
+
+    def estimate_billable(
+        self,
+        *,
+        provider: str,
+        model: str,
+        usage: ModelUsage | dict[str, Any],
+        provider_cost: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        normalized = usage if isinstance(usage, ModelUsage) else usage_from_mapping(usage)
+        billable_pricing = self._billable_pricing.get((provider, model))
+        if billable_pricing is not None:
+            return billable_pricing.estimate(normalized, kind="billable")
+        if self.billing_policy is None:
+            return None
+        effective_provider_cost = provider_cost or self.estimate_provider_cost(
+            provider=provider,
+            model=model,
+            usage=normalized,
+        )
+        if effective_provider_cost is None:
+            return None
+        return self.billing_policy.apply(effective_provider_cost)
 
 
 def usage_from_mapping(value: dict[str, Any] | None) -> ModelUsage:
@@ -245,6 +416,55 @@ def _rate(*values: float | None) -> float:
         if value is not None:
             return value
     return 0.0
+
+
+def _line_item(
+    *,
+    name: str,
+    quantity: int,
+    rate_per_million: float,
+    amount: float,
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "quantity": quantity,
+        "unit": "tokens",
+        "rate_per_million": rate_per_million,
+        "amount": amount,
+    }
+
+
+def _attach_pricing_source(
+    estimate: dict[str, Any],
+    pricing: ModelPricing,
+) -> None:
+    optional_fields = {
+        "catalog_version": pricing.catalog_version,
+        "effective_at": pricing.effective_at,
+        "retrieved_at": pricing.retrieved_at,
+        "source_url": pricing.source_url,
+    }
+    for key, value in optional_fields.items():
+        if value is not None:
+            estimate[key] = value
+
+
+def _float(value: Any) -> float:
+    if isinstance(value, float):
+        return value
+    if isinstance(value, int):
+        return float(value)
+    return 0.0
+
+
+def _round_amount(value: float, quantum: str | None) -> float:
+    if quantum is None:
+        return value
+    rounded = Decimal(str(value)).quantize(
+        Decimal(quantum),
+        rounding=ROUND_HALF_UP,
+    )
+    return float(rounded)
 
 
 def _merge_provider_details(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:

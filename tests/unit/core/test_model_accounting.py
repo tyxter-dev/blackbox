@@ -4,8 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from blackbox import AgentResult, AgentRuntime, ModelCacheControl, ModelPricing
+from blackbox import AgentResult, AgentRuntime, MarkupPolicy, ModelCacheControl, ModelPricing
 from blackbox.core.accounting import (
+    ModelCatalog,
     ModelUsage,
     usage_from_anthropic_message,
     usage_from_gemini_chunk,
@@ -314,6 +315,141 @@ def test_usage_accumulates_split_cache_fields_and_estimates_split_cost() -> None
     assert estimate["output"] == 0.00006
     assert estimate["reasoning_output"] == 0.000012
     assert estimate["total"] == pytest.approx(0.00019675)
+    assert estimate["kind"] == "provider_cost"
+    assert estimate["line_items"] == [
+        {
+            "name": "input",
+            "quantity": 113,
+            "unit": "tokens",
+            "rate_per_million": 1,
+            "amount": 0.000113,
+        },
+        {
+            "name": "cache_read_input",
+            "quantity": 30,
+            "unit": "tokens",
+            "rate_per_million": 0.1,
+            "amount": 0.000003,
+        },
+        {
+            "name": "cache_creation_input",
+            "quantity": 7,
+            "unit": "tokens",
+            "rate_per_million": 1.25,
+            "amount": 0.00000875,
+        },
+        {
+            "name": "output",
+            "quantity": 30,
+            "unit": "tokens",
+            "rate_per_million": 2,
+            "amount": 0.00006,
+        },
+        {
+            "name": "reasoning_output",
+            "quantity": 4,
+            "unit": "tokens",
+            "rate_per_million": 3,
+            "amount": 0.000012,
+        },
+    ]
+
+
+def test_model_pricing_estimate_preserves_source_metadata() -> None:
+    pricing = ModelPricing(
+        provider="openai",
+        model="gpt-example",
+        input_per_million=1,
+        output_per_million=2,
+        source="blackbox-bundled",
+        catalog_version="2026-05-06",
+        effective_at="2026-05-01",
+        retrieved_at="2026-05-06T00:00:00Z",
+        source_url="https://example.test/pricing",
+    )
+
+    estimate = pricing.estimate(ModelUsage(input_tokens=10, output_tokens=5))
+
+    assert estimate["kind"] == "provider_cost"
+    assert estimate["source"] == "blackbox-bundled"
+    assert estimate["catalog_version"] == "2026-05-06"
+    assert estimate["effective_at"] == "2026-05-01"
+    assert estimate["retrieved_at"] == "2026-05-06T00:00:00Z"
+    assert estimate["source_url"] == "https://example.test/pricing"
+
+
+def test_model_catalog_estimates_billable_markup_from_provider_cost() -> None:
+    catalog = ModelCatalog()
+    catalog.register_pricing(
+        ModelPricing(
+            provider="openai",
+            model="gpt-example",
+            input_per_million=1,
+            output_per_million=2,
+        )
+    )
+    catalog.register_billing_policy(
+        MarkupPolicy(
+            multiplier=1.5,
+            fixed_per_run=0.001,
+            round_to="0.000001",
+            name="default_markup",
+        )
+    )
+    usage = ModelUsage(input_tokens=100, output_tokens=50)
+
+    provider_cost = catalog.estimate_provider_cost(
+        provider="openai",
+        model="gpt-example",
+        usage=usage,
+    )
+    billable = catalog.estimate_billable(
+        provider="openai",
+        model="gpt-example",
+        usage=usage,
+        provider_cost=provider_cost,
+    )
+
+    assert provider_cost is not None
+    assert provider_cost["total"] == 0.0002
+    assert billable is not None
+    assert billable["kind"] == "billable"
+    assert billable["pricing_policy"] == "default_markup"
+    assert billable["provider_cost_total"] == 0.0002
+    assert billable["total"] == 0.0013
+
+
+def test_billable_pricing_catalog_overrides_markup_policy() -> None:
+    catalog = ModelCatalog()
+    catalog.register_pricing(
+        ModelPricing(
+            provider="openai",
+            model="gpt-example",
+            input_per_million=1,
+            output_per_million=2,
+        )
+    )
+    catalog.register_billable_pricing(
+        ModelPricing(
+            provider="openai",
+            model="gpt-example",
+            input_per_million=10,
+            output_per_million=20,
+            source="tenant-catalog",
+        )
+    )
+    catalog.register_billing_policy(MarkupPolicy(multiplier=100))
+
+    billable = catalog.estimate_billable(
+        provider="openai",
+        model="gpt-example",
+        usage=ModelUsage(input_tokens=100, output_tokens=50),
+    )
+
+    assert billable is not None
+    assert billable["kind"] == "billable"
+    assert billable["source"] == "tenant-catalog"
+    assert billable["total"] == 0.002
 
 
 def test_anthropic_usage_extraction_handles_cache_tokens() -> None:

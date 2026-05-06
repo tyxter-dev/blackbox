@@ -41,7 +41,7 @@ from blackbox.compat.providers import (
     register_default_model_providers,
     resolve_model_route,
 )
-from blackbox.core.accounting import ModelCatalog, ModelPricing, ModelUsage
+from blackbox.core.accounting import MarkupPolicy, ModelCatalog, ModelPricing, ModelUsage
 from blackbox.core.approvals import ApprovalDecision, ApprovalRequest
 from blackbox.core.artifacts import Artifact, ArtifactRef
 from blackbox.core.cache import (
@@ -308,6 +308,7 @@ __all__ = [
     "MCPTrustDecision",
     "MCPTrustLevel",
     "ManagedRealtimeSession",
+    "MarkupPolicy",
     "MediaRef",
     "Memory",
     "MemorySpec",
