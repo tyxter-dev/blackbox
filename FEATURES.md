@@ -161,6 +161,7 @@ Status legend:
 | OpenAI Agents SDK provider | Supported | `OpenAICloudAgentProvider` | Supports injected `client=...` implementations and the optional production `openai-agents` wrapper for Agents SDK sessions, streaming events, HITL approval resume, artifacts, cancellation, MCP-capable agent definitions, and continuation metadata. |
 | Claude Code Agent SDK provider | Supported | `ClaudeCodeAgentProvider` | Supports injected `client=...` implementations and the optional production `claude-agent-sdk` wrapper for sessions, streaming events, workspace/tool events, approvals, artifacts, cancellation, and resume metadata. |
 | Cloud agent providers | Partial | `OpenAICloudAgentProvider`, `ClaudeCodeAgentProvider`, `VertexAIAgentEngineProvider` | OpenAI Agents SDK and Claude Code are implemented; Vertex Agent Engine remains an honest stub. |
+| Cloud agent webhook ingress | Contract only | `AgentWebhookProvider`, `runtime.agents.ingest_webhook(...)` | Optional provider contract and runtime persistence path exist for verified webhook deliveries; no built-in provider verifies or maps live webhook payloads yet. |
 
 ## Artifacts, Workspaces, MCP, and Observability
 

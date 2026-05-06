@@ -16,12 +16,14 @@ from blackbox.core.accounting import (
 from blackbox.core.approvals import ApprovalDecision
 from blackbox.core.artifacts import Artifact, ArtifactPage, ArtifactRef
 from blackbox.core.errors import (
+    AgentWebhookError,
     ApprovalError,
     ConfigurationError,
     SessionError,
     SessionNotFoundError,
     SessionResumeError,
     SessionTerminalError,
+    UnsupportedFeatureError,
 )
 from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.results import (
@@ -41,7 +43,13 @@ from blackbox.core.state import ProviderState, RunState
 from blackbox.core.stores import EventStore, RunStore, SessionStore
 from blackbox.observability.presets import ObservabilityPreset
 from blackbox.observability.traces import TraceContext, trace_metadata_from_events
-from blackbox.providers.base import AgentSpec, TaskSpec
+from blackbox.providers.base import (
+    AgentSpec,
+    AgentWebhookDelivery,
+    AgentWebhookIngestResult,
+    AgentWebhookProvider,
+    TaskSpec,
+)
 from blackbox.providers.registry import ProviderRef, ProviderRegistry
 from blackbox.runtime.config import RuntimeConfig, workflow_policy
 from blackbox.runtime.event_metadata import (
@@ -255,6 +263,53 @@ class AgentRuntimeFacade:
             after_event_id=after_event_id,
             limit=limit,
         )
+
+    async def ingest_webhook(
+        self,
+        *,
+        provider: str,
+        headers: Mapping[str, str],
+        body: bytes,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> AgentWebhookIngestResult:
+        """Ingest one verified cloud-agent webhook through an opt-in provider.
+
+        This is a placeholder architecture surface. Provider adapters that
+        implement :class:`AgentWebhookProvider` must verify signatures, reject
+        replays, and normalize any provider-native payload into canonical
+        ``AgentEvent`` records. The runtime persists those events, but it does
+        not parse or trust provider webhook bodies itself.
+        """
+
+        provider_key = ProviderRef.parse(provider).provider_key
+        adapter = self.registry.get_agent(provider_key)
+        if not isinstance(adapter, AgentWebhookProvider):
+            raise UnsupportedFeatureError(
+                f"Provider {provider_key!r} does not support agent webhook ingress."
+            )
+        adapter_provider_id = adapter.provider_id
+        delivery = AgentWebhookDelivery(
+            provider=adapter_provider_id,
+            headers=dict(headers),
+            body=body,
+            metadata=dict(metadata or {}),
+        )
+        result = await adapter.ingest_webhook(delivery)
+        if result.provider != adapter_provider_id:
+            raise AgentWebhookError(
+                f"Provider {adapter_provider_id!r} returned webhook result for "
+                f"{result.provider!r}."
+            )
+        normalized_events = [
+            _webhook_scoped_event(event, provider=adapter_provider_id, result=result)
+            for event in result.events
+        ]
+        result.events = normalized_events
+        for event in normalized_events:
+            await self._record_event(event)
+            if event.session_id is not None:
+                await self._persist_session_event(event.session_id, event)
+        return result
 
     async def resume_session(
         self,
@@ -942,6 +997,28 @@ def _session_scoped_event(event: AgentEvent, *, session_id: str) -> AgentEvent:
     if event.session_id == session_id:
         return event
     return replace(event, session_id=session_id)
+
+
+def _webhook_scoped_event(
+    event: AgentEvent,
+    *,
+    provider: str,
+    result: AgentWebhookIngestResult,
+) -> AgentEvent:
+    session_id = event.session_id
+    if session_id is None and result.session_ref is not None:
+        session_id = result.session_ref.id
+    data = {
+        **event.data,
+        "webhook_event_id": result.webhook_event_id,
+        "webhook_event_type": result.webhook_event_type,
+        "webhook_ingest_status": result.status,
+    }
+    if result.dedupe_key is not None:
+        data["webhook_dedupe_key"] = result.dedupe_key
+    if result.provider_session_id is not None:
+        data["provider_session_id"] = result.provider_session_id
+    return replace(event, provider=event.provider or provider, session_id=session_id, data=data)
 
 
 def _provider_event_id(event: AgentEvent) -> str | None:

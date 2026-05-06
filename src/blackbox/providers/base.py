@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from blackbox.core.approvals import ApprovalDecision
@@ -16,6 +17,7 @@ from blackbox.tools.hosted.specs import HostedToolSpec
 
 CacheStrategy = Literal["auto", "ephemeral", "provider_managed", "bypass"]
 CompactionStrategy = Literal["auto", "disabled", "aggressive"]
+AgentWebhookIngressStatus = Literal["accepted", "ignored", "reconcile_required"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -145,6 +147,39 @@ class TaskSpec:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(slots=True)
+class AgentWebhookDelivery:
+    """Raw inbound webhook delivery for an agent provider.
+
+    Provider adapters own signature verification, replay checks, and native
+    payload parsing. The runtime only supplies the raw request envelope and
+    persists normalized events returned by webhook-capable adapters.
+    """
+
+    provider: str
+    headers: dict[str, str]
+    body: bytes
+    received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class AgentWebhookIngestResult:
+    """Provider-normalized outcome of ingesting one webhook delivery."""
+
+    provider: str
+    status: AgentWebhookIngressStatus = "accepted"
+    webhook_event_id: str | None = None
+    webhook_event_type: str | None = None
+    session_ref: SessionRef | None = None
+    provider_session_id: str | None = None
+    dedupe_key: str | None = None
+    requires_session_fetch: bool = False
+    events: list[AgentEvent] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    raw: Any | None = None
+
+
 @runtime_checkable
 class ModelProvider(Protocol):
     """Provider that runs model turns.
@@ -207,4 +242,16 @@ class AgentProvider(Protocol):
         limit: int = 100,
     ) -> ArtifactPage:
         """List artifacts produced by a session with optional type and cursor filters."""
+        ...
+
+
+@runtime_checkable
+class AgentWebhookProvider(Protocol):
+    """Optional provider protocol for verified cloud-agent webhook ingress."""
+
+    async def ingest_webhook(
+        self,
+        delivery: AgentWebhookDelivery,
+    ) -> AgentWebhookIngestResult:
+        """Verify and normalize one provider webhook delivery."""
         ...

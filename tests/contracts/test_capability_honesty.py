@@ -166,6 +166,7 @@ def test_local_agent_capabilities_default_no_approvals() -> None:
     assert caps.supports_sessions
     assert caps.supports_cancellation
     assert caps.supports_approvals is False
+    assert caps.supports_webhooks is False
 
 
 def test_local_agent_capabilities_with_approval_policy() -> None:
@@ -205,6 +206,7 @@ def test_claude_code_sdk_capabilities_advertise_provider_lifecycle() -> None:
     assert caps.supports_mcp is True
     assert caps.supports_cancellation is True
     assert caps.supports_resume is True
+    assert caps.supports_webhooks is False
 
 
 def test_openai_agents_sdk_capabilities_advertise_provider_lifecycle() -> None:
@@ -218,6 +220,7 @@ def test_openai_agents_sdk_capabilities_advertise_provider_lifecycle() -> None:
     assert caps.supports_mcp is True
     assert caps.supports_cancellation is True
     assert caps.supports_resume is True
+    assert caps.supports_webhooks is False
 
 
 @pytest.mark.parametrize(

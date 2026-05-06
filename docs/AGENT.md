@@ -60,6 +60,7 @@ cancellation
 artifact listing
 provider-native session/run/checkpoint references
 provider-native event payload preservation
+verified webhook ingress normalization
 session-level capability reporting
 ```
 
@@ -95,6 +96,7 @@ session supervision.
 | Session refs | `src/blackbox/core/sessions.py` | Implemented. `AgentRef`, `SessionRef`, `InvocationRef`, and `AgentSession` are public contracts. |
 | Session state | `src/blackbox/core/session_state.py`, `src/blackbox/core/stores.py` | Implemented. `AgentSessionState`, `SessionStore`, `InMemorySessionStore`, `JSONLSessionStore`, and `SQLiteSessionStore` persist provider-native session IDs, replay cursors, invocations, approvals, workspace/MCP metadata, and artifact refs. |
 | Events | `src/blackbox/core/events.py` | Implemented. Session, cloud-agent, workspace, approval, model, tool, MCP, artifact, handoff, guardrail, retry, and eval event names exist. |
+| Webhook ingress | `src/blackbox/providers/base.py`, `src/blackbox/runtime/agents.py` | Contract only. `AgentWebhookProvider` and `runtime.agents.ingest_webhook(...)` define the opt-in path for verified cloud-agent webhooks, but no built-in provider maps live webhook payloads yet. |
 | Tests | `tests/runtime/test_local_agent_provider.py`, `tests/runtime/test_openai_agents_provider.py`, `tests/runtime/test_claude_code_agent_provider.py`, `tests/contracts/test_capability_honesty.py` | Current behavior is covered with local, injected-client, SDK-wrapper, and capability tests. |
 
 ## 5. Primary Users
@@ -208,6 +210,23 @@ sessions replay from the durable session ledger without contacting the provider.
 Providers that do not advertise `supports_resume` can replay stored history but
 must not claim live reconnect after process restart.
 
+### A3c: Ingest A Cloud-Agent Webhook
+
+```python
+result = await runtime.agents.ingest_webhook(
+    provider="claude-managed-agent",
+    headers=request.headers,
+    body=await request.body(),
+)
+```
+
+Webhook ingress is an optional companion contract, not part of the base
+`AgentProvider` protocol. Providers that implement `AgentWebhookProvider` must
+verify signatures, reject replays, and normalize safe provider state changes
+into `AgentEvent` records. The runtime persists returned events to the same
+session ledger used by streaming and replay. Providers that have not opted in
+raise a typed unsupported error.
+
 ### A4: Pause For Approval And Resume
 
 ```python
@@ -304,6 +323,23 @@ projection, and metadata. `TaskSpec` defines prompt, optional model, workspace,
 input artifacts, task-scoped hosted tools, response override, metadata, and
 provider specific `extra`.
 
+Webhook-capable providers may additionally implement:
+
+```python
+@runtime_checkable
+class AgentWebhookProvider(Protocol):
+    async def ingest_webhook(
+        self,
+        delivery: AgentWebhookDelivery,
+    ) -> AgentWebhookIngestResult:
+        ...
+```
+
+`AgentWebhookDelivery` carries raw request headers, body bytes, received time,
+and application metadata. `AgentWebhookIngestResult` carries the verified
+webhook ID/type, optional session reference, dedupe key, whether the application
+should fetch provider state, and any normalized `AgentEvent` records to persist.
+
 ## 8. Event Taxonomy
 
 `AgentProvider` adapters should map common lifecycle concepts to these canonical
@@ -318,6 +354,8 @@ session.cancelled
 cloud_agent.status.changed
 cloud_agent.log
 cloud_agent.checkpoint.created
+cloud_agent.webhook.received
+cloud_agent.webhook.ignored
 agent.response.message.created
 model.request.started
 model.item.created
@@ -375,6 +413,7 @@ provider-specific `data` fields.
 | A-P1-6 | Artifact normalization | Partial | Provider files, patches, logs, checkpoints, screenshots, and reports normalize into `Artifact` records. |
 | A-P1-7 | Session persistence | Implemented | `SessionStore` owns durable agent session state while `RunStore` remains the compact model-loop continuation store. |
 | A-P1-8 | Agent result collector | Implemented | `runtime.agents.run(...)` returns `AgentSessionResult[T]` with typed output, text, strict status, events, artifacts, session ref, provider state, usage, trace, and metadata. |
+| A-P1-9 | Cloud-agent webhook ingress | Contract only | `AgentWebhookProvider` and `runtime.agents.ingest_webhook(...)` exist; built-in providers must not advertise support until signature verification, replay rejection, provider fetch/reconcile, and live payload mapping are covered by fixtures. |
 
 ### P2 - Later
 
@@ -417,6 +456,10 @@ implement downstream admin, team, billing, or scheduling products
 5. **Vertex scope:** Keep Vertex AI Agent Engine as a scaffold until its exact
    session, event, artifact, eval, and deployment contract is implemented and
    tested.
+6. **Webhook provider coverage:** The ingress contract is intentionally
+   provider-neutral. Do not mark a built-in provider as webhook-capable until
+   signed webhook fixtures or live delivery tests cover verification, idempotent
+   event IDs, provider state reconciliation, approval/tool events, and retries.
 
 ## 12. Definition Of Done
 

@@ -22,6 +22,14 @@ class UnsupportedFeatureError(CapabilityError):
     """Alias for CapabilityError kept for backward compatibility."""
 
 
+class AgentWebhookError(AgentRuntimeError):
+    """Raised when an agent-provider webhook cannot be ingested."""
+
+
+class AgentWebhookVerificationError(AgentWebhookError):
+    """Raised when a provider webhook fails signature or replay verification."""
+
+
 class ProviderExecutionError(AgentRuntimeError):
     """Raised when a provider call fails at runtime (network, server, parsing)."""
 

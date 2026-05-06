@@ -71,6 +71,8 @@ from blackbox.core.content import (
     VideoFramePart,
 )
 from blackbox.core.errors import (
+    AgentWebhookError,
+    AgentWebhookVerificationError,
     OutputValidationError,
     SessionBusyError,
     SessionCursorError,
@@ -158,6 +160,10 @@ from blackbox.pricing import (
 from blackbox.providers.base import (
     AgentProvider,
     AgentSpec,
+    AgentWebhookDelivery,
+    AgentWebhookIngestResult,
+    AgentWebhookIngressStatus,
+    AgentWebhookProvider,
     CompactionControl,
     ModelCacheControl,
     ModelProvider,
@@ -270,6 +276,12 @@ __all__ = [
     "AgentSessionResultStatus",
     "AgentSessionState",
     "AgentSpec",
+    "AgentWebhookDelivery",
+    "AgentWebhookError",
+    "AgentWebhookIngestResult",
+    "AgentWebhookIngressStatus",
+    "AgentWebhookProvider",
+    "AgentWebhookVerificationError",
     "ApplyPatch",
     "ApprovalDecision",
     "ApprovalRequest",

@@ -176,6 +176,7 @@ await runtime.agents.send_message(...)
 await runtime.agents.approve(...)
 await runtime.agents.cancel(...)
 await runtime.agents.list_artifacts(...)
+await runtime.agents.ingest_webhook(...)
 ```
 
 | # | Status | Functionality | Test | What it proves |
@@ -194,6 +195,7 @@ await runtime.agents.list_artifacts(...)
 | 4.12 | ✅ | Client-backed Claude Code lifecycle | `runtime/test_claude_code_agent_provider.py` | Injected Claude Code clients can create agents, start sessions, stream/resume events, send messages, approve, cancel, and list artifacts. |
 | 4.13 | ✅ | SDK-backed Claude Code lifecycle | `runtime/test_claude_code_agent_provider.py::test_claude_code_sdk_backed_provider_runs_without_injected_client` | Optional `claude-agent-sdk` wrapper maps sessions, streaming events, workspace artifacts, approvals, cancellation, and resume metadata through `ClaudeCodeAgentProvider`. |
 | 4.14 | ✅ | SDK-backed OpenAI Agents lifecycle | `runtime/test_openai_agents_provider.py` | Optional `openai-agents` wrapper maps Agents SDK sessions, streaming events, approvals, continuation, cancellation, and artifacts through `OpenAICloudAgentProvider`. |
+| 4.15 | ✅ | Contract-only webhook ingress | `runtime/test_agent_webhook_ingress.py` | Providers must opt into `AgentWebhookProvider`; normalized webhook events persist through the same session ledger and duplicate event IDs remain idempotent. |
 
 ---
 

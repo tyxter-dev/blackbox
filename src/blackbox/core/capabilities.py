@@ -228,6 +228,7 @@ class AgentCapabilities:
 
     supports_sessions: bool = True
     supports_streaming_events: bool = True
+    supports_webhooks: bool = False
     supports_artifacts: bool = False
     supports_workspace: bool = False
     supports_approvals: bool = False

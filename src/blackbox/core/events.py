@@ -179,6 +179,8 @@ class EventTypes:
     CLOUD_AGENT_STATUS_CHANGED = "cloud_agent.status.changed"
     CLOUD_AGENT_LOG = "cloud_agent.log"
     CLOUD_AGENT_CHECKPOINT_CREATED = "cloud_agent.checkpoint.created"
+    CLOUD_AGENT_WEBHOOK_RECEIVED = "cloud_agent.webhook.received"
+    CLOUD_AGENT_WEBHOOK_IGNORED = "cloud_agent.webhook.ignored"
 
     AGENT_RESPONSE_MESSAGE_CREATED = "agent.response.message.created"
 
