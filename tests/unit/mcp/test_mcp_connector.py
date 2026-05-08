@@ -257,6 +257,34 @@ async def test_mcp_connector_surfaces_required_approval() -> None:
     assert events[0].data["ref"] == "mcp:tickets.lookup"
 
 
+async def test_mcp_trust_approval_error_explains_server_approval_boundary() -> None:
+    connector = MCPConnector(
+        [
+            MCPServerSpec(
+                name="tickets",
+                transport="stdio",
+                command="fake-mcp",
+                require_approval="never",
+                trust_policy=MCPServerTrustPolicy(
+                    server="tickets",
+                    trust_level=MCPTrustLevel.TRUSTED,
+                    allowed_tools=frozenset({"lookup"}),
+                    approval_mode=MCPApprovalMode.ALWAYS,
+                ),
+            )
+        ],
+        transports={"tickets": _FakeTransport()},
+    )
+
+    with pytest.raises(ApprovalError) as exc_info:
+        await connector.call_tool("tickets", "lookup", {"ticket_id": "T-1"})
+
+    assert "Server require_approval='never' only disables provider/server approval" in str(
+        exc_info.value
+    )
+    assert "approval_mode='never'" in str(exc_info.value)
+
+
 async def test_mcp_call_failed_event_redacts_errors_by_default() -> None:
     connector = MCPConnector(
         [

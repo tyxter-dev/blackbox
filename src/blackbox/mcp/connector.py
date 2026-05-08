@@ -393,7 +393,9 @@ class MCPConnector:
             })
             self._emit_approval_required(definition, "MCP trust policy requires approval.")
             raise ApprovalError(
-                f"MCP trust policy required approval for MCP call {definition.ref}."
+                f"MCP trust policy required approval for MCP call {definition.ref}. "
+                "Server require_approval='never' only disables provider/server approval; "
+                "configure the MCP trust policy approval_mode='never' for trusted write tools."
             )
         if self.policy is None:
             return

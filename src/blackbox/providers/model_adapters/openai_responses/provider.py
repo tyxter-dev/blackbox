@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import AsyncIterator
+from hashlib import sha1
 from typing import Any
 
 from blackbox.core.accounting import usage_from_openai_response
@@ -94,6 +96,9 @@ _MCP_ITEM_DATA_KEYS = (
     "error",
     "approval_request_id",
 )
+
+_OPENAI_FUNCTION_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_TOOL_NAME_ALIASES_KEY = "_blackbox_tool_name_aliases"
 
 
 class OpenAIResponsesProvider:
@@ -318,6 +323,7 @@ class OpenAIResponsesProvider:
         """Stream one Responses API turn as normalized events and final provider state."""
         client = self._get_client()
         kwargs = self._build_request_kwargs(request)
+        tool_name_aliases = kwargs.pop(_TOOL_NAME_ALIASES_KEY, {})
 
         yield AgentEvent(
             type=EventTypes.MODEL_REQUEST_STARTED,
@@ -339,7 +345,11 @@ class OpenAIResponsesProvider:
                             if candidate is not None:
                                 terminal_event_type = event_type
                                 terminal_response = candidate
-                        mapped = _map_event(sdk_event, provider=self.provider_id)
+                        mapped = _map_event(
+                            sdk_event,
+                            provider=self.provider_id,
+                            tool_name_aliases=tool_name_aliases,
+                        )
                         if mapped is not None:
                             emitted_provider_output = True
                             yield mapped
@@ -366,7 +376,11 @@ class OpenAIResponsesProvider:
                 )
                 attempt += 1
 
-        provider_state = _build_provider_state(final_response, provider=self.provider_id)
+        provider_state = _build_provider_state(
+            final_response,
+            provider=self.provider_id,
+            tool_name_aliases=tool_name_aliases,
+        )
         usage = usage_from_openai_response(final_response)
         data: dict[str, Any] = {"model": request.model, "provider_state": provider_state}
         status = _attr(final_response, "status")
@@ -533,7 +547,103 @@ class OpenAIResponsesProvider:
                     )
                 kwargs["text"] = {**extra_text, "format": kwargs["text"]["format"]}
         kwargs.update(extra)
+        kwargs.pop(_TOOL_NAME_ALIASES_KEY, None)
+        tools_value = kwargs.get("tools")
+        if isinstance(tools_value, list):
+            aliased_tools, tool_name_aliases = _alias_openai_function_tool_names(tools_value)
+            kwargs["tools"] = aliased_tools
+            if tool_name_aliases:
+                kwargs[_TOOL_NAME_ALIASES_KEY] = tool_name_aliases
+                if "tool_choice" in kwargs:
+                    kwargs["tool_choice"] = _alias_tool_choice(
+                        kwargs["tool_choice"],
+                        tool_name_aliases,
+                    )
         return kwargs
+
+
+def _alias_openai_function_tool_names(
+    tools: list[Any],
+) -> tuple[list[Any], dict[str, str]]:
+    aliases: dict[str, str] = {}
+    used_names = {
+        str(tool["name"])
+        for tool in tools
+        if _is_function_tool_payload(tool)
+        and isinstance(tool.get("name"), str)
+        and _OPENAI_FUNCTION_NAME_RE.fullmatch(str(tool["name"]))
+    }
+    aliased_tools: list[Any] = []
+    for tool in tools:
+        if not _is_function_tool_payload(tool):
+            aliased_tools.append(tool)
+            continue
+        name = tool.get("name")
+        if not isinstance(name, str) or _OPENAI_FUNCTION_NAME_RE.fullmatch(name):
+            aliased_tools.append(tool)
+            continue
+        alias = _safe_openai_function_name(name, used_names)
+        used_names.add(alias)
+        aliases[alias] = name
+        copied = dict(tool)
+        copied["name"] = alias
+        metadata = copied.get("metadata")
+        metadata = dict(metadata) if isinstance(metadata, dict) else {}
+        metadata.setdefault("canonical_name", name)
+        metadata.setdefault("provider_name", alias)
+        copied["metadata"] = metadata
+        aliased_tools.append(copied)
+    return aliased_tools, aliases
+
+
+def _is_function_tool_payload(tool: Any) -> bool:
+    if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
+        return False
+    tool_type = tool.get("type")
+    return tool_type is None or tool_type == "function"
+
+
+def _safe_openai_function_name(name: str, used_names: set[str]) -> str:
+    base = re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_") or "tool"
+    if len(base) > 64:
+        digest = sha1(name.encode("utf-8")).hexdigest()[:8]
+        base = f"{base[:55]}_{digest}"
+    if base not in used_names:
+        return base
+    digest = sha1(name.encode("utf-8")).hexdigest()[:8]
+    candidate = f"{base[:55]}_{digest}"
+    suffix = 2
+    while candidate in used_names:
+        counter = f"_{suffix}"
+        candidate = f"{base[:64 - len(counter)]}{counter}"
+        suffix += 1
+    return candidate
+
+
+def _alias_tool_choice(tool_choice: Any, aliases: dict[str, str]) -> Any:
+    canonical_to_alias = {canonical: alias for alias, canonical in aliases.items()}
+    if isinstance(tool_choice, str):
+        return canonical_to_alias.get(tool_choice, tool_choice)
+    if not isinstance(tool_choice, dict):
+        return tool_choice
+    copied = dict(tool_choice)
+    name = copied.get("name")
+    if isinstance(name, str) and name in canonical_to_alias:
+        copied["name"] = canonical_to_alias[name]
+    function = copied.get("function")
+    if isinstance(function, dict):
+        function_name = function.get("name")
+        if isinstance(function_name, str) and function_name in canonical_to_alias:
+            function = dict(function)
+            function["name"] = canonical_to_alias[function_name]
+            copied["function"] = function
+    return copied
+
+
+def _canonical_tool_name(name: str, aliases: dict[str, str] | None) -> str:
+    if not aliases:
+        return name
+    return aliases.get(name, name)
 
 
 def _coerce_input(value: str | list[Any]) -> Any:
@@ -573,7 +683,12 @@ def _merge_text_format(kwargs: dict[str, Any], request: TurnRequest) -> None:
     kwargs["text"] = text_config
 
 
-def _map_event(sdk_event: Any, *, provider: str) -> AgentEvent | None:
+def _map_event(
+    sdk_event: Any,
+    *,
+    provider: str,
+    tool_name_aliases: dict[str, str] | None = None,
+) -> AgentEvent | None:
     event_type = getattr(sdk_event, "type", None)
     if not isinstance(event_type, str):
         return None
@@ -598,11 +713,21 @@ def _map_event(sdk_event: Any, *, provider: str) -> AgentEvent | None:
 
     if event_type == "response.output_item.added":
         item = getattr(sdk_event, "item", None)
-        return _map_item_added(item, provider=provider, raw=sdk_event)
+        return _map_item_added(
+            item,
+            provider=provider,
+            raw=sdk_event,
+            tool_name_aliases=tool_name_aliases,
+        )
 
     if event_type == "response.output_item.done":
         item = getattr(sdk_event, "item", None)
-        return _map_item_done(item, provider=provider, raw=sdk_event)
+        return _map_item_done(
+            item,
+            provider=provider,
+            raw=sdk_event,
+            tool_name_aliases=tool_name_aliases,
+        )
 
     if event_type in {"response.created", "response.in_progress"}:
         return None
@@ -618,7 +743,13 @@ def _map_event(sdk_event: Any, *, provider: str) -> AgentEvent | None:
     )
 
 
-def _map_item_added(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
+def _map_item_added(
+    item: Any,
+    *,
+    provider: str,
+    raw: Any,
+    tool_name_aliases: dict[str, str] | None = None,
+) -> AgentEvent | None:
     if item is None:
         return None
     item_type = getattr(item, "type", None) or (item.get("type") if isinstance(item, dict) else None)
@@ -632,8 +763,12 @@ def _map_item_added(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
     data: dict[str, Any] = {"item_type": item_type}
     status: ItemStatus = "created"
     if item_type == "function_call":
+        provider_name = _attr(item, "name") or ""
+        name = _canonical_tool_name(str(provider_name), tool_name_aliases)
         data["call_id"] = _attr(item, "call_id") or item_id or ""
-        data["name"] = _attr(item, "name") or ""
+        data["name"] = name
+        if provider_name and provider_name != name:
+            data["provider_name"] = provider_name
         data["arguments"] = _parse_arguments(_attr(item, "arguments"))
     elif item_type in _ITEM_TYPE_TO_RUN_ITEM and item_type.startswith("mcp_"):
         data.update(_mcp_item_data(item, item_type=item_type))
@@ -661,7 +796,13 @@ def _map_item_added(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
     )
 
 
-def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
+def _map_item_done(
+    item: Any,
+    *,
+    provider: str,
+    raw: Any,
+    tool_name_aliases: dict[str, str] | None = None,
+) -> AgentEvent | None:
     """Map a completed Responses output item into the corresponding runtime event."""
     if item is None:
         return None
@@ -672,17 +813,22 @@ def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
     item_id = getattr(item, "id", None) or (item.get("id") if isinstance(item, dict) else None)
 
     if item_type == "function_call":
+        provider_name = _attr(item, "name") or ""
+        name = _canonical_tool_name(str(provider_name), tool_name_aliases)
+        data = {
+            "call_id": _attr(item, "call_id") or item_id or "",
+            "name": name,
+            "arguments": _parse_arguments(_attr(item, "arguments")),
+            "item_type": item_type,
+            "phase": "done",
+        }
+        if provider_name and provider_name != name:
+            data["provider_name"] = provider_name
         return AgentEvent(
             type=EventTypes.TOOL_CALL_REQUESTED,
             provider=provider,
             item_id=item_id,
-            data={
-                "call_id": _attr(item, "call_id") or item_id or "",
-                "name": _attr(item, "name") or "",
-                "arguments": _parse_arguments(_attr(item, "arguments")),
-                "item_type": item_type,
-                "phase": "done",
-            },
+            data=data,
             raw=raw,
         )
 
@@ -781,11 +927,16 @@ def _map_item_done(item: Any, *, provider: str, raw: Any) -> AgentEvent | None:
     )
 
 
-def _build_provider_state(final_response: Any, *, provider: str) -> ProviderState:
+def _build_provider_state(
+    final_response: Any,
+    *,
+    provider: str,
+    tool_name_aliases: dict[str, str] | None = None,
+) -> ProviderState:
     response_id = _attr(final_response, "id")
     output = _attr(final_response, "output") or []
     native_history = list(output) if isinstance(output, list) else []
-    tool_state = _provider_tool_state(native_history)
+    tool_state = _provider_tool_state(native_history, tool_name_aliases=tool_name_aliases)
     continuation: dict[str, Any] = {"previous_response_id": response_id} if response_id else {}
     output_item_ids = tool_state.get("output_item_ids")
     if output_item_ids:
@@ -799,7 +950,11 @@ def _build_provider_state(final_response: Any, *, provider: str) -> ProviderStat
     )
 
 
-def _provider_tool_state(output: list[Any]) -> dict[str, Any]:
+def _provider_tool_state(
+    output: list[Any],
+    *,
+    tool_name_aliases: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Extract replayable tool, hosted-tool, MCP, file, and source-reference state."""
     output_item_ids: list[str] = []
     function_calls: list[dict[str, Any]] = []
@@ -822,10 +977,19 @@ def _provider_tool_state(output: list[Any]) -> dict[str, Any]:
                 "type": item_type,
                 "call_id": call_id,
                 "status": _attr(item, "status"),
-                "name": _attr(item, "name"),
+                "name": _canonical_tool_name(str(_attr(item, "name")), tool_name_aliases)
+                if _attr(item, "name") is not None
+                else None,
             }.items()
             if value is not None
         }
+        provider_name = _attr(item, "name")
+        if (
+            item_type == "function_call"
+            and isinstance(provider_name, str)
+            and _canonical_tool_name(provider_name, tool_name_aliases) != provider_name
+        ):
+            state_item["provider_name"] = provider_name
         if item_type == "function_call":
             function_calls.append(state_item)
         elif item_type in _HOSTED_TOOL_CALL_TYPES:

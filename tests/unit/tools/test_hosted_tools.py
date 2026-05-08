@@ -81,6 +81,22 @@ def test_remote_mcp_serializes_for_openai() -> None:
     }
 
 
+def test_remote_mcp_repr_redacts_authorization_values() -> None:
+    spec = RemoteMCP(
+        server_label="monday",
+        server_url="https://mcp.example.com/sse",
+        authorization="Bearer secret-token",
+        headers={"Authorization": "Bearer header-token", "X-Trace": "trace-1"},
+    )
+
+    text = repr(spec)
+
+    assert "secret-token" not in text
+    assert "header-token" not in text
+    assert "<redacted>" in text
+    assert "trace-1" in text
+
+
 def test_remote_mcp_serializes_connector_id_for_openai() -> None:
     spec = RemoteMCP(
         server_label="github",

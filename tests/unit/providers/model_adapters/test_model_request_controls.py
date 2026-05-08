@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from blackbox.core.errors import UnsupportedFeatureError
@@ -21,6 +23,10 @@ from blackbox.providers.model_adapters.gemini_generate_content import (
     GeminiGenerateContentProvider,
 )
 from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.openai_responses.provider import (
+    _TOOL_NAME_ALIASES_KEY,
+    _map_event,
+)
 from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
 
 
@@ -50,6 +56,57 @@ def test_openai_responses_maps_common_controls_to_native_kwargs() -> None:
     assert kwargs["parallel_tool_calls"] is False
     assert kwargs["reasoning"] == {"effort": "low"}
     assert kwargs["tools"] == [{"name": "lookup", "parameters": {"type": "object"}}]
+
+
+def test_openai_responses_aliases_invalid_function_tool_names() -> None:
+    request = TurnRequest(
+        model="gpt-test",
+        input="hi",
+        tools=[
+            {
+                "type": "function",
+                "name": "mcp:monday.search",
+                "description": "Search monday.com.",
+                "parameters": {"type": "object"},
+                "metadata": {"mcp": True},
+            }
+        ],
+        controls=ModelRequestControls(
+            tool_choice={"type": "function", "name": "mcp:monday.search"}
+        ),
+    )
+
+    kwargs = OpenAIResponsesProvider._build_request_kwargs(request)
+
+    assert kwargs["tools"][0]["name"] == "mcp_monday_search"
+    assert kwargs["tools"][0]["metadata"]["canonical_name"] == "mcp:monday.search"
+    assert kwargs["tools"][0]["metadata"]["provider_name"] == "mcp_monday_search"
+    assert kwargs["tool_choice"] == {"type": "function", "name": "mcp_monday_search"}
+    assert kwargs[_TOOL_NAME_ALIASES_KEY] == {"mcp_monday_search": "mcp:monday.search"}
+
+
+def test_openai_responses_maps_function_alias_back_to_canonical_name() -> None:
+    sdk_event = SimpleNamespace(
+        type="response.output_item.done",
+        item=SimpleNamespace(
+            type="function_call",
+            id="fc_1",
+            call_id="call_1",
+            name="mcp_monday_search",
+            arguments='{"query": "Customer Support Tickets"}',
+        ),
+    )
+
+    event = _map_event(
+        sdk_event,
+        provider="openai",
+        tool_name_aliases={"mcp_monday_search": "mcp:monday.search"},
+    )
+
+    assert event is not None
+    assert event.data["name"] == "mcp:monday.search"
+    assert event.data["provider_name"] == "mcp_monday_search"
+    assert event.data["arguments"] == {"query": "Customer Support Tickets"}
 
 
 def test_openai_extra_overrides_common_controls() -> None:

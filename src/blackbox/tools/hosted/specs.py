@@ -204,7 +204,7 @@ class ToolSearch:
 MCPApprovalPolicy: TypeAlias = Literal["always", "never"] | dict[str, Any]
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(slots=True, frozen=True, repr=False)
 class RemoteMCP:
     """Provider-native remote MCP server declaration.
 
@@ -228,6 +228,25 @@ class RemoteMCP:
     tool_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
     cache_control: dict[str, Any] | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        values = {
+            "server_label": self.server_label,
+            "server_url": self.server_url,
+            "connector_id": self.connector_id,
+            "server_description": self.server_description,
+            "authorization": "<redacted>" if self.authorization is not None else None,
+            "headers": _redact_header_mapping(self.headers),
+            "allowed_tools": self.allowed_tools,
+            "denied_tools": self.denied_tools,
+            "require_approval": self.require_approval,
+            "defer_loading": self.defer_loading,
+            "tool_configs": self.tool_configs,
+            "cache_control": self.cache_control,
+            "extra": self.extra,
+        }
+        args = ", ".join(f"{key}={value!r}" for key, value in values.items())
+        return f"RemoteMCP({args})"
 
 
 @dataclass(slots=True, frozen=True)
@@ -311,6 +330,21 @@ def hosted_tool_kind(spec: HostedToolSpec) -> str:
     if isinstance(spec, HostedToolRaw):
         return "raw"
     raise TypeError(f"Unknown hosted tool spec: {type(spec).__name__}")
+
+
+def _redact_header_mapping(headers: dict[str, str]) -> dict[str, str]:
+    redacted: dict[str, str] = {}
+    for key, value in headers.items():
+        redacted[key] = "<redacted>" if _is_sensitive_header(key) else value
+    return redacted
+
+
+def _is_sensitive_header(key: str) -> bool:
+    normalized = key.lower().replace("_", "-")
+    return any(
+        marker in normalized
+        for marker in ("authorization", "token", "secret", "api-key")
+    )
 
 
 def to_openai_tool(spec: HostedToolSpec) -> dict[str, Any]:
