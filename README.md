@@ -434,6 +434,15 @@ Runnable scripts live under `examples/`:
 - `examples/model_provider_knowledge_drawer.py` — support drawer answer grounded
   in a temporary OpenAI vector store and `FileSearch`. These examples load
   `examples/.env` when present.
+- `examples/dynamic_toolset_crm.py` — dynamic tool loading over a 31-tool CRM
+  catalog with a `ToolBudget`: the model searches and loads tools at run time
+  and the budget rejects overflow. Offline and deterministic.
+- `examples/mcp_toolset_fake_crm.py` — external MCP integration validated
+  offline: a managed stdio `MCPToolset` against the fake CRM server in
+  `examples/mcp_servers/`, exercising the real transport, discovery, trust,
+  and namespaced dispatch path with zero credentials.
+- `examples/mcp_servers/` — Tier 0 fake external MCP servers (CRM, booking,
+  maps) authored with blackbox's own `MCPServer` SDK; see the README inside.
 - `examples/launchmybakery.py` — Google Maps and BigQuery remote MCP toolsets
   rebuilt from Google's Launch My Bakery demo (requires Google ADC,
   `MAPS_API_KEY`, and a provider with remote MCP support).

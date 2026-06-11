@@ -75,9 +75,12 @@ snippet only) · ❌ no example.
 
 ## 4. Example backlog (priority order)
 
-1. `dynamic_toolset_crm.py` — a CRM-shaped 30-tool catalog with
+1. ✅ `dynamic_toolset_crm.py` — a CRM-shaped 31-tool catalog with
    `tool_selection="dynamic"` and a `ToolBudget`; mirrors the single most
-   common production shape. Offline (echo/scripted model).
+   common production shape. Offline (scripted model). Building it exposed
+   and fixed a real dispatch bug: dynamically loaded tools were visible to
+   the model but rejected at execution because the dispatch gate held a
+   frozen copy of the initially visible tool set.
 2. `human_escalation.py` — an agent that pauses on `call_human`-style
    approval, application resolves the `ApprovalDecision`, run resumes.
 3. `conversation_resume.py` — persistent multi-session conversation:
@@ -108,13 +111,14 @@ strictly more than nothing:
 
 ### Tier 0 — Offline fake MCP servers (default; runs in CI)
 
-Use the library's own `MCPServer` stdio authoring SDK to build small fake
-external providers under `examples/mcp_servers/` — e.g. a fake CRM, a fake
-booking/calendar service, a fake maps lookup, with realistic tool schemas
-and canned data. Every MCP example defaults to the fake server and accepts a
-flag/env switch for the real one. This dogfoods the authoring SDK and
-validates the full connector path (transport, list_tools, caching, trust,
-approval gates, namespacing) with zero accounts.
+✅ Shipped: `examples/mcp_servers/` contains fake CRM, booking, and maps
+servers authored with the library's own `MCPServer` stdio SDK — realistic
+tool schemas, canned data, and `MCPToolError` error paths.
+`examples/mcp_toolset_fake_crm.py` runs the full connector path (managed
+stdio transport, discovery, trust policy, namespaced dispatch, canonical MCP
+events) against the fake CRM with zero accounts. Every future MCP example
+defaults to a fake server and accepts a flag/env switch for the real one.
+This dogfoods the authoring SDK while validating the connector.
 
 ### Tier 1 — Golden contract fixtures
 

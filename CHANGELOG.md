@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Slice 24 — Dynamic tool dispatch fix and Tier 0 MCP fixtures
+
+Validating examples against production use-case data exposed a dispatch bug
+and produced the first offline MCP validation fixtures.
+
+- Fixes dynamic toolset dispatch: tools loaded through `load_tools` were
+  visible to the model but rejected at execution with
+  `tool_not_in_selected_plan`, because the loop's dispatch gate held a frozen
+  copy of the initially visible tool names. The gate now tracks the dynamic
+  session's live `visible_names`. Regression coverage asserts a loaded tool
+  actually executes.
+- Adds `examples/dynamic_toolset_crm.py`: dynamic tool loading over a 31-tool
+  CRM catalog with a `ToolBudget`, mirroring the most common production agent
+  shape from `docs/USE_CASE_VALIDATION.md`. Offline and deterministic.
+- Adds `examples/mcp_servers/` (fake CRM, booking, and maps MCP servers
+  authored with blackbox's own `MCPServer` stdio SDK, including
+  `MCPToolError` error paths) and `examples/mcp_toolset_fake_crm.py`, which
+  drives the real managed stdio transport, discovery, trust, and namespaced
+  dispatch against the fake CRM with zero credentials — Tier 0 of the MCP
+  validation ladder.
+
 ### Slice 23 — Provider model catalog
 
 Blackbox now keeps provider model identity separate from monetary pricing.
