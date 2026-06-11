@@ -4,9 +4,12 @@ import os
 from pathlib import Path
 from typing import Any
 
+_LIVE_PATH_FRAGMENTS = ("tests/integration", "tests/journey")
+_LIVE_MARK_FRAGMENTS = ("integration_", "journey")
+
 
 def pytest_configure(config: Any) -> None:
-    if not _should_load_dotenv(config):
+    if not _live_tests_selected_explicitly(config):
         return
     env_path = Path(__file__).resolve().parents[1] / ".env"
     if not env_path.exists():
@@ -29,9 +32,32 @@ def pytest_configure(config: Any) -> None:
         os.environ[name] = value
 
 
-def _should_load_dotenv(config: Any) -> bool:
+def pytest_collection_modifyitems(config: Any, items: list[Any]) -> None:
+    """Keep the default suite offline.
+
+    Live integration and journey tests run only when explicitly selected by
+    marker or path, even if provider API keys are present in the environment.
+    """
+    if _live_tests_selected_explicitly(config):
+        return
+    deselected = [item for item in items if _is_live_item(item)]
+    if not deselected:
+        return
+    config.hook.pytest_deselected(items=deselected)
+    selected = {id(item) for item in deselected}
+    items[:] = [item for item in items if id(item) not in selected]
+
+
+def _live_tests_selected_explicitly(config: Any) -> bool:
     mark_expression = str(getattr(config.option, "markexpr", "") or "")
-    if "integration_" in mark_expression or "journey" in mark_expression:
+    if any(fragment in mark_expression for fragment in _LIVE_MARK_FRAGMENTS):
         return True
     args = [str(arg).replace("\\", "/") for arg in getattr(config, "args", [])]
-    return any("tests/integration" in arg or "tests/journey" in arg for arg in args)
+    return any(
+        fragment in arg for arg in args for fragment in _LIVE_PATH_FRAGMENTS
+    )
+
+
+def _is_live_item(item: Any) -> bool:
+    path = str(getattr(item, "fspath", "") or "").replace("\\", "/")
+    return any(fragment in path for fragment in _LIVE_PATH_FRAGMENTS)
