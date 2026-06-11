@@ -963,20 +963,24 @@ class AgentRuntime:
             )
         if output_schema is not None and output_strategy == "finalizer_tool":
             tool_definitions.append(_finalizer_tool_payload(output_schema))
-        allowed_tool_names = (
-            dynamic_session.visible_names
-            if dynamic_session is not None
-            else {
+        runtime_allowed_tools: set[str] | None
+        if dynamic_session is not None:
+            # Live reference, not a copy: load_tools mutates visible_names
+            # between turns and the dispatch gate must track the
+            # model-visible tool surface.
+            runtime_allowed_tools = dynamic_session.visible_names
+        else:
+            allowed_tool_names = {
                 tool["name"]
                 for tool in tool_definitions
                 if isinstance(tool.get("name"), str)
             }
-        )
-        runtime_allowed_tools = (
-            set(allowed_tool_names)
-            if _routing_enabled(effective_tool_routing)
-            else (set(allowed_tool_names) if allowed_tool_names else None)
-        )
+            if _routing_enabled(effective_tool_routing):
+                runtime_allowed_tools = set(allowed_tool_names)
+            else:
+                runtime_allowed_tools = (
+                    set(allowed_tool_names) if allowed_tool_names else None
+                )
         tool_runtime = self._tool_runtime_for(
             tool_execution_context,
             tool_session=effective_tool_session,

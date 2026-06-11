@@ -118,6 +118,20 @@ async def test_dynamic_toolset_loads_tools_between_model_turns() -> None:
     assert result.output == "Resolved customer cus_123."
     assert any(event.type == EventTypes.TOOL_SEARCH_COMPLETED for event in result.events)
     assert any(event.type == EventTypes.TOOL_CHOICE_LOADED for event in result.events)
+    # The loaded tool must actually execute: the dispatch gate has to track
+    # tools loaded after the run started, not just the initially visible set.
+    completed = [
+        event
+        for event in result.events
+        if event.type == EventTypes.TOOL_CALL_COMPLETED
+        and event.data.get("name") == "lookup_customer"
+    ]
+    assert completed, "dynamically loaded tool was visible but rejected at dispatch"
+    assert not any(
+        event.type == EventTypes.TOOL_CHOICE_REJECTED
+        and event.data.get("name") == "lookup_customer"
+        for event in result.events
+    )
     assert result.metadata["tool_choice"]["loaded"] == ["lookup_customer"]
 
 
