@@ -988,6 +988,8 @@ MIT License - see [LICENSE](LICENSE).
 
 ## Next implementation targets
 
+See [`ROADMAP.md`](ROADMAP.md). Nearest targets:
+
 1. Vertex AI Agent Engine `AgentProvider`.
 2. Connector-level pending-call store for direct MCP approval resume outside
    the high-level runtime loop.

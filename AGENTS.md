@@ -34,6 +34,7 @@ Read these before making non-trivial changes:
 - `docs/TAXONOMY.md` — canonical definitions and disambiguation rules for the project's concepts (turn/run/session, event/item/artifact, tool kinds, catalogs, "workspace" senses). Use its terms in code, docstrings, and docs.
 - `docs/PRD.md` — the contract. Sections most worth re-reading: §4 design principles, §7.1 MVP scope, §8.4 AgentLoop, §10.7 AgentResult, §11 event taxonomy, §12.1–§12.3 P0/P1/P2 requirements, §22 milestones.
 - `FEATURES.md` — feature catalog with status per behavior (Supported / Partial / Contract only / Not supported yet). This is the canonical "what works today" inventory.
+- `ROADMAP.md` — what to do next and why, by horizon (re-entry checks, open milestones, the workspace-agent-package bet, release). Forward-looking counterpart to `FEATURES.md`.
 - `CHANGELOG.md` — slice history (one entry per slice, semver-ish).
 - `tests/VALIDATION.md` — coverage tracker mapping behaviors to the tests that prove them.
 - `README.md` — public-facing API surface and package layout.
