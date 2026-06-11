@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "blackbox"
 version = "0.1.0"
-description = "Provider-native runtime for complete blackbox agent loops and agent sessions."
+description = "Provider-native runtime for building agents and distributable agent workspaces across OpenAI, Anthropic, Gemini, and xAI."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

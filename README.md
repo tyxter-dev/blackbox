@@ -1,8 +1,25 @@
 # Blackbox
 
-A fresh scaffold for a provider-native agent runtime.
+A provider-native, multi-provider runtime for building agents and distributable
+agent workspaces.
+
+Blackbox is infrastructure for agent builders. It gives applications one typed
+surface over three layers that usually require three separate stacks:
+
+- **Model turns** across OpenAI Responses, Anthropic Messages, Gemini
+  GenerateContent, and xAI — with hosted tools, MCP, structured output,
+  caching, and usage accounting.
+- **Agent sessions** across local model-backed agents and provider-managed
+  agents (OpenAI Agents SDK, Claude Code, cloud agent engines).
+- **Workspaces and agent packages** — contracts for where agents work
+  (`WorkspaceRuntime`) and how governed agents are described, permissioned,
+  scheduled, and distributed as portable packages (`WorkspaceAgentSpec`).
 
 The design deliberately does **not** use LiteLLM. It borrows only the useful idea of provider compatibility through routing, capabilities, and a common public interface. The core is not a Chat Completions normalizer. The core is built around sessions, events, state, artifacts, and provider-native escape hatches.
+
+Canonical definitions for the project's vocabulary (turn vs run vs session,
+event vs item vs artifact, tool kinds, catalogs) live in
+[`docs/TAXONOMY.md`](docs/TAXONOMY.md).
 
 ## Coding agent fast path
 
@@ -955,11 +972,15 @@ pytest -m integration_openai      # network-gated, requires OPENAI_API_KEY
 pytest -m integration_xai         # network-gated, requires XAI_API_KEY
 pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
 pytest -m integration_gemini      # network-gated, requires GOOGLE_API_KEY
+pytest tests/journey              # live journey suites, requires provider keys
 ```
 
-Integration tests load a repo-root `.env` only when an integration marker or
-`tests/integration/...` path is selected, so the default `pytest` run remains
-offline.
+Live tests stay out of the default run at collection time: anything under
+`tests/integration/` or `tests/journey/` is deselected unless an
+`integration_*`/`journey_*` marker or one of those paths is selected
+explicitly — even when provider API keys are already present in the
+environment. The repo-root `.env` is loaded only for those explicit live
+selections, so the default `pytest` run remains offline.
 
 ## License
 
