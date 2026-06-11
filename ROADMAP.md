@@ -77,6 +77,12 @@ Goal: no half-open workstreams. These map to PRD M2–M5 and the honest gaps in
 - [ ] **Naming-collision fixes from `docs/TAXONOMY.md`** — rename
       `tools/routing.ToolBudget` → `ToolRoutingBudget` (pre-release, no
       compat shim needed); audit other flagged collisions.
+- [ ] **Use-case validation backlog** — execute the prioritized example
+      backlog and the Tier 0 fake-MCP-server strategy from
+      `docs/USE_CASE_VALIDATION.md`, which grounds example coverage in a
+      610-agent production dataset. Top gaps: dynamic toolsets, human
+      escalation/approvals, conversation resume, media parts. Rule adopted
+      there: an MCP example that cannot run offline (Tier 0) does not merge.
 
 ## Horizon 2 — The differentiated layer: workspace agent packages v1
 

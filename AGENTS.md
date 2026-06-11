@@ -40,6 +40,7 @@ Read these before making non-trivial changes:
 - `README.md` — public-facing API surface and package layout.
 - `src/blackbox/<package>/README.md` — every domain package has a "Belongs Here / Does Not Belong Here / File Map" README. Read the relevant one before adding code in a package you don't already own.
 - Architecture notes: `docs/ORGANIZATION_PLAN.md`, `docs/AGENT.md`, `docs/MODEL.md`, `docs/WORKSPACE.md`, `docs/WORKFLOW_PROFILES.md`.
+- `docs/USE_CASE_VALIDATION.md` — demand-side coverage: real-world agent patterns mapped to examples, the example backlog, and the tiered (offline-first) MCP integration validation strategy.
 
 The PRD is updated when product direction shifts; ask before making sweeping PRD edits. `FEATURES.md` should be kept honest as features land.
 
