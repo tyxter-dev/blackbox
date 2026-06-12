@@ -20,6 +20,8 @@ from blackbox.core.errors import (
     ConfigurationError,
     OutputValidationError,
     ProviderExecutionError,
+    ProviderNotConfiguredError,
+    ProviderNotFoundError,
     ToolExecutionError,
 )
 from blackbox.core.events import AgentEvent, EventTypes
@@ -1262,6 +1264,29 @@ class AgentRuntime:
                 await record_stream_event(stamped)
                 routing_history_events.append(stamped)
                 yield stamped
+            if dynamic_session is not None:
+                # Final model-visible tool surface (meta-tools excluded) so
+                # callers can persist it and pass it back as ``tools=`` on the
+                # next run, keeping dynamically loaded tools loaded.
+                meta_names = {
+                    definition.name
+                    for definition in dynamic_session.registry.all_tools()
+                    if definition.metadata.get("blackbox_dynamic_meta") is True
+                }
+                final_visible = sorted(dynamic_session.visible_names - meta_names)
+                visibility_event = trace_context.stamp(
+                    AgentEvent(
+                        type=EventTypes.TOOL_SET_CHANGED,
+                        provider=provider_ref.provider_key,
+                        data={"visible_tools": final_visible, "dynamic": True},
+                    ),
+                    run_id=run_id,
+                    sequence=sequence,
+                    preserve_sequence=False,
+                )
+                sequence += 1
+                await record_stream_event(visibility_event)
+                yield visibility_event
             if opened_workspace is not None and not workspace_preserve:
                 workspace_provider_obj, workspace_ref, should_close = opened_workspace
                 if should_close:
@@ -1283,7 +1308,7 @@ class AgentRuntime:
             for connector in active_mcp_connectors:
                 await connector.stop()
 
-    async def run(
+    async def _run_single(
         self,
         *,
         provider: str | None = None,
@@ -1720,6 +1745,126 @@ class AgentRuntime:
         # Should be unreachable: the loop either returns or re-raises.
         assert last_error is not None
         raise last_error
+
+    async def run(
+        self,
+        *,
+        provider: str | None = None,
+        input: str,
+        model: str | None = None,
+        config: RuntimeConfig | None = None,
+        tools: list[str] | str | None = None,
+        tool_routing: ToolRoutingSpec | None = None,
+        tool_session: ToolSession | None = None,
+        tool_execution_context: dict[str, Any] | None = None,
+        tool_max_concurrent: int | None = None,
+        tool_timeout: float | None = None,
+        approval_policy: Any = None,
+        policy: Any = None,
+        max_iterations: int = 8,
+        mock_tools: bool = False,
+        output_type: type[T] | None = None,
+        output_spec: OutputSpec | None = None,
+        provider_state: ProviderState | None = None,
+        instructions: str | None = None,
+        prompt: PromptSpec | None = None,
+        prompt_mode: PromptMode | None = None,
+        channel: str | None = None,
+        hosted_tools: list[HostedToolSpec] | None = None,
+        toolsets: list[Any] | None = None,
+        tool_selection: ToolSelection = "static",
+        tool_budget: ToolBudget | None = None,
+        hosted_tool_handlers: HostedToolHandlers | None = None,
+        cache: ModelCacheControl | None = None,
+        tool_search: ToolSearchControl | None = None,
+        dynamic_loading: DynamicToolLoadingSpec | None = None,
+        compaction: CompactionControl | None = None,
+        modalities: list[str] | None = None,
+        data_sources: list[DataSourceRef] | None = None,
+        context_flags: list[str] | None = None,
+        workspace: Any | None = None,
+        workspace_provider: Any | None = None,
+        workspace_policy: Any = None,
+        workspace_prefix: str = "workspace",
+        workspace_preserve: bool = False,
+        fallback_providers: list[str] | None = None,
+        **kwargs: Any,
+    ) -> AgentResult[T]:
+        """Run the complete agent loop and return a typed AgentResult.
+
+        See :meth:`_run_single` for the core loop semantics. The additional
+        ``fallback_providers`` argument accepts provider refs tried in order
+        when the current provider fails with a provider availability or
+        execution error (``ProviderExecutionError``, ``ProviderNotFoundError``,
+        ``ProviderNotConfiguredError``). Capability and validation errors do
+        not trigger failover.
+
+        State-transfer semantics: provider-native continuation state is not
+        portable across providers, so when ``provider_state`` is present,
+        fallback candidates from a different provider are skipped. Replayable
+        inputs (strings, content items, chat-compat history) fail over freely.
+
+        A failed attempt may already have executed local tools; failover
+        re-runs the whole loop, so tools should be idempotent or guarded by
+        approval policies when fallback is enabled. The chosen provider and
+        attempt log are reported under ``result.metadata["fallback"]``.
+        """
+
+        # locals() at function entry is exactly the declared parameters.
+        params: dict[str, Any] = {
+            key: value
+            for key, value in locals().items()
+            if key not in {"self", "fallback_providers", "kwargs"}
+        }
+        params.update(kwargs)
+
+        if not fallback_providers:
+            return await self._run_single(**params)
+
+        candidates: list[str | None] = [provider, *fallback_providers]
+        attempts: list[dict[str, Any]] = []
+        last_error: Exception | None = None
+        for index, candidate in enumerate(candidates):
+            label = candidate if candidate is not None else "(default)"
+            if index > 0 and candidate is not None and provider_state is not None:
+                candidate_key = ProviderRef.parse(candidate).provider_key
+                if provider_state.provider != candidate_key:
+                    attempts.append(
+                        {
+                            "provider": label,
+                            "skipped": "provider_state_not_transferable",
+                        }
+                    )
+                    continue
+            try:
+                result: AgentResult[T] = await self._run_single(
+                    **{**params, "provider": candidate}
+                )
+            except (
+                ProviderExecutionError,
+                ProviderNotFoundError,
+                ProviderNotConfiguredError,
+            ) as exc:
+                attempts.append(
+                    {
+                        "provider": label,
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                    }
+                )
+                last_error = exc
+                continue
+            result.metadata["fallback"] = {
+                "provider_used": label,
+                "attempts": attempts,
+            }
+            return result
+        if last_error is not None:
+            raise last_error
+        raise ConfigurationError(
+            "All fallback candidates were skipped; none could accept the "
+            "current provider_state."
+        )
 
     def _resolved_run_spec(
         self,

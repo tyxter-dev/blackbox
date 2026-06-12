@@ -172,6 +172,7 @@ def _tool_choice_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any
     called: list[str] = []
     rejected: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
+    visible_tools: list[str] | None = None
     for event in events:
         if event.type == EventTypes.TOOL_CHOICE_SELECTED:
             name = event.data.get("name")
@@ -189,15 +190,22 @@ def _tool_choice_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any
             rejected.append(dict(event.data))
         elif event.type == EventTypes.TOOL_CHOICE_FAILED:
             failed.append(dict(event.data))
-    if not (selected or loaded or called or rejected or failed):
+        elif event.type == EventTypes.TOOL_SET_CHANGED:
+            tools_value = event.data.get("visible_tools")
+            if isinstance(tools_value, list):
+                visible_tools = [name for name in tools_value if isinstance(name, str)]
+    if not (selected or loaded or called or rejected or failed) and visible_tools is None:
         return {}
-    return {
+    metadata: dict[str, Any] = {
         "selected": selected,
         "loaded": loaded,
         "called": called,
         "rejected": rejected,
         "failed": failed,
     }
+    if visible_tools is not None:
+        metadata["visible_tools"] = visible_tools
+    return metadata
 
 
 def _tool_routing_metadata_from_events(events: list[AgentEvent]) -> dict[str, Any]:

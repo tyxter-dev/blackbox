@@ -132,7 +132,89 @@ async def test_dynamic_toolset_loads_tools_between_model_turns() -> None:
         and event.data.get("name") == "lookup_customer"
         for event in result.events
     )
+    # The final visible surface (meta-tools excluded) is exposed for
+    # persistence across runs.
+    assert result.metadata["tool_choice"]["visible_tools"] == ["lookup_customer"]
     assert result.metadata["tool_choice"]["loaded"] == ["lookup_customer"]
+
+
+async def test_dynamic_tool_surface_round_trips_across_runs() -> None:
+    """visible_tools from run 1 passed as tools= on run 2 skips rediscovery."""
+
+    runtime, scripted = _runtime()
+
+    def load_turn(request: Any) -> Any:
+        yield AgentEvent(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
+        yield AgentEvent(
+            type=EventTypes.TOOL_CALL_REQUESTED,
+            provider="scripted",
+            item_id="load_1",
+            data={
+                "call_id": "load_1",
+                "name": "load_tools",
+                "arguments": {"tool_names": ["lookup_customer"]},
+            },
+        )
+        yield AgentEvent(
+            type=EventTypes.MODEL_COMPLETED,
+            provider="scripted",
+            data={"provider_state": ProviderState(provider="scripted")},
+        )
+
+    scripted.queue(load_turn)
+    scripted.queue(text_only_turn("loaded"))
+
+    first = await runtime.run(
+        provider="scripted:test",
+        input="prepare tools",
+        toolsets=[CRMTools()],
+        tool_selection="dynamic",
+    )
+    visible = first.metadata["tool_choice"]["visible_tools"]
+    assert visible == ["lookup_customer"]
+
+    # Fresh run (new message in the same conversation): restore visibility.
+    def first_turn_sees_restored(request: Any) -> Any:
+        names = [tool["name"] for tool in request.tools]
+        assert "lookup_customer" in names, "restored tool not visible on turn one"
+        yield AgentEvent(type=EventTypes.MODEL_REQUEST_STARTED, provider="scripted")
+        yield AgentEvent(
+            type=EventTypes.TOOL_CALL_REQUESTED,
+            provider="scripted",
+            item_id="crm_1",
+            data={
+                "call_id": "crm_1",
+                "name": "lookup_customer",
+                "arguments": {"customer_id": "cus_9"},
+            },
+        )
+        yield AgentEvent(
+            type=EventTypes.MODEL_COMPLETED,
+            provider="scripted",
+            data={"provider_state": ProviderState(provider="scripted")},
+        )
+
+    scripted.queue(first_turn_sees_restored)
+    scripted.queue(text_only_turn("done"))
+
+    second = await runtime.run(
+        provider="scripted:test",
+        input="next message",
+        toolsets=[CRMTools()],
+        tool_selection="dynamic",
+        tools=list(visible),
+    )
+    assert second.output == "done"
+    # The restored tool executed on the first turn without search/load.
+    assert any(
+        event.type == EventTypes.TOOL_CALL_COMPLETED
+        and event.data.get("name") == "lookup_customer"
+        for event in second.events
+    )
+    assert not any(
+        event.type == EventTypes.TOOL_SEARCH_COMPLETED for event in second.events
+    )
+    assert second.metadata["tool_choice"]["visible_tools"] == ["lookup_customer"]
 
 
 class _ExposurePolicy:
