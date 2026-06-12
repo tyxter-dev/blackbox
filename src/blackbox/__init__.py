@@ -31,7 +31,7 @@ Import guidance:
 from importlib import import_module
 from typing import Any
 
-from blackbox.compat.chat import ChatMessage
+from blackbox.compat.chat import ChatMessage, messages_to_input
 from blackbox.compat.providers import (
     AgentProviderAlias,
     ModelRoute,
@@ -462,6 +462,7 @@ __all__ = [
     "google_application_default_bigquery_auth",
     "google_bigquery_mcp_toolset",
     "google_maps_mcp_toolset",
+    "messages_to_input",
     "prepare_agent_spec",
     "provider_ref_for_model",
     "register_default_agent_providers",

@@ -326,6 +326,29 @@ The facade converts messages into a provider input payload and then delegates
 to `runtime.models`; chat messages do not become the runtime's internal event
 or state model.
 
+`runtime.chat.run` is a single model turn. To run the full blackbox loop
+(tools, output strategies, approvals) over chat-shaped history — the on-ramp
+for applications migrating off chat-centric stacks — convert the messages and
+pass them as the loop input:
+
+```python
+from blackbox import ChatMessage, messages_to_input
+
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input=messages_to_input([
+        ChatMessage(role="system", content="Be concise."),
+        *persisted_history,
+        ChatMessage(role="user", content=customer_message),
+    ]),
+    tools=["order_status"],
+    output_type=ReplyBatch,
+)
+```
+
+Because chat-shaped input is replayable across providers, this form also
+composes with `fallback_providers` for mid-conversation failover.
+
 ## Local agent usage
 
 ```python

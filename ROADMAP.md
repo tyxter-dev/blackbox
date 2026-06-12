@@ -142,9 +142,11 @@ concept is structurally a `WorkspaceAgentSpec`.
 
 Goal: other people can depend on this.
 
-- [ ] **v0.1 to PyPI** — PRD §27 definition-of-done is substantially met;
-      verify the checklist, confirm the `blackbox` name is available (else
-      pick the public name now), build, publish.
+- [ ] **v0.1 to PyPI** — PRD §27 definition-of-done is substantially met and
+      the wheel builds cleanly. Verified 2026-06-12: the `blackbox` name on
+      PyPI is **taken** by an unrelated package — pick a distribution name
+      (e.g. `blackbox-runtime`; the import name can remain `blackbox`),
+      then publish. Until then, consumers install via git dependency.
 - [ ] **Versioning policy** — declare what is stable (top-level exports) vs
       provisional (adapter modules) so the adapter treadmill doesn't force
       majors.

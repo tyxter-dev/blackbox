@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Slice 28 — Pre-adoption readiness
+
+Hardens the surfaces a downstream application wires against.
+
+- Widens `runtime.run`/`runtime.stream`/`plan_run` input typing to
+  `str | list[Any]`: chat-shaped history (`messages_to_input`, now exported
+  at top level) and `ContentItem` multimodal entries flow through the full
+  blackbox loop — tools, output strategies, approvals — not just single
+  model turns. Covered by loop-level tests for both shapes; documented in
+  the README as the migration on-ramp for chat-centric stacks, composing
+  with `fallback_providers` because chat input is replayable.
+- Adds GitHub Actions CI: ruff, strict mypy, the offline suite, and a wheel
+  build across Ubuntu/Windows and Python 3.11/3.12. Live tests stay out via
+  the collection-time deselection.
+- Fixes the last strict-mypy error (duplicate `data` annotation in the
+  OpenAI Responses item mapper); `mypy src` is clean across 156 files.
+- Verified against live providers: the OpenAI, Anthropic, Gemini, and xAI
+  integration smoke suites pass (9 passed, 3 skipped) — no API drift since
+  the adapters were written.
+- Release naming note: the `blackbox` name on PyPI is taken by an unrelated
+  package; consume via git dependency for now and pick a distribution name
+  (import name can remain `blackbox`) before the PyPI release.
+
 ### Slice 27 — Adoption gaps: fallback routing, tool-surface persistence, multitenancy
 
 Implements three gaps identified by the first downstream adoption case, a

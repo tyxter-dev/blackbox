@@ -247,7 +247,7 @@ class AgentRuntime:
         self,
         *,
         provider: str | None = None,
-        input: str,
+        input: str | list[Any],
         model: str | None = None,
         config: RuntimeConfig | None = None,
         tools: list[str] | str | None = None,
@@ -475,8 +475,8 @@ class AgentRuntime:
                 }
                 resolution = await resolve_tool_routing(
                     RoutingContext(
-                        task=input,
-                        current_input=input,
+                        task=_routing_input_text(input),
+                        current_input=_routing_input_text(input),
                         iteration=0,
                         provider=provider_ref.provider_key,
                         model=model_name,
@@ -586,7 +586,7 @@ class AgentRuntime:
         self,
         *,
         provider: str | None = None,
-        input: str,
+        input: str | list[Any],
         model: str | None = None,
         config: RuntimeConfig | None = None,
         tools: list[str] | str | None = None,
@@ -885,8 +885,8 @@ class AgentRuntime:
             }
             resolution = await resolve_tool_routing(
                 RoutingContext(
-                    task=input,
-                    current_input=input,
+                    task=_routing_input_text(input),
+                    current_input=_routing_input_text(input),
                     iteration=0,
                     provider=provider_ref.provider_key,
                     model=model_name,
@@ -1013,7 +1013,7 @@ class AgentRuntime:
                 return []
             resolution = await resolve_tool_routing(
                 RoutingContext(
-                    task=input,
+                    task=_routing_input_text(input),
                     current_input=_routing_input_text(turn_input),
                     iteration=iteration,
                     provider=provider_ref.provider_key,
@@ -1057,7 +1057,7 @@ class AgentRuntime:
                 return False, []
             candidates = await collect_candidates(
                 RoutingContext(
-                    task=input,
+                    task=_routing_input_text(input),
                     current_input=name,
                     iteration=iteration,
                     provider=provider_ref.provider_key,
@@ -1312,7 +1312,7 @@ class AgentRuntime:
         self,
         *,
         provider: str | None = None,
-        input: str,
+        input: str | list[Any],
         model: str | None = None,
         config: RuntimeConfig | None = None,
         tools: list[str] | str | None = None,
@@ -1750,7 +1750,7 @@ class AgentRuntime:
         self,
         *,
         provider: str | None = None,
-        input: str,
+        input: str | list[Any],
         model: str | None = None,
         config: RuntimeConfig | None = None,
         tools: list[str] | str | None = None,

@@ -819,7 +819,7 @@ def _map_item_done(
     if item_type == "function_call":
         provider_name = _attr(item, "name") or ""
         name = _canonical_tool_name(str(provider_name), tool_name_aliases)
-        data = {
+        data: dict[str, Any] = {
             "call_id": _attr(item, "call_id") or item_id or "",
             "name": name,
             "arguments": _parse_arguments(_attr(item, "arguments")),
@@ -837,7 +837,7 @@ def _map_item_done(
         )
 
     if item_type in _HOSTED_TOOL_CALL_TYPES:
-        data: dict[str, Any] = {
+        data = {
             "item_type": item_type,
             **_hosted_tool_data(item, item_type=item_type),
         }

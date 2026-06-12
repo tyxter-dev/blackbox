@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [master, version_0.2]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: pip install -e .[dev]
+      - name: Lint
+        run: ruff check src tests examples
+      - name: Type-check
+        run: mypy src
+      - name: Test (offline suite)
+        # Live integration/journey tests are deselected at collection time
+        # by tests/conftest.py, so this never needs provider keys.
+        run: pytest -q
+      - name: Build wheel
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          pip install build
+          python -m build --wheel
