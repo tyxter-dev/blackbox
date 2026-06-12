@@ -32,6 +32,7 @@ from blackbox.core.capabilities import (
     ModelCapabilities,
     ModelCapabilityProfile,
 )
+from blackbox.core.content import ContentItem
 from blackbox.core.errors import (
     ProviderExecutionError,
     ProviderNotConfiguredError,
@@ -41,6 +42,7 @@ from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.items import ItemStatus, ItemTypes, RunItem
 from blackbox.core.state import ProviderState
 from blackbox.providers.base import TurnRequest
+from blackbox.providers.model_adapters._multimodal import content_item_to_anthropic
 from blackbox.providers.model_adapters._support import (
     is_retryable_status_error,
     sleep_for_retry,
@@ -581,6 +583,8 @@ def _compose_messages(request: TurnRequest) -> list[dict[str, Any]]:
             if entry.status == "failed":
                 block["is_error"] = True
             tool_results.append(block)
+        elif isinstance(entry, ContentItem):
+            passthrough.append(content_item_to_anthropic(entry))
         elif isinstance(entry, dict):
             passthrough.append(_cache_marked_entry(entry, request.controls.cache))
 

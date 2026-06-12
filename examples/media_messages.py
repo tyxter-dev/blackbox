@@ -6,12 +6,12 @@ Mirrors the ``send_media`` pattern from ``docs/USE_CASE_VALIDATION.md``
 application through the deferred-payload channel, and the application — not
 the model — delivers the bytes over its messaging channel.
 
-Scope note (validation finding): typed content parts (``ImagePart``,
-``FilePart``) currently flow through the realtime stack and serialize
-cleanly, but no model adapter maps them into provider-native *inbound*
-multimodal input yet — that gap is tracked in ``docs/USE_CASE_VALIDATION.md``.
-This example covers the outbound half, which is what production agents do
-today.
+For the *inbound* direction, pass ``ContentItem`` entries through
+``runtime.run(input=[...])`` — e.g.
+``ContentItem(role="user", parts=[TextPart(text="what is this?"),
+ImagePart.from_url("https://...", mime_type="image/jpeg")])`` — and the
+OpenAI Responses, Anthropic Messages, and Gemini adapters map the parts to
+their native multimodal input shapes.
 
 Run::
 

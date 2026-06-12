@@ -22,6 +22,7 @@ from blackbox.core.capabilities import (
     ModelCapabilities,
     ModelCapabilityProfile,
 )
+from blackbox.core.content import ContentItem
 from blackbox.core.errors import (
     ProviderExecutionError,
     ProviderNotConfiguredError,
@@ -31,6 +32,7 @@ from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.items import ItemTypes, RunItem
 from blackbox.core.state import ProviderState
 from blackbox.providers.base import TurnRequest
+from blackbox.providers.model_adapters._multimodal import content_item_to_gemini
 from blackbox.providers.model_adapters._support import (
     is_retryable_status_error,
     sleep_for_retry,
@@ -566,6 +568,8 @@ def _compose_contents(request: TurnRequest) -> Any:
             provider_item = entry.data.get("provider_input_item")
             if isinstance(provider_item, dict):
                 parts.append(provider_item)
+        elif isinstance(entry, ContentItem):
+            passthrough.append(content_item_to_gemini(entry))
         else:
             passthrough.append(strip_private_fields(entry))
 

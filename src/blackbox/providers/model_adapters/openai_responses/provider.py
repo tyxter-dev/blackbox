@@ -15,6 +15,7 @@ from blackbox.core.capabilities import (
     ModelCapabilities,
     ModelCapabilityProfile,
 )
+from blackbox.core.content import ContentItem
 from blackbox.core.errors import (
     ProviderExecutionError,
     ProviderNotConfiguredError,
@@ -24,6 +25,7 @@ from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.items import ItemStatus, ItemTypes, RunItem
 from blackbox.core.state import ProviderState
 from blackbox.providers.base import TurnRequest
+from blackbox.providers.model_adapters._multimodal import content_item_to_openai_responses
 from blackbox.providers.model_adapters._support import (
     is_retryable_status_error,
     sleep_for_retry,
@@ -651,7 +653,9 @@ def _coerce_input(value: str | list[Any]) -> Any:
         return value
     converted: list[Any] = []
     for entry in value:
-        if isinstance(entry, RunItem) and entry.type == ItemTypes.FUNCTION_RESULT:
+        if isinstance(entry, ContentItem):
+            converted.append(content_item_to_openai_responses(entry))
+        elif isinstance(entry, RunItem) and entry.type == ItemTypes.FUNCTION_RESULT:
             converted.append(
                 {
                     "type": "function_call_output",
