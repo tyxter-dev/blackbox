@@ -138,6 +138,39 @@ concept is structurally a `WorkspaceAgentSpec`.
       that installs packages from a registry, schedules them, and surfaces
       approvals; proves the layer end-to-end and becomes the flagship demo.
 
+## Horizon 2½ — The inbound half: environment workers
+
+Goal: make blackbox the lab-neutral *worker* side of the connector, not only
+the call-initiating orchestrator. Anthropic's Managed Agents self-hosted
+sandboxes (June 2026) published the reference contract for this — a
+customer-side daemon that claims tool-execution work from a lab control
+plane, runs it locally, and posts results back. Full analysis, copy list,
+and differentiators in `docs/ENVIRONMENT_WORKERS.md`. The strategic logic:
+labs own control planes, lib consumers own customer distribution, blackbox
+is the connector — and the inbound hemisphere is entirely missing today.
+
+- [ ] **`WorkSource` protocol** — lab-neutral claim/lease/stop work-queue
+      contract (poll, claim with lease, keep-alive, dead-worker reclaim,
+      drain/block/auto-stop knobs), vocabulary copied from Anthropic's
+      environments work API.
+- [ ] **`AnthropicEnvironmentWorkSource` adapter** — first implementation,
+      wrapping `client.beta.environments.work.*`; re-verify the beta API
+      (`managed-agents-2026-04-01`) against live docs first.
+- [ ] **`EnvironmentWorker`** — wires claimed work into the existing
+      `ToolRuntime` + `WorkspaceProvider` + policy gates; always-on and
+      webhook-triggered entry points; graceful SIGTERM drain; optional
+      one-workspace-per-work-item sandbox spawn.
+- [ ] **Customer-side governance on inbound work** — gate the lab's tool
+      calls through `before_command`/`before_tool_call`/
+      `before_workspace_write` policy checkpoints; this is the
+      differentiator no lab-shipped worker offers.
+- [ ] **Scoped worker credentials** — a worker-scoped key concept distinct
+      from the org/provider key, never exposing the privileged credential on
+      the worker host (mirrors Anthropic's environment-key split).
+- [ ] **Worker ops surface** — queue depth / oldest-queued / workers-polling
+      liveness stats and graceful/forced stop, consistent with the
+      observability layer.
+
 ## Horizon 3 — Release and ecosystem
 
 Goal: other people can depend on this.
