@@ -10,6 +10,10 @@ schema and registry layer, not an execution backend.
 - Schedule declarations and scheduled-run references.
 - Workspace-agent registry interfaces and in-memory registry.
 - Serialization helpers for package specs.
+- The on-disk package format (`package.py`): `agent.json` manifest +
+  `instructions.md` + embedded `skills/<name>/` bundles, with
+  save/load/pack/unpack/install helpers. Packages are diffable directories
+  that zip into installable archives; unpacking is zip-slip guarded.
 - Thin bridges that prepare or run a workspace-agent spec through the runtime.
 
 ## Does Not Belong Here

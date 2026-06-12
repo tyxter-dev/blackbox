@@ -112,9 +112,14 @@ dataclass. This is the product bet; each item should be driven by a concrete
 consuming application — the first downstream consumer's packaged-agent
 concept is structurally a `WorkspaceAgentSpec`.
 
-- [ ] **Package format on disk** — a serialized layout (manifest + skills +
-      prompts) that can be checked into a repo, zipped, published, and
-      installed; today the spec only round-trips through dicts.
+- [x] **Package format on disk** — `workspace_agents/package.py`:
+      `agent.json` manifest (format marker + serialized spec) +
+      `instructions.md` (diffable prompt) + embedded `skills/<name>/`
+      bundles, with `save/load/pack/unpack/install_workspace_agent_package`
+      helpers. Local skill sources embed on save and resolve to absolute
+      paths on load; non-local sources stay verbatim; unpack is zip-slip
+      guarded; loading a newer `format_version` fails loudly. Still open
+      (folds into the versioning item): integrity checksums and signing.
 - [ ] **Validation/linting** — `prepare_agent_spec` exists; grow it into a
       real validator: unresolvable tool refs, permission/connector mismatches,
       schedule sanity, model availability against the provider model catalog.

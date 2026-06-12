@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Slice 30 — Workspace agent package format on disk
+
+First step of the ROADMAP Horizon 2 arc (format → validator → SQLite
+registry): `WorkspaceAgentSpec` becomes a real distribution format instead
+of a dict round-trip.
+
+- New `workspace_agents/package.py`: a package is a directory with an
+  `agent.json` manifest (`format` marker, `format_version`, serialized
+  spec), `instructions.md` (the prompt as a diffable file that wins over
+  the manifest on load), and embedded `skills/<name>/` bundles.
+- `save_workspace_agent_package` embeds local skill sources (files or
+  directory trees) and rewrites refs to package-relative paths; non-local
+  sources (URLs, registry coordinates) stay verbatim.
+  `load_workspace_agent_package` resolves embedded sources to absolute
+  paths and fails loudly on missing bundles, foreign formats, or a newer
+  `format_version`.
+- `pack_/unpack_workspace_agent_package` zip and extract packages with
+  zip-slip guarding; `install_workspace_agent_package` loads a directory
+  or archive and saves the spec into any `WorkspaceAgentRegistry`
+  (archives require an explicit `unpack_dir` as the durable skill home).
+- Known fidelity bound inherited from the dict round-trip: typed
+  `hosted_tools` entries serialize to plain dicts and stay dicts on load.
+- 11 offline tests in `tests/unit/workspace_agents/test_package.py`,
+  including re-save/re-embed round-trips and malicious-archive rejection.
+
 ### Slice 29 — Environment workers (the inbound half)
 
 Implements ROADMAP Horizon 2½: blackbox as the customer-side worker that
