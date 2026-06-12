@@ -81,15 +81,21 @@ snippet only) · ❌ no example.
    and fixed a real dispatch bug: dynamically loaded tools were visible to
    the model but rejected at execution because the dispatch gate held a
    frozen copy of the initially visible tool set.
-2. `human_escalation.py` — an agent that pauses on `call_human`-style
-   approval, application resolves the `ApprovalDecision`, run resumes.
-3. `conversation_resume.py` — persistent multi-session conversation:
-   `SessionStore` + `provider_state` round-trip across two processes.
-4. `model_lifecycle_audit.py` — scan a fleet's configured models against
-   `ProviderModelCatalog` and report retired/deprecating models with
-   replacements. Offline, uses bundled catalog.
-5. `tenant_billing.py` — provider cost vs billable with `MarkupPolicy`
-   across a few simulated tenant runs.
+2. ✅ `human_escalation.py` — a policy marks `issue_refund` as requiring
+   approval; the run pauses on `APPROVAL_REQUESTED`, an out-of-band reviewer
+   resolves via `runtime.approve(...)`, and both the approved and denied
+   paths complete.
+3. ✅ `conversation_resume.py` — provider-native continuation state
+   checkpointed to `SQLiteRunStore` and reloaded by a fresh runtime in a
+   simulated process restart; the resumed model recalls a fact that only
+   exists in the state loaded from disk.
+4. ✅ `model_lifecycle_audit.py` — audits a simulated fleet against
+   `ProviderModelCatalog`, flagging the model past its deprecation deadline
+   with its replacement, plus models missing from the bundled catalog
+   (which doubles as evidence for the catalog-refresh roadmap item).
+5. ✅ `tenant_billing.py` — provider cost vs billable with `MarkupPolicy`
+   across simulated tenant runs, with a per-tenant invoice rollup and
+   margin.
 6. `media_messages.py` — image/document content parts in and out.
 7. `agent_handoff.py` — transfer between two local agents, emitting
    canonical handoff events; documents that *routing policy* belongs to the

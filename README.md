@@ -443,6 +443,16 @@ Runnable scripts live under `examples/`:
   and namespaced dispatch path with zero credentials.
 - `examples/mcp_servers/` — Tier 0 fake external MCP servers (CRM, booking,
   maps) authored with blackbox's own `MCPServer` SDK; see the README inside.
+- `examples/human_escalation.py` — a risky tool call pauses the run for a
+  human reviewer who approves or denies via `runtime.approve(...)`. Offline.
+- `examples/conversation_resume.py` — provider-native continuation state
+  checkpointed to `SQLiteRunStore` and resumed by a fresh runtime, simulating
+  a process restart between customer messages. Offline.
+- `examples/model_lifecycle_audit.py` — audit a fleet's configured models
+  against the bundled `ProviderModelCatalog` for deprecations and
+  replacements. Offline.
+- `examples/tenant_billing.py` — provider cost vs billable price per run with
+  `MarkupPolicy`, rolled up into per-tenant invoices. Offline.
 - `examples/launchmybakery.py` — Google Maps and BigQuery remote MCP toolsets
   rebuilt from Google's Launch My Bakery demo (requires Google ADC,
   `MAPS_API_KEY`, and a provider with remote MCP support).
