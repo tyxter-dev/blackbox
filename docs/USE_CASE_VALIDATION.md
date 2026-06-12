@@ -59,19 +59,20 @@ snippet only) · ❌ no example.
 | Real-world pattern | Prevalence | Library surface | Example today | Status |
 |---|---|---|---|---|
 | Blackbox loop, typed output | all | `runtime.run`, `AgentResult[T]` | `minimal_runtime_run`, `run_with_typed_output` | ✅ |
-| Large catalog + dynamic tool loading | 574/610 | `Toolset`, `ToolBudget`, `tool_selection="dynamic"` | tests only (`test_dynamic_toolsets`) | ❌ **top gap** |
-| Human escalation / approval pause | 588/610 | `ApprovalRequest`/`ApprovalDecision`, policy gates | none dedicated | ❌ |
-| Agent-to-agent transfer / routing | 103 + routing on all | handoff events/items; routing itself is app-level | none | ❌ (and document the core/app boundary) |
+| Large catalog + dynamic tool loading | 574/610 | `Toolset`, `ToolBudget`, `tool_selection="dynamic"` | `dynamic_toolset_crm` | ✅ (building it fixed a dispatch bug) |
+| Human escalation / approval pause | 588/610 | `ApprovalRequest`/`ApprovalDecision`, policy gates | `human_escalation` | ✅ |
+| Agent-to-agent transfer / routing | 103 + routing on all | handoff events/items; routing itself is app-level | `agent_handoff` | ✅ (boundary documented) |
 | Scheduled & proactive behavior | ~570 | `ScheduleSpec`, `ScheduleTrigger`, `run_workspace_agent` | README snippet only | 🟡 needs executor (Roadmap H2) |
-| Persistent conversation memory | 610/610 | `provider_state` resume, `SessionStore`, `MemorySpec` | tests only (`test_resume_run_from_saved_state`) | 🟡 |
+| Persistent conversation memory | 610/610 | `provider_state` resume, `SessionStore`, `MemorySpec` | `conversation_resume` | ✅ |
 | RAG / knowledge lookup | ~40 | hosted `FileSearch` | `model_provider_knowledge_drawer` | ✅ |
-| Generic external HTTP API tool | 578/610 | local tools | `local_agent_with_tool` (generic) | 🟡 worth a dedicated example |
-| Media in/out (images, documents) | 580/610 | `ContentPart`s, `MediaRef` | none | ❌ |
+| Generic external HTTP API tool | 578/610 | local tools | `external_api_tool` | ✅ |
+| Media out (send image/document) | 580/610 | `MediaRef`, `ToolResult.payload` | `media_messages` | ✅ |
+| Media in (multimodal model input) | inbound WhatsApp media | `ContentPart`s exist; no adapter mapping | none possible yet | ❌ gap → Roadmap H1 |
 | Deferred payload pattern (CRM writes) | ~650 calls/agent | `ToolResult.payload` | `run_with_typed_output` | ✅ |
 | Multi-provider fleet | platform-wide | registry, `ProviderRef` | implicit in all examples | ✅ |
-| Tenant cost accounting / resale markup | platform-wide | pricing catalog, `MarkupPolicy`, `billable` | README snippet only | 🟡 |
-| Model lifecycle / deprecation alerts | 170 agents on a retired model | `ProviderModelCatalog` lifecycle | none | ❌ cheap, high-value |
-| External MCP integrations | 0 | `MCPToolset`, `RemoteMCP`, `MCPConnector` | `launchmybakery` (needs Google credentials) | 🟡 credential-gated; see §5 |
+| Tenant cost accounting / resale markup | platform-wide | pricing catalog, `MarkupPolicy`, `billable` | `tenant_billing` | ✅ |
+| Model lifecycle / deprecation alerts | 170 agents on a retired model | `ProviderModelCatalog` lifecycle | `model_lifecycle_audit` | ✅ |
+| External MCP integrations | 0 | `MCPToolset`, `RemoteMCP`, `MCPConnector` | `mcp_toolset_fake_crm` (Tier 0) + `launchmybakery` (Tier 2) | ✅ offline-first |
 
 ## 4. Example backlog (priority order)
 
@@ -96,12 +97,20 @@ snippet only) · ❌ no example.
 5. ✅ `tenant_billing.py` — provider cost vs billable with `MarkupPolicy`
    across simulated tenant runs, with a per-tenant invoice rollup and
    margin.
-6. `media_messages.py` — image/document content parts in and out.
-7. `agent_handoff.py` — transfer between two local agents, emitting
-   canonical handoff events; documents that *routing policy* belongs to the
-   application.
-8. `external_api_tool.py` — the generic HTTP tool pattern done safely
-   (timeouts, payload separation, schema).
+6. ✅ `media_messages.py` — outbound media through a `send_media` tool:
+   `MediaRef`s reach the application via deferred payloads while the model
+   sees only confirmations. **Validation finding:** the *inbound* half is a
+   gap — typed content parts (`ImagePart`, `FilePart`) serialize and flow
+   through realtime, but no model adapter maps them into provider-native
+   multimodal input for standard turns (tracked in `ROADMAP.md` Horizon 1).
+7. ✅ `agent_handoff.py` — triage-to-specialist transfer: the
+   `transfer_to_agent` tool emits canonical `HANDOFF_REQUESTED` events and a
+   payload directive; the application owns routing policy and starts the
+   specialist run. Documents that boundary explicitly.
+8. ✅ `external_api_tool.py` — the generic HTTP tool done safely: base-URL
+   allowlist (model picks an API name, never a URL), timeout, response size
+   cap, payload separation. The request path is real, served by a throwaway
+   local HTTP server.
 
 Each example follows the existing conventions: offline by default
 (echo/scripted providers), `examples/.env` loading only where live providers

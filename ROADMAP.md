@@ -77,12 +77,16 @@ Goal: no half-open workstreams. These map to PRD M2–M5 and the honest gaps in
 - [ ] **Naming-collision fixes from `docs/TAXONOMY.md`** — rename
       `tools/routing.ToolBudget` → `ToolRoutingBudget` (pre-release, no
       compat shim needed); audit other flagged collisions.
-- [ ] **Use-case validation backlog** — execute the prioritized example
-      backlog and the Tier 0 fake-MCP-server strategy from
-      `docs/USE_CASE_VALIDATION.md`, which grounds example coverage in a
-      610-agent production dataset. Top gaps: dynamic toolsets, human
-      escalation/approvals, conversation resume, media parts. Rule adopted
-      there: an MCP example that cannot run offline (Tier 0) does not merge.
+- [x] **Use-case validation backlog** — all eight examples and the Tier 0
+      fake MCP servers from `docs/USE_CASE_VALIDATION.md` are shipped;
+      building them exposed and fixed a dynamic-toolset dispatch bug. Rule
+      adopted there: an MCP example that cannot run offline (Tier 0) does
+      not merge.
+- [ ] **Inbound multimodal model input** — typed content parts (`ImagePart`,
+      `FilePart`, `ContentItem`) exist in core and flow through realtime,
+      but no model adapter maps them into provider-native multimodal input
+      for standard turns. Found while building `media_messages.py`; inbound
+      customer media is routine for WhatsApp-style agents.
 
 ## Horizon 2 — The differentiated layer: workspace agent packages v1
 

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Slice 25 — Use-case example backlog completed
+
+All eight examples from the `docs/USE_CASE_VALIDATION.md` backlog now exist,
+offline and deterministic.
+
+- Adds `human_escalation.py` (approval pause + out-of-band reviewer via
+  `runtime.approve`), `conversation_resume.py` (provider-state checkpoint to
+  `SQLiteRunStore`, resumed by a fresh runtime), `model_lifecycle_audit.py`
+  (fleet audit against the bundled provider model catalog),
+  `tenant_billing.py` (provider cost vs billable with per-tenant rollup),
+  `media_messages.py` (outbound media via `MediaRef` payloads),
+  `agent_handoff.py` (canonical handoff events; routing stays app-level),
+  and `external_api_tool.py` (allowlisted, capped, timed generic HTTP tool).
+- Records a validation finding: typed content parts are not yet mapped into
+  provider-native multimodal input by any model adapter; inbound media is a
+  Roadmap Horizon 1 gap.
+
 ### Slice 24 — Dynamic tool dispatch fix and Tier 0 MCP fixtures
 
 Validating examples against production use-case data exposed a dispatch bug

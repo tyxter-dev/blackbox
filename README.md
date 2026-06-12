@@ -453,6 +453,13 @@ Runnable scripts live under `examples/`:
   replacements. Offline.
 - `examples/tenant_billing.py` — provider cost vs billable price per run with
   `MarkupPolicy`, rolled up into per-tenant invoices. Offline.
+- `examples/media_messages.py` — outbound media: a `send_media` tool hands
+  `MediaRef`s to the application through deferred payloads. Offline.
+- `examples/agent_handoff.py` — triage-to-specialist transfer with canonical
+  handoff events; routing policy stays in the application. Offline.
+- `examples/external_api_tool.py` — a generic HTTP tool with allowlist,
+  timeout, size cap, and payload separation, served by a throwaway local
+  HTTP server. Offline.
 - `examples/launchmybakery.py` — Google Maps and BigQuery remote MCP toolsets
   rebuilt from Google's Launch My Bakery demo (requires Google ADC,
   `MAPS_API_KEY`, and a provider with remote MCP support).
