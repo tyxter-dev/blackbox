@@ -143,9 +143,15 @@ concept is structurally a `WorkspaceAgentSpec`.
       storage into core (callback/provider interface, applications implement).
 - [ ] **Versioning and upgrade story** — semver rules for packages,
       compatibility checks on install, migration notes between spec versions.
-- [ ] **Reference "agent workspace" example app** — a small downstream app
-      that installs packages from a registry, schedules them, and surfaces
-      approvals; proves the layer end-to-end and becomes the flagship demo.
+- [x] **Reference "agent workspace" example app** — `examples/diet_coach.py`
+      (pinned by `tests/e2e/test_diet_coach_example.py`): a personal
+      nutrition agent that validates its spec, ships as an on-disk package,
+      installs from the zip into the SQLite registry, fires its 9 AM cron
+      schedule through `ScheduleExecutor`, and takes a conversational
+      preference change that the next morning's run reflects. Fully offline
+      (scripted model, faked Cal.com/Slack). Still open: surfacing an
+      approval flow in the demo (blocked on the approval-channel item in
+      Horizon 1).
 
 ## Horizon 2½ — The inbound half: environment workers
 

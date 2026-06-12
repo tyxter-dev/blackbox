@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Slice 32 — Diet Coach flagship example
+
+The reference "agent workspace" app from ROADMAP Horizon 2, proving the
+package layer end to end in one offline, deterministic story
+(`examples/diet_coach.py`, pinned by `tests/e2e/test_diet_coach_example.py`):
+
+- A personal nutrition agent for an athlete training 5 days/week:
+  `WorkspaceAgentSpec` with Cal.com/Slack connectors (`auth_mode=
+  "end_user"` — credentials stay downstream), four app-layer tools, scoped
+  permissions, a timezone-aware 9 AM cron schedule, and an embedded
+  nutrition skill bundle.
+- Walks validate → save package → zip → install-from-archive into
+  `SQLiteWorkspaceAgentRegistry` → `ScheduleExecutor` fires Monday's 9 AM
+  Slack update → a conversational change request ("not in the mood for
+  chicken, I want beef today") lands in the preference store via a tool
+  call → Tuesday's scheduled run reflects it.
+- The model is scripted and Cal.com/Slack are in-process fakes, honoring
+  the Tier 0 rule (examples must run offline); swapping in a real provider
+  and HTTP/MCP connectors is the documented production path.
+
 ### Slice 31 — Workspace agent validator and SQLite registry
 
 Completes the offline half of the ROADMAP Horizon 2 arc started in Slice 30.
