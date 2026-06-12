@@ -30,6 +30,7 @@ from blackbox.workspace_agents.permissions import (
 )
 from blackbox.workspace_agents.registry import (
     InMemoryWorkspaceAgentRegistry,
+    SQLiteWorkspaceAgentRegistry,
     WorkspaceAgentRegistry,
 )
 from blackbox.workspace_agents.runtime import prepare_agent_spec, run_workspace_agent
@@ -56,6 +57,13 @@ from blackbox.workspace_agents.spec import (
     WorkspaceAgentVersion,
     WorkspaceAgentVisibility,
 )
+from blackbox.workspace_agents.validation import (
+    ValidationIssue,
+    ValidationSeverity,
+    WorkspaceAgentValidationError,
+    ensure_valid_workspace_agent,
+    validate_workspace_agent,
+)
 
 __all__ = [
     "DEFAULT_SCHEDULE_INPUT",
@@ -73,6 +81,7 @@ __all__ = [
     "MemorySpec",
     "PermissionScope",
     "PublicationSpec",
+    "SQLiteWorkspaceAgentRegistry",
     "ScheduleExecutor",
     "ScheduleExpressionError",
     "ScheduleSpec",
@@ -82,14 +91,18 @@ __all__ = [
     "ScheduledRunStatus",
     "SkillBundleRef",
     "ToolPermission",
+    "ValidationIssue",
+    "ValidationSeverity",
     "WorkspaceAgentMetadata",
     "WorkspaceAgentPackageError",
     "WorkspaceAgentRegistry",
     "WorkspaceAgentSpec",
+    "WorkspaceAgentValidationError",
     "WorkspaceAgentVersion",
     "WorkspaceAgentVisibility",
     "dataclass_from_dict",
     "dataclass_to_dict",
+    "ensure_valid_workspace_agent",
     "install_workspace_agent_package",
     "load_workspace_agent_package",
     "next_cron_run",
@@ -101,6 +114,7 @@ __all__ = [
     "run_workspace_agent",
     "save_workspace_agent_package",
     "unpack_workspace_agent_package",
+    "validate_workspace_agent",
     "workspace_agent_from_dict",
     "workspace_agent_to_dict",
 ]

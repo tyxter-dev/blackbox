@@ -120,12 +120,16 @@ concept is structurally a `WorkspaceAgentSpec`.
       paths on load; non-local sources stay verbatim; unpack is zip-slip
       guarded; loading a newer `format_version` fails loudly. Still open
       (folds into the versioning item): integrity checksums and signing.
-- [ ] **Validation/linting** — `prepare_agent_spec` exists; grow it into a
-      real validator: unresolvable tool refs, permission/connector mismatches,
-      schedule sanity, model availability against the provider model catalog.
-- [ ] **Persistent registry** — `WorkspaceAgentRegistry` has only the
-      in-memory implementation; add a SQLite-backed one consistent with the
-      existing stores.
+- [x] **Validation/linting** — `validate_workspace_agent` /
+      `ensure_valid_workspace_agent` return typed `ValidationIssue`s:
+      unresolvable tool refs (local/hosted/MCP-server/connector-backed),
+      permission/connector mismatches, duplicates, schedule expression and
+      timezone sanity (calendar triggers warn), and model availability
+      against the bundled catalog (warning — the catalog is a snapshot).
+- [x] **Persistent registry** — `SQLiteWorkspaceAgentRegistry` keeps every
+      saved version keyed by `(agent_id, version)` with a latest pointer,
+      matching the existing SQLite-store pattern; publish/deprecate
+      transforms are shared with the in-memory registry.
 - [x] **Schedule execution bridge** — `ScheduleExecutor` runs due cron and
       interval schedules through `run_workspace_agent`, gated by the
       `before_scheduled_run` policy checkpoint, producing `ScheduledRunRef`s;

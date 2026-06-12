@@ -8,7 +8,11 @@ schema and registry layer, not an execution backend.
 - `WorkspaceAgentSpec` and supporting metadata/version/publication specs.
 - Tool and connector permission declarations.
 - Schedule declarations and scheduled-run references.
-- Workspace-agent registry interfaces and in-memory registry.
+- Workspace-agent registry interfaces with in-memory and SQLite-backed
+  implementations (every version kept; latest pointer for default reads).
+- Spec validation (`validation.py`): typed issues for unresolvable refs,
+  permission/connector mismatches, schedule sanity, and catalog-checked
+  model availability; `ensure_valid_workspace_agent` gates pipelines.
 - Serialization helpers for package specs.
 - The on-disk package format (`package.py`): `agent.json` manifest +
   `instructions.md` + embedded `skills/<name>/` bundles, with

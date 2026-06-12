@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Slice 31 — Workspace agent validator and SQLite registry
+
+Completes the offline half of the ROADMAP Horizon 2 arc started in Slice 30.
+
+- New `workspace_agents/validation.py`: `validate_workspace_agent` returns
+  typed `ValidationIssue`s (severity, code, message, field);
+  `ensure_valid_workspace_agent` raises `WorkspaceAgentValidationError` on
+  errors so install/publish pipelines can gate on it. Errors: unresolvable
+  tool refs (checked against local tools, hosted tool names/types,
+  connector tool refs, and declared MCP servers for `mcp:` refs), unknown
+  connectors, duplicate permissions/connectors/schedules/skills, invalid
+  cron/interval expressions, unknown timezones, missing name/provider.
+  Warnings: calendar triggers (reference executor cannot fire them),
+  absolute skill sources missing locally, and models absent from the
+  bundled catalog (a snapshot, so availability is advisory).
+- New `SQLiteWorkspaceAgentRegistry`: durable registry keeping every saved
+  version keyed by `(agent_id, version)` with a latest pointer; visibility
+  filtered listing, publish/deprecate, `KeyError` parity with the
+  in-memory registry, persistence across reopen. The publish/deprecate
+  spec transforms are extracted as shared `published_spec`/
+  `deprecated_spec` helpers used by both registries.
+- 18 new offline tests; full suite 649 passed.
+
 ### Slice 30 — Workspace agent package format on disk
 
 First step of the ROADMAP Horizon 2 arc (format → validator → SQLite
