@@ -87,11 +87,30 @@ Goal: no half-open workstreams. These map to PRD M2–M5 and the honest gaps in
       in the OpenAI Responses (and xAI), Anthropic Messages, and Gemini
       adapters; unmappable parts raise `UnsupportedFeatureError`.
 
+Adoption-driven gaps from the first downstream consumer (a production
+multi-tenant WhatsApp agent platform migrating off `llm_factory_toolkit`):
+
+- [x] **Cross-provider fallback routing** —
+      `runtime.run(fallback_providers=[...])` tries provider refs in order on
+      provider availability/execution errors, with explicit state-transfer
+      semantics: candidates incompatible with a present `provider_state` are
+      skipped, and attempts are reported under `result.metadata["fallback"]`.
+- [x] **Cross-run dynamic tool surface persistence** — the final
+      model-visible surface of a dynamic run is emitted as a
+      `TOOL_SET_CHANGED` event and surfaced as
+      `result.metadata["tool_choice"]["visible_tools"]`; passing it back as
+      `tools=` restores loaded tools without rediscovery.
+- [x] **Multi-tenant provider pattern** — documented in
+      `docs/MULTITENANCY.md` (cached runtime-per-tenant factory over shared
+      stores, with the alias-registration alternative and its footgun);
+      runnable recipe in `examples/multi_tenant_runtimes.py`.
+
 ## Horizon 2 — The differentiated layer: workspace agent packages v1
 
 Goal: make `WorkspaceAgentSpec` a real distribution format, not just a
 dataclass. This is the product bet; each item should be driven by a concrete
-consuming application (Tyxter products are the natural first consumers).
+consuming application — the first downstream consumer's packaged-agent
+concept is structurally a `WorkspaceAgentSpec`.
 
 - [ ] **Package format on disk** — a serialized layout (manifest + skills +
       prompts) that can be checked into a repo, zipped, published, and

@@ -164,6 +164,45 @@ result = await runtime.run(
 `tool_max_concurrent` and `tool_timeout` apply to local tool execution in the
 blackbox loop, including dynamic tool sessions.
 
+In dynamic mode (`tool_selection="dynamic"`), the final model-visible tool
+surface is reported on `result.metadata["tool_choice"]["visible_tools"]`.
+Pass it back as `tools=[...]` on the next run to keep dynamically loaded
+tools loaded across a conversation instead of re-paying tool discovery:
+
+```python
+first = await runtime.run(..., toolsets=[crm], tool_selection="dynamic")
+visible = first.metadata["tool_choice"]["visible_tools"]
+
+second = await runtime.run(
+    ..., toolsets=[crm], tool_selection="dynamic", tools=visible,
+)
+```
+
+## Provider fallback routing
+
+`runtime.run(...)` accepts `fallback_providers`, provider refs tried in order
+when the current provider fails with an availability or execution error
+(capability and validation errors never fail over):
+
+```python
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Summarize the incident.",
+    fallback_providers=["xai:grok-4", "gemini:gemini-2.5-flash"],
+)
+print(result.metadata["fallback"])  # provider_used + attempt log
+```
+
+State-transfer semantics are explicit: provider-native continuation state is
+not portable, so when `provider_state` is set, candidates on a different
+provider are skipped. Replayable inputs (plain strings, content items, chat
+history via `runtime.chat`) fail over freely. A failed attempt may already
+have executed local tools — failover re-runs the loop, so enable it only
+with idempotent or approval-gated tools.
+
+For per-tenant credentials and per-tenant fallback chains, see
+[`docs/MULTITENANCY.md`](docs/MULTITENANCY.md).
+
 ## Provider-hosted tools
 
 Provider-hosted tools stay separate from local Python tools. Pass typed hosted
@@ -479,6 +518,9 @@ Runnable scripts live under `examples/`:
 - `examples/scheduled_digest.py` — cron and interval schedules on a packaged
   workspace agent executed by the reference `ScheduleExecutor`, replaying a
   simulated weekend deterministically. Offline.
+- `examples/multi_tenant_runtimes.py` — a cached `AgentRuntime` per tenant
+  with tenant-keyed providers, shared run store, per-tenant markup, and
+  per-tenant fallback chains. Offline.
 - `examples/launchmybakery.py` — Google Maps and BigQuery remote MCP toolsets
   rebuilt from Google's Launch My Bakery demo (requires Google ADC,
   `MAPS_API_KEY`, and a provider with remote MCP support).

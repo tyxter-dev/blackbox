@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Slice 27 — Adoption gaps: fallback routing, tool-surface persistence, multitenancy
+
+Implements three gaps identified by the first downstream adoption case, a
+production multi-tenant agent platform migrating off `llm_factory_toolkit`.
+
+- Provider fallback routing: `runtime.run(fallback_providers=[...])` tries
+  provider refs in order when the current provider fails with
+  `ProviderExecutionError`, `ProviderNotFoundError`, or
+  `ProviderNotConfiguredError`. Capability and validation errors never fail
+  over. State-transfer semantics are explicit: candidates on a different
+  provider than a present `provider_state` are skipped. The chosen provider
+  and attempt log land on `result.metadata["fallback"]`; failover re-runs the
+  loop, so tools should be idempotent or approval-gated when enabled.
+- Dynamic tool surface persistence: dynamic runs emit a final
+  `TOOL_SET_CHANGED` event with the model-visible surface (meta-tools
+  excluded), surfaced as `result.metadata["tool_choice"]["visible_tools"]`.
+  Passing it back as `tools=` on the next run restores loaded tools without
+  re-paying discovery iterations.
+- Multi-tenant provider pattern: `docs/MULTITENANCY.md` documents the
+  recommended cached runtime-per-tenant factory over shared stores
+  (`AgentRuntime()` construction measures ~0.1 ms), the alias-registration
+  alternative and its bare-`provider_id` footgun, and per-tenant fallback
+  chains; `examples/multi_tenant_runtimes.py` is the runnable recipe.
+
 ### Slice 26 — Inbound multimodal input and schedule execution
 
 Closes the two remaining demand-side gaps from `docs/USE_CASE_VALIDATION.md`.

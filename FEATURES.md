@@ -19,6 +19,7 @@ Status legend:
 | Typed agent result | Supported | `AgentResult[T]` | Carries `output`, `text`, `events`, `items`, `artifacts`, `payloads`, `provider_state`, and `metadata`. |
 | Text-only runs | Supported | `runtime.run(output_type=None)` | Returns final text as `AgentResult.output` and `AgentResult.text`. |
 | Max-iteration guard | Supported | `runtime.run(max_iterations=...)` | Prevents unbounded model/tool loops and emits a terminal failure event. |
+| Provider fallback routing | Supported | `runtime.run(fallback_providers=[...])` | Provider refs tried in order on `ProviderExecutionError`/`ProviderNotFoundError`/`ProviderNotConfiguredError`; candidates incompatible with a present `provider_state` are skipped; attempts and `provider_used` are reported under `result.metadata["fallback"]`. Capability/validation errors never fail over. |
 | Mock tool execution | Supported | `runtime.run(mock_tools=True)` / `runtime.tools.call(..., mock=True)` | Short-circuits real tool side effects for tests and demos. |
 | Workspace agent package contracts | Supported | `WorkspaceAgentSpec`, `WorkspaceAgentRegistry`, `run_workspace_agent(...)` | Portable package metadata for governed agents: connectors, permissions, schedules, skills, publication, serialization, and a thin bridge into the existing runtime loop. |
 | Schedule execution (reference executor) | Supported | `ScheduleExecutor`, `next_cron_run(...)`, `parse_interval(...)` | Dependency-free cron (5-field, timezone-aware) and interval triggers run due schedules via `run_workspace_agent`, gated by the `before_scheduled_run` policy checkpoint, producing `ScheduledRunRef`s. Missed windows collapse into one run. `calendar` triggers are reported as unsupported. |
@@ -58,6 +59,7 @@ Status legend:
 | Context schema privacy | Supported | Injected context parameters are not added to provider tool schemas. |
 | Tool catalog search | Supported | `ToolCatalog` | Simple relevance-scored catalog/search layer for registered/cataloged tools. |
 | Runtime toolsets and dynamic loading | Supported | `Toolset`, `ToolBudget`, `runtime.run(toolsets=[...], tool_selection="dynamic")` | Large catalogs can expose `search_tools`/`load_tools`, defer concrete tools until loaded, enforce visible/call/parallel budgets, and emit tool-choice telemetry. |
+| Dynamic tool surface persistence | Supported | `result.metadata["tool_choice"]["visible_tools"]` + `runtime.run(tools=[...])` | The final model-visible surface (meta-tools excluded) is emitted as a `TOOL_SET_CHANGED` event and surfaced in result metadata; pass it back as `tools=` to keep loaded tools loaded across runs. |
 | Workspace tool backend | Supported | `runtime.tools.register_workspace(...)` | Compatibility bridge for exposing provider-backed workspace operations as run-scoped local tools. |
 | Namespaced `ToolRef` IDs | Not supported yet | Planned for MCP | Current high-level API references tools by simple name. |
 
