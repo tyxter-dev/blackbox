@@ -21,6 +21,7 @@ Status legend:
 | Max-iteration guard | Supported | `runtime.run(max_iterations=...)` | Prevents unbounded model/tool loops and emits a terminal failure event. |
 | Mock tool execution | Supported | `runtime.run(mock_tools=True)` / `runtime.tools.call(..., mock=True)` | Short-circuits real tool side effects for tests and demos. |
 | Workspace agent package contracts | Supported | `WorkspaceAgentSpec`, `WorkspaceAgentRegistry`, `run_workspace_agent(...)` | Portable package metadata for governed agents: connectors, permissions, schedules, skills, publication, serialization, and a thin bridge into the existing runtime loop. |
+| Schedule execution (reference executor) | Supported | `ScheduleExecutor`, `next_cron_run(...)`, `parse_interval(...)` | Dependency-free cron (5-field, timezone-aware) and interval triggers run due schedules via `run_workspace_agent`, gated by the `before_scheduled_run` policy checkpoint, producing `ScheduledRunRef`s. Missed windows collapse into one run. `calendar` triggers are reported as unsupported. |
 
 ## Structured Output
 
@@ -123,6 +124,7 @@ Status legend:
 | OpenAI tool-search control | Supported | `ToolSearchControl` / `ToolSearch` | OpenAI can request provider tool search directly or through hosted namespace specs without duplicate tool-search entries. |
 | Provider-native compaction control | Supported | `CompactionControl(strategy="auto" | "disabled")` | OpenAI maps to Responses `truncation`; supported Anthropic Claude 4.6 models map to `context_management.edits`; aggressive/custom compaction raises until a full compaction workflow exists. |
 | Modalities control | Contract only | `ModelRequestControls.modalities` | Explicit typed surface exists and unsupported providers reject it; no adapter maps it yet. |
+| Multimodal model input (content parts) | Supported | `runtime.run(input=[ContentItem(...)])` | `TextPart`/`ImagePart`/`FilePart` map to native input for OpenAI Responses (and xAI), Anthropic Messages, and Gemini; Gemini also accepts `AudioPart`. Resolution order: `provider_file_id`, `url`, inline base64. Artifact-only `MediaRef`s and unmappable parts raise `UnsupportedFeatureError`; `ProviderNativePart` passes through. |
 
 ## Provider Runtime
 

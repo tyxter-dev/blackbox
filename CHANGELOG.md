@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Slice 26 — Inbound multimodal input and schedule execution
+
+Closes the two remaining demand-side gaps from `docs/USE_CASE_VALIDATION.md`.
+
+- Multimodal model input: `ContentItem` entries in `runtime.run(input=[...])`
+  now map to provider-native multimodal input. `TextPart`/`ImagePart`/
+  `FilePart` are supported by OpenAI Responses (and xAI), Anthropic Messages,
+  and Gemini GenerateContent; Gemini also accepts `AudioPart`. Media resolves
+  by `provider_file_id`, then `url`, then inline base64; artifact-only
+  references and unmappable parts raise `UnsupportedFeatureError`, and
+  `ProviderNativePart` passes through verbatim.
+- Schedule execution: the reference `ScheduleExecutor` runs due
+  `WorkspaceAgentSpec` schedules through `run_workspace_agent`. Includes a
+  dependency-free five-field cron parser (timezone-aware via `zoneinfo`,
+  vixie-cron day-of-month/day-of-week OR rule), interval triggers
+  (`90s`/`15m`/`2h`/`1d`), the `before_scheduled_run` policy checkpoint,
+  `ScheduledRunRef` outcomes (completed/failed/skipped), missed-window
+  collapse, `run_now` for manual triggers, and an optional `serve()` polling
+  loop. `calendar` triggers are reported as unsupported.
+- Adds `examples/scheduled_digest.py` and updates `examples/media_messages.py`
+  with the inbound usage; new unit suites cover part mapping per provider and
+  executor semantics.
+
 ### Slice 25 — Use-case example backlog completed
 
 All eight examples from the `docs/USE_CASE_VALIDATION.md` backlog now exist,

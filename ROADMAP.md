@@ -82,11 +82,10 @@ Goal: no half-open workstreams. These map to PRD M2–M5 and the honest gaps in
       building them exposed and fixed a dynamic-toolset dispatch bug. Rule
       adopted there: an MCP example that cannot run offline (Tier 0) does
       not merge.
-- [ ] **Inbound multimodal model input** — typed content parts (`ImagePart`,
-      `FilePart`, `ContentItem`) exist in core and flow through realtime,
-      but no model adapter maps them into provider-native multimodal input
-      for standard turns. Found while building `media_messages.py`; inbound
-      customer media is routine for WhatsApp-style agents.
+- [x] **Inbound multimodal model input** — `ContentItem` entries in
+      `runtime.run(input=[...])` now map to provider-native multimodal input
+      in the OpenAI Responses (and xAI), Anthropic Messages, and Gemini
+      adapters; unmappable parts raise `UnsupportedFeatureError`.
 
 ## Horizon 2 — The differentiated layer: workspace agent packages v1
 
@@ -103,9 +102,11 @@ consuming application (Tyxter products are the natural first consumers).
 - [ ] **Persistent registry** — `WorkspaceAgentRegistry` has only the
       in-memory implementation; add a SQLite-backed one consistent with the
       existing stores.
-- [ ] **Schedule execution bridge** — `ScheduleSpec` is declarative only;
-      provide a reference executor (or a documented bridge to external cron)
-      that produces `ScheduledRunRef`s and runs packages.
+- [x] **Schedule execution bridge** — `ScheduleExecutor` runs due cron and
+      interval schedules through `run_workspace_agent`, gated by the
+      `before_scheduled_run` policy checkpoint, producing `ScheduledRunRef`s;
+      drive it from external cron via `run_due(now=...)` or with the built-in
+      `serve()` loop. `calendar` triggers remain downstream.
 - [ ] **Permission enforcement at run time** — `ToolPermission` is metadata
       today; enforce scopes/connector bindings in the loop's policy gates so
       a package's grants actually constrain execution.

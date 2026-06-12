@@ -1,3 +1,12 @@
+from blackbox.workspace_agents.executor import (
+    DEFAULT_SCHEDULE_INPUT,
+    ScheduleExecutor,
+    ScheduleExpressionError,
+    next_cron_run,
+    next_run_at,
+    parse_cron,
+    parse_interval,
+)
 from blackbox.workspace_agents.permissions import (
     ApprovalMode,
     ApprovalRequirement,
@@ -36,6 +45,7 @@ from blackbox.workspace_agents.spec import (
 )
 
 __all__ = [
+    "DEFAULT_SCHEDULE_INPUT",
     "ApprovalMode",
     "ApprovalRequirement",
     "ConnectorAuthMode",
@@ -45,6 +55,8 @@ __all__ = [
     "MemorySpec",
     "PermissionScope",
     "PublicationSpec",
+    "ScheduleExecutor",
+    "ScheduleExpressionError",
     "ScheduleSpec",
     "ScheduleTrigger",
     "ScheduleTriggerKind",
@@ -59,6 +71,10 @@ __all__ = [
     "WorkspaceAgentVisibility",
     "dataclass_from_dict",
     "dataclass_to_dict",
+    "next_cron_run",
+    "next_run_at",
+    "parse_cron",
+    "parse_interval",
     "prepare_agent_spec",
     "run_workspace_agent",
     "workspace_agent_from_dict",

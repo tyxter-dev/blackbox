@@ -62,12 +62,12 @@ snippet only) · ❌ no example.
 | Large catalog + dynamic tool loading | 574/610 | `Toolset`, `ToolBudget`, `tool_selection="dynamic"` | `dynamic_toolset_crm` | ✅ (building it fixed a dispatch bug) |
 | Human escalation / approval pause | 588/610 | `ApprovalRequest`/`ApprovalDecision`, policy gates | `human_escalation` | ✅ |
 | Agent-to-agent transfer / routing | 103 + routing on all | handoff events/items; routing itself is app-level | `agent_handoff` | ✅ (boundary documented) |
-| Scheduled & proactive behavior | ~570 | `ScheduleSpec`, `ScheduleTrigger`, `run_workspace_agent` | README snippet only | 🟡 needs executor (Roadmap H2) |
+| Scheduled & proactive behavior | ~570 | `ScheduleSpec`, `ScheduleTrigger`, `ScheduleExecutor` | `scheduled_digest` | ✅ |
 | Persistent conversation memory | 610/610 | `provider_state` resume, `SessionStore`, `MemorySpec` | `conversation_resume` | ✅ |
 | RAG / knowledge lookup | ~40 | hosted `FileSearch` | `model_provider_knowledge_drawer` | ✅ |
 | Generic external HTTP API tool | 578/610 | local tools | `external_api_tool` | ✅ |
 | Media out (send image/document) | 580/610 | `MediaRef`, `ToolResult.payload` | `media_messages` | ✅ |
-| Media in (multimodal model input) | inbound WhatsApp media | `ContentPart`s exist; no adapter mapping | none possible yet | ❌ gap → Roadmap H1 |
+| Media in (multimodal model input) | inbound WhatsApp media | `ContentItem` in `runtime.run(input=[...])`, mapped by OpenAI/Anthropic/Gemini adapters | unit-tested mapping; see `media_messages` docstring | ✅ |
 | Deferred payload pattern (CRM writes) | ~650 calls/agent | `ToolResult.payload` | `run_with_typed_output` | ✅ |
 | Multi-provider fleet | platform-wide | registry, `ProviderRef` | implicit in all examples | ✅ |
 | Tenant cost accounting / resale markup | platform-wide | pricing catalog, `MarkupPolicy`, `billable` | `tenant_billing` | ✅ |

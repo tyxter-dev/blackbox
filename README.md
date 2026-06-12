@@ -402,6 +402,22 @@ agent = WorkspaceAgentSpec(
 result = await run_workspace_agent(runtime, agent, input="Summarize today's work.")
 ```
 
+Declared schedules run through the reference `ScheduleExecutor`: cron and
+interval triggers (dependency-free parser, timezone-aware) execute due
+schedules via `run_workspace_agent`, gated by the `before_scheduled_run`
+policy checkpoint, and produce `ScheduledRunRef`s. Drive it from an external
+cron with `await executor.run_due(now=...)` or run `executor.serve()`:
+
+```python
+from blackbox import InMemoryWorkspaceAgentRegistry, ScheduleExecutor
+
+registry = InMemoryWorkspaceAgentRegistry()
+await registry.save(agent)
+executor = ScheduleExecutor(runtime=runtime, registry=registry)
+refs = await executor.run_due()          # external-cron mode
+ref = await executor.run_now(agent.id, "weekday")  # manual triggers
+```
+
 For packaged agents, MCP is modeled as part of the agent definition rather than
 as a loose tool name. `mcp_servers` declares bare server connections and
 `mcp_toolsets` declares server connections plus routing preferences; both are
@@ -460,6 +476,9 @@ Runnable scripts live under `examples/`:
 - `examples/external_api_tool.py` — a generic HTTP tool with allowlist,
   timeout, size cap, and payload separation, served by a throwaway local
   HTTP server. Offline.
+- `examples/scheduled_digest.py` — cron and interval schedules on a packaged
+  workspace agent executed by the reference `ScheduleExecutor`, replaying a
+  simulated weekend deterministically. Offline.
 - `examples/launchmybakery.py` — Google Maps and BigQuery remote MCP toolsets
   rebuilt from Google's Launch My Bakery demo (requires Google ADC,
   `MAPS_API_KEY`, and a provider with remote MCP support).
@@ -563,6 +582,29 @@ result = await runtime.run(
 Pass additional keyword arguments to `runtime.models.run(...)` for
 provider-specific fields that are not part of the common controls. Those
 provider-specific values override the common controls.
+
+## Multimodal model input
+
+Pass typed content parts as input and the adapters map them to each
+provider's native multimodal shape (OpenAI Responses and xAI, Anthropic
+Messages, Gemini; Gemini also accepts `AudioPart`):
+
+```python
+from blackbox import ContentItem, ImagePart, TextPart
+
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input=[ContentItem(role="user", parts=[
+        TextPart(text="What product is shown in this photo?"),
+        ImagePart.from_url("https://cdn.example.test/photo.jpg", mime_type="image/jpeg"),
+    ])],
+)
+```
+
+Media resolution order is `provider_file_id`, then `url`, then inline
+base64. Artifact-only `MediaRef`s must be resolved by the application first,
+and parts a provider cannot express raise `UnsupportedFeatureError` —
+`ProviderNativePart` remains the escape hatch.
 
 ## Usage accounting
 
