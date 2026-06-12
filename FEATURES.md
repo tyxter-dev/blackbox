@@ -167,6 +167,17 @@ Status legend:
 | Cloud agent providers | Partial | `OpenAICloudAgentProvider`, `ClaudeCodeAgentProvider`, `VertexAIAgentEngineProvider` | OpenAI Agents SDK and Claude Code are implemented; Vertex Agent Engine remains an honest stub. |
 | Cloud agent webhook ingress | Contract only | `AgentWebhookProvider`, `runtime.agents.ingest_webhook(...)` | Optional provider contract and runtime persistence path exist for verified webhook deliveries; no built-in provider verifies or maps live webhook payloads yet. |
 
+## Environment Workers
+
+| Feature | Status | Public surface | Notes |
+|---|---|---|---|
+| Lab-neutral work-queue contract | Supported | `WorkSource`, `WorkItem`, `WorkResult`, `WorkQueueStats` | Claim/lease/complete/stop/stats vocabulary copied from Anthropic's environments work API so adapters map one-to-one; `reclaim_older_than_ms` covers dead-worker reclaim. |
+| In-memory reference work source | Supported | `InMemoryWorkSource` | FIFO claim, heartbeat leases, stale-lease reclaim with attempt counting, ops-side `enqueue`/`request_stop(force=...)`, results record, 30-second `workers_polling` liveness window, injectable clock. |
+| Environment worker daemon | Supported | `EnvironmentWorker` | Always-on (`run`) and webhook-triggered (`drain`) shapes; injected `WorkHandler` executes each session; lease keep-alive while handlers run; control-plane stop cancels in-flight work; graceful `stop()` drains; `status()` exposes per-outcome counters including lost leases. |
+| Inbound work policy gate | Supported | `before_work_claim` checkpoint | Every claimed item is checked before execution; `deny`/`require_approval` complete it as `skipped` with the reason (no approval channel at the worker boundary yet). |
+| Scoped worker credentials | Supported | `WorkerCredentials` | Environment id + environment key with the key excluded from `repr`; documents that the org/provider key never reaches the worker host. |
+| Anthropic Managed Agents work source | Partial | `AnthropicEnvironmentWorkSource`, `anthropic_sdk_session_handler` | Wraps `client.beta.environments.work.*` (beta `managed-agents-2026-04-01`) with feature detection and `ProviderNotConfiguredError` on drift. Built from the 2026-06-12 doc snapshot, unit-tested against fakes only — not yet validated against the live beta API. |
+
 ## Artifacts, Workspaces, MCP, and Observability
 
 | Feature | Status | Public surface | Notes |

@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### Slice 29 — Environment workers (the inbound half)
+
+Implements ROADMAP Horizon 2½: blackbox as the customer-side worker that
+claims agent sessions from a lab control plane's work queue and executes
+them under customer-owned policy. Design analysis in
+`docs/ENVIRONMENT_WORKERS.md`; usage in `src/blackbox/workers/README.md`.
+
+- New `blackbox.workers` package. `WorkSource` is the lab-neutral
+  claim/lease/complete/stop/stats protocol (vocabulary copied from
+  Anthropic's environments work API, including `reclaim_older_than_ms`
+  dead-worker reclaim); `InMemoryWorkSource` is the reference
+  implementation and the seam for customer-owned control planes.
+- `EnvironmentWorker` runs always-on (`run`) or webhook-triggered
+  (`drain`): claims items, gates each at the new `before_work_claim`
+  policy checkpoint (deny/require_approval ⇒ completed as `skipped`
+  without executing), keeps the lease alive while the injected
+  `WorkHandler` runs, cancels in-flight work on a control-plane stop, and
+  drains gracefully on `stop()`. `status()` reports state, last poll,
+  in-flight item, and per-outcome counters including lost leases.
+- `WorkerCredentials` carries the scoped environment id/key pair with the
+  key excluded from `repr`; the org/provider key stays off the worker host.
+- `AnthropicEnvironmentWorkSource` adapts the contract onto
+  `client.beta.environments.work.*` (injected client, feature-detected,
+  `ProviderNotConfiguredError` with a re-verify pointer on drift);
+  `anthropic_sdk_session_handler` delegates session execution to the SDK
+  worker helper. Built from the 2026-06-12 beta doc snapshot
+  (`managed-agents-2026-04-01`) and tested against fakes — validate
+  against the live API before production use.
+- New errors `WorkSourceError`/`WorkItemNotFoundError`; new policy
+  checkpoint `before_work_claim`; 29 offline tests under
+  `tests/unit/workers/`.
+
 ### Slice 28 — Pre-adoption readiness
 
 Hardens the surfaces a downstream application wires against.

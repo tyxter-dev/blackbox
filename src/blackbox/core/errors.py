@@ -151,6 +151,14 @@ class SessionTerminalError(SessionError):
         self.safe_to_retry = safe_to_retry
 
 
+class WorkSourceError(AgentRuntimeError):
+    """Raised when a work-queue source rejects or cannot perform an operation."""
+
+
+class WorkItemNotFoundError(WorkSourceError):
+    """Raised when a work item id is unknown to the work source."""
+
+
 class ArtifactError(AgentRuntimeError):
     """Raised when an artifact cannot be created, read, or referenced."""
 

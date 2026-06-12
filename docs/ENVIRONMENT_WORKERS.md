@@ -12,6 +12,16 @@ before implementing.
 Vocabulary follows `docs/TAXONOMY.md`. Forward-looking items land in
 `ROADMAP.md` (Horizon 2½).
 
+**Status update, 2026-06-12 (same day):** the proposed shape below is now
+implemented as `blackbox.workers` — `WorkSource` protocol +
+`InMemoryWorkSource` reference, `EnvironmentWorker` (always-on and
+webhook-triggered), `AnthropicEnvironmentWorkSource` +
+`anthropic_sdk_session_handler`, `WorkerCredentials`, the
+`before_work_claim` policy checkpoint, and the stats/status ops surface.
+See `src/blackbox/workers/README.md`. The Anthropic adapter is built from
+this doc's snapshot and unit-tested against fakes; it has **not** been run
+against the live beta API — do that before first production use.
+
 ## Strategic framing
 
 The market is splitting along a line that validates this project's thesis:

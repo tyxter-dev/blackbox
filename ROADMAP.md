@@ -149,27 +149,34 @@ and differentiators in `docs/ENVIRONMENT_WORKERS.md`. The strategic logic:
 labs own control planes, lib consumers own customer distribution, blackbox
 is the connector — and the inbound hemisphere is entirely missing today.
 
-- [ ] **`WorkSource` protocol** — lab-neutral claim/lease/stop work-queue
-      contract (poll, claim with lease, keep-alive, dead-worker reclaim,
-      drain/block/auto-stop knobs), vocabulary copied from Anthropic's
-      environments work API.
-- [ ] **`AnthropicEnvironmentWorkSource` adapter** — first implementation,
-      wrapping `client.beta.environments.work.*`; re-verify the beta API
-      (`managed-agents-2026-04-01`) against live docs first.
-- [ ] **`EnvironmentWorker`** — wires claimed work into the existing
-      `ToolRuntime` + `WorkspaceProvider` + policy gates; always-on and
-      webhook-triggered entry points; graceful SIGTERM drain; optional
-      one-workspace-per-work-item sandbox spawn.
-- [ ] **Customer-side governance on inbound work** — gate the lab's tool
-      calls through `before_command`/`before_tool_call`/
-      `before_workspace_write` policy checkpoints; this is the
-      differentiator no lab-shipped worker offers.
-- [ ] **Scoped worker credentials** — a worker-scoped key concept distinct
-      from the org/provider key, never exposing the privileged credential on
-      the worker host (mirrors Anthropic's environment-key split).
-- [ ] **Worker ops surface** — queue depth / oldest-queued / workers-polling
-      liveness stats and graceful/forced stop, consistent with the
-      observability layer.
+- [x] **`WorkSource` protocol** — `blackbox.workers.WorkSource`: lab-neutral
+      claim/lease/complete/stop/stats contract with dead-worker reclaim
+      (`reclaim_older_than_ms`) and a full in-memory reference
+      implementation (`InMemoryWorkSource`) covering the offline suite.
+- [x] **`AnthropicEnvironmentWorkSource` adapter** — wraps
+      `client.beta.environments.work.*` (injected client, feature-detected,
+      `ProviderNotConfiguredError` on drift). Built from the 2026-06-12 doc
+      snapshot and tested against fakes only — **run it against the live
+      beta API before first production use**.
+- [x] **`EnvironmentWorker`** — always-on (`run`) and webhook-triggered
+      (`drain`) entry points, lease keep-alive during handlers,
+      control-plane stop cancellation, graceful `stop()` drain, injected
+      `WorkHandler` (`anthropic_sdk_session_handler` ships as the SDK
+      delegate). Still open: a packaged one-workspace-per-work-item sandbox
+      spawn recipe over `SandboxWorkspaceProvider`.
+- [x] **Customer-side governance on inbound work** — every claimed item is
+      gated at the new `before_work_claim` checkpoint (deny/require_approval
+      ⇒ skipped without execution). Per-tool-call gating flows through
+      handlers built on `ToolRuntime` (existing `before_tool_call`/
+      `before_command` gates); wrapping the Anthropic SDK toolset itself
+      remains open pending its tool-object interface.
+- [x] **Scoped worker credentials** — `WorkerCredentials` (environment id +
+      key, key excluded from `repr`); docs state the org key never reaches
+      the worker host.
+- [x] **Worker ops surface** — `WorkSource.stats()` (depth / pending /
+      oldest_queued_at / workers_polling) and `EnvironmentWorker.status()`
+      (state, last poll, in-flight item, per-outcome counters incl. lost
+      leases); `request_stop(force=...)` on the reference source.
 
 ## Horizon 3 — Release and ecosystem
 

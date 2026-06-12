@@ -233,6 +233,18 @@ from blackbox.tools.hosted.specs import (
 from blackbox.tools.routing import ResolvedToolPlan, ToolCandidate, ToolRoutingSpec
 from blackbox.tools.session import ToolSession
 from blackbox.tools.toolsets import ToolBudget, ToolSelection, Toolset
+from blackbox.workers import (
+    AnthropicEnvironmentWorkSource,
+    EnvironmentWorker,
+    InMemoryWorkSource,
+    WorkerCredentials,
+    WorkerStatus,
+    WorkItem,
+    WorkQueueStats,
+    WorkResult,
+    WorkSource,
+    anthropic_sdk_session_handler,
+)
 from blackbox.workspace_agents import (
     ApprovalRequirement,
     ConnectorSpec,
@@ -284,6 +296,7 @@ __all__ = [
     "AgentWebhookIngressStatus",
     "AgentWebhookProvider",
     "AgentWebhookVerificationError",
+    "AnthropicEnvironmentWorkSource",
     "ApplyPatch",
     "ApprovalDecision",
     "ApprovalRequest",
@@ -306,6 +319,7 @@ __all__ = [
     "ContentPart",
     "DataSourceRef",
     "DynamicToolLoadingSpec",
+    "EnvironmentWorker",
     "EventTypes",
     "FakeRealtimeProvider",
     "FilePart",
@@ -320,6 +334,7 @@ __all__ = [
     "ImagePart",
     "InMemoryProviderCacheStore",
     "InMemorySessionStore",
+    "InMemoryWorkSource",
     "InMemoryWorkspaceAgentRegistry",
     "ItemTypes",
     "JSONLSessionStore",
@@ -440,6 +455,12 @@ __all__ = [
     "VideoFramePart",
     "WebFetch",
     "WebSearch",
+    "WorkItem",
+    "WorkQueueStats",
+    "WorkResult",
+    "WorkSource",
+    "WorkerCredentials",
+    "WorkerStatus",
     "WorkflowProfile",
     "WorkspaceAgentMetadata",
     "WorkspaceAgentRegistry",
@@ -448,6 +469,7 @@ __all__ = [
     "WorkspaceRuntimeFacade",
     "WorkspaceSpec",
     "agent_response_messages",
+    "anthropic_sdk_session_handler",
     "assert_prompt_tool_parity",
     "bundled_model_catalog",
     "bundled_provider_model_catalog",
