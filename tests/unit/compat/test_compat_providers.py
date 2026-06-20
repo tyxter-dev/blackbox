@@ -6,11 +6,13 @@ from blackbox.agents.local import LocalAgentProvider as CompatLocalAgentProvider
 from blackbox.compat.providers import (
     create_runtime_with_default_providers,
     provider_ref_for_model,
+    register_default_agent_providers,
     register_default_model_providers,
     resolve_model_route,
 )
 from blackbox.loop import AgentLoop as CompatAgentLoop
 from blackbox.models.xai_responses import XAIResponsesProvider as CompatXAIResponsesProvider
+from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
 from blackbox.providers.agent_adapters.local import LocalAgentProvider
 from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
 from blackbox.providers.registry import ProviderRegistry
@@ -90,6 +92,30 @@ def test_create_runtime_with_default_providers() -> None:
 
     assert isinstance(runtime, AgentRuntime)
     assert runtime.registry.list_model_providers() == ["anthropic"]
+
+
+def test_register_default_agent_providers_includes_claude_code() -> None:
+    runtime = AgentRuntime()
+    register_default_agent_providers(runtime)
+
+    assert runtime.registry.list_agent_providers() == ["claude-code", "claude_code", "local"]
+    resolved = runtime.registry.get_agent("claude-code")
+    assert isinstance(resolved, ClaudeCodeAgentProvider)
+    # Both the canonical id and the underscore alias resolve to the same instance.
+    assert runtime.registry.get_agent("claude_code") is resolved
+
+
+def test_register_default_agent_providers_explicit_include() -> None:
+    runtime = AgentRuntime()
+    register_default_agent_providers(runtime, include=["claude-code"])
+
+    assert runtime.registry.list_agent_providers() == ["claude-code", "claude_code"]
+
+
+def test_register_default_agent_providers_rejects_unknown_include() -> None:
+    runtime = AgentRuntime()
+    with pytest.raises(ValueError, match="Unknown agent provider"):
+        register_default_agent_providers(runtime, include=["bogus"])
 
 
 def test_xai_provider_defaults_to_xai_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

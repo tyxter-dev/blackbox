@@ -15,7 +15,7 @@ import inspect
 import os
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field, is_dataclass, replace
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, Literal, Protocol, cast, runtime_checkable
 from uuid import uuid4
 
 from blackbox.core.approvals import ApprovalDecision
@@ -27,9 +27,38 @@ from blackbox.core.sessions import AgentRef, AgentSession, InvocationRef, Sessio
 from blackbox.core.streams import bounded_queue
 from blackbox.providers.base import AgentSpec, TaskSpec
 
+AuthMode = Literal["auto", "api_key", "subscription"]
+"""How ``ClaudeCodeAgentProvider`` authenticates the underlying Claude Code CLI.
+
+- ``"auto"`` (default): use API-key billing when an ``api_key`` or
+  ``ANTHROPIC_API_KEY`` is present, otherwise fall back to a logged-in Claude
+  Pro/Max subscription (``claude login`` / ``CLAUDE_CODE_OAUTH_TOKEN``).
+- ``"api_key"``: require API-key auth; raise if none is configured.
+- ``"subscription"``: force subscription/OAuth auth and neutralize any inherited
+  ``ANTHROPIC_API_KEY`` so the CLI never falls back to API-key billing.
+"""
+
 
 def _sdk_event_queue() -> asyncio.Queue[dict[str, Any] | None]:
     return bounded_queue()
+
+
+def _subscription_credentials_available() -> bool:
+    """Return ``True`` when a Claude subscription credential is reachable.
+
+    The Claude Code CLI (spawned by ``claude-agent-sdk``) resolves OAuth
+    credentials from ``CLAUDE_CODE_OAUTH_TOKEN`` or the on-disk credentials file
+    written by ``claude login`` / ``claude setup-token``. This mirrors that
+    lookup so the provider can start without an API key.
+    """
+    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        return True
+    candidates: list[str] = []
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    if config_dir:
+        candidates.append(os.path.join(config_dir, ".credentials.json"))
+    candidates.append(os.path.join(os.path.expanduser("~"), ".claude", ".credentials.json"))
+    return any(os.path.exists(path) for path in candidates)
 
 
 @runtime_checkable
@@ -89,6 +118,7 @@ class ClaudeCodeAgentProvider:
     """
 
     provider_id = "claude-code"
+    provider_aliases = ("claude_code",)
 
     def __init__(
         self,
@@ -96,16 +126,20 @@ class ClaudeCodeAgentProvider:
         *,
         client: ClaudeCodeClient | None = None,
         sdk_module: Any | None = None,
+        auth: AuthMode = "auto",
     ) -> None:
         self.api_key = api_key
+        self.auth = auth
         self._client = client
         self._sdk_module = sdk_module
         self._agents: dict[str, AgentRef] = {}
         self._sessions: dict[str, AgentSession] = {}
 
     def capabilities(self) -> AgentCapabilities:
-        if self._client is None and not (
-            self.api_key or self._sdk_module is not None or os.environ.get("ANTHROPIC_API_KEY")
+        if (
+            self._client is None
+            and self._sdk_module is None
+            and not self._auth_available()
         ):
             return AgentCapabilities(supports_sessions=False, supports_streaming_events=False)
         advertised = getattr(self._client, "capabilities", None)
@@ -210,15 +244,46 @@ class ClaudeCodeAgentProvider:
     def _get_client(self) -> ClaudeCodeClient:
         if self._client is not None:
             return self._client
-        if not self.api_key and not os.environ.get("ANTHROPIC_API_KEY"):
-            raise ProviderNotConfiguredError(
-                "ClaudeCodeAgentProvider requires an api_key or ANTHROPIC_API_KEY."
-            )
+        resolved = self._resolve_auth()
         self._client = ClaudeAgentSDKClient(
-            api_key=self.api_key,
+            api_key=self.api_key if resolved == "api_key" else None,
             sdk_module=self._sdk_module,
+            force_subscription=resolved == "subscription",
         )
         return self._client
+
+    def _has_api_key(self) -> bool:
+        return bool(self.api_key or os.environ.get("ANTHROPIC_API_KEY"))
+
+    def _auth_available(self) -> bool:
+        """Return ``True`` when some usable auth (API key or subscription) exists."""
+        if self.auth == "subscription":
+            return True
+        if self._has_api_key():
+            return True
+        if self.auth == "api_key":
+            return False
+        return _subscription_credentials_available()
+
+    def _resolve_auth(self) -> Literal["api_key", "subscription"]:
+        """Pick the concrete auth path, or raise if nothing is configured."""
+        if self.auth == "subscription":
+            return "subscription"
+        if self._has_api_key():
+            return "api_key"
+        if self.auth == "api_key":
+            raise ProviderNotConfiguredError(
+                "ClaudeCodeAgentProvider auth='api_key' requires an api_key or "
+                "ANTHROPIC_API_KEY."
+            )
+        if _subscription_credentials_available():
+            return "subscription"
+        raise ProviderNotConfiguredError(
+            "ClaudeCodeAgentProvider requires an api_key, ANTHROPIC_API_KEY, a "
+            "CLAUDE_CODE_OAUTH_TOKEN, or a logged-in Claude subscription (run "
+            "`claude login` or `claude setup-token`). Pass auth='subscription' to "
+            "force subscription auth."
+        )
 
     def _resolve_session(self, session: SessionRef | AgentSession) -> AgentSession:
         if isinstance(session, AgentSession):
@@ -352,6 +417,11 @@ def _coerce_event(raw: Any, *, provider: str, session_id: str) -> AgentEvent:
     data = _as_dict(raw)
     event_type = _canonical_event_type(str(data.get("type", data.get("event", ""))))
     event_data = dict(data.get("data") or {})
+    # The keys below are the adapter's intentional projection (e.g. the decoded
+    # text-delta string in ``message``). They must win over the raw SDK envelope
+    # carried under ``data`` -- which also has a ``message`` key holding the full
+    # SDK message dict -- otherwise the projected text is shadowed. The untouched
+    # envelope is still preserved verbatim on ``AgentEvent.raw``.
     for key in (
         "status",
         "message",
@@ -367,7 +437,7 @@ def _coerce_event(raw: Any, *, provider: str, session_id: str) -> AgentEvent:
         "result",
         "error",
     ):
-        if key in data and key not in event_data:
+        if key in data:
             event_data[key] = data[key]
     event_kwargs: dict[str, Any] = {
         "type": event_type,
@@ -489,8 +559,15 @@ class ClaudeAgentSDKClient:
     provider/session contract while keeping the SDK import optional.
     """
 
-    def __init__(self, *, api_key: str | None = None, sdk_module: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        sdk_module: Any | None = None,
+        force_subscription: bool = False,
+    ) -> None:
         self.api_key = api_key
+        self.force_subscription = force_subscription
         self._sdk = sdk_module
         self._agents: dict[str, AgentSpec] = {}
         self._sessions: dict[str, _SDKSession] = {}
@@ -663,6 +740,10 @@ class ClaudeAgentSDKClient:
         env = dict(spec.environment if spec is not None else {})
         if self.api_key is not None:
             env.setdefault("ANTHROPIC_API_KEY", self.api_key)
+        elif self.force_subscription:
+            # Neutralize any inherited ANTHROPIC_API_KEY so the spawned CLI uses
+            # the Claude subscription OAuth credentials instead of API billing.
+            env.setdefault("ANTHROPIC_API_KEY", "")
 
         kwargs: dict[str, Any] = {
             "include_partial_messages": True,

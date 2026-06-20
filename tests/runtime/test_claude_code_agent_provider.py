@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from blackbox.core.approvals import ApprovalDecision
+from blackbox.core.errors import ProviderNotConfiguredError
 from blackbox.core.events import EventTypes
 from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
 from blackbox.providers.base import AgentSpec, TaskSpec
@@ -119,6 +120,69 @@ async def test_claude_code_sdk_permission_callback_emits_approval_and_resumes() 
 
     assert rest[-1].type == EventTypes.SESSION_COMPLETED
     assert sdk.clients[0].permission_result is not None
+
+
+async def test_claude_code_auto_uses_subscription_without_api_key(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "oauth-test-token")
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(sdk_module=sdk)  # no api_key, auth defaults to "auto"
+
+    assert provider.capabilities().supports_sessions is True
+
+    agent = await provider.create_agent(AgentSpec(name="coder"))
+    await provider.start_session(agent, TaskSpec(prompt="fix bug"))
+
+    env = sdk.clients[0].options.kwargs["env"]
+    # Subscription auth must not inject a real API key; the inherited key (none
+    # here) is neutralized to an empty string so the CLI uses OAuth credentials.
+    assert env["ANTHROPIC_API_KEY"] == ""
+
+
+async def test_claude_code_subscription_neutralizes_inherited_api_key(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-not-be-used")
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(auth="subscription", sdk_module=sdk)
+
+    agent = await provider.create_agent(AgentSpec(name="coder"))
+    await provider.start_session(agent, TaskSpec(prompt="fix bug"))
+
+    env = sdk.clients[0].options.kwargs["env"]
+    assert env["ANTHROPIC_API_KEY"] == ""
+
+
+async def test_claude_code_auth_api_key_requires_key(monkeypatch: Any) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    provider = ClaudeCodeAgentProvider(auth="api_key")
+
+    assert provider.capabilities().supports_sessions is False
+    try:
+        await provider.create_agent(AgentSpec(name="coder"))
+    except ProviderNotConfiguredError:
+        pass
+    else:  # pragma: no cover - guard
+        raise AssertionError("expected ProviderNotConfiguredError")
+
+
+async def test_claude_code_sdk_projects_text_delta_into_event_data() -> None:
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(api_key="sk-test", sdk_module=sdk)
+    agent = await provider.create_agent(AgentSpec(name="coder"))
+    session = await provider.start_session(agent, TaskSpec(prompt="hi"))
+
+    events = [event async for event in provider.stream_events(session)]
+    delta = next(event for event in events if event.type == EventTypes.MODEL_TEXT_DELTA)
+
+    # The decoded text projection must win over the raw SDK envelope (which also
+    # carries a ``message`` key holding the full SDK message dict).
+    assert delta.data["message"] == "working"
+    # ...while the untouched raw envelope is still preserved verbatim on ``raw``.
+    assert isinstance(delta.raw, dict)
+    assert isinstance(delta.raw["data"]["message"], dict)
 
 
 @dataclass(slots=True)

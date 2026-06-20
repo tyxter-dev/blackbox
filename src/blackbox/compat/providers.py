@@ -14,7 +14,7 @@ from blackbox.providers.registry import ProviderRegistry
 
 ProviderKey = Literal["openai", "anthropic", "google", "xai"]
 ProviderAlias = Literal["openai", "anthropic", "google", "gemini", "xai"]
-AgentProviderAlias = Literal["local"]
+AgentProviderAlias = Literal["local", "claude-code"]
 
 _EXPLICIT_PREFIXES: dict[str, ProviderKey] = {
     "openai/": "openai",
@@ -161,6 +161,14 @@ def register_default_agent_providers(
 
         tools = getattr(getattr(target, "tools", None), "default_runtime", None)
         registry.register_agent(LocalAgentProvider(target.models, tools=tools))
+    if "claude-code" in selected:
+        from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+
+        # Construction is lazy: credentials and the optional claude-agent-sdk are
+        # resolved only when a session is started, so this is safe to register
+        # offline. auth="auto" prefers API-key billing and falls back to a
+        # logged-in Claude Pro/Max subscription.
+        registry.register_agent(ClaudeCodeAgentProvider())
     return registry
 
 
@@ -209,11 +217,15 @@ def _normalize_agent_include(
     include: Iterable[AgentProviderAlias | str] | None,
 ) -> set[AgentProviderAlias]:
     if include is None:
-        return {"local"}
+        return {"local", "claude-code"}
     selected: set[AgentProviderAlias] = set()
     for value in include:
         if value == "local":
             selected.add("local")
+        elif value in {"claude-code", "claude_code"}:
+            selected.add("claude-code")
         else:
-            raise ValueError(f"Unknown agent provider '{value}'. Expected: local.")
+            raise ValueError(
+                f"Unknown agent provider '{value}'. Expected one of: local, claude-code."
+            )
     return selected

@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Slice 33 — Claude Code subscription auth + registry registration
+
+Makes `ClaudeCodeAgentProvider` usable on a Claude Pro/Max subscription, not
+just API-key billing, and wires it into the registry so it resolves by name.
+
+- New `auth` selector on `ClaudeCodeAgentProvider(auth="auto" | "api_key" |
+  "subscription")`. `"auto"` (default) keeps the prior API-key behavior when
+  `api_key`/`ANTHROPIC_API_KEY` is set, and otherwise falls back to a
+  logged-in subscription — detected via `CLAUDE_CODE_OAUTH_TOKEN` or the
+  `~/.claude/.credentials.json` written by `claude login` / `claude
+  setup-token` (honoring `CLAUDE_CONFIG_DIR`). `"subscription"` forces OAuth
+  and neutralizes any inherited `ANTHROPIC_API_KEY` so the spawned CLI never
+  silently switches to API billing. `"api_key"` preserves strict behavior.
+  `capabilities()` now reports `supports_sessions=True` when a subscription
+  is reachable instead of requiring a key.
+- `register_default_agent_providers` now registers `ClaudeCodeAgentProvider`
+  (alias `claude_code`) alongside `local`; construction stays lazy so it is
+  safe to register offline. `runtime.agents` resolves `provider="claude-code"`.
+- Event-mapping fix: in `_coerce_event`, the adapter's projected fields (e.g.
+  the decoded `message` text-delta string) now win over the raw SDK envelope
+  carried under `data`, so model text lands in `AgentEvent.data["message"]`
+  instead of being shadowed by the full SDK message dict. The untouched
+  envelope is still preserved verbatim on `AgentEvent.raw`.
+
 ### Slice 32 — Diet Coach flagship example
 
 The reference "agent workspace" app from ROADMAP Horizon 2, proving the
