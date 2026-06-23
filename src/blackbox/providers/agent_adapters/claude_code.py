@@ -13,6 +13,7 @@ import asyncio
 import importlib
 import inspect
 import os
+import warnings
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field, is_dataclass, replace
 from typing import Any, Literal, Protocol, cast, runtime_checkable
@@ -766,6 +767,11 @@ class ClaudeAgentSDKClient:
         if workspace_root is not None:
             kwargs["cwd"] = workspace_root
 
+        # Passthrough for SDK options the runtime doesn't model directly. Callers
+        # set these via ``spec.permissions`` or ``task.extra``. ``setting_sources``
+        # is load-bearing for skills: the SDK does not load filesystem settings by
+        # default, so ``setting_sources=["project"]`` is required for the cwd's
+        # ``.claude/`` (skills, agents, commands, CLAUDE.md) to be discovered.
         for key in (
             "tools",
             "allowed_tools",
@@ -778,6 +784,7 @@ class ClaudeAgentSDKClient:
             "output_format",
             "cli_path",
             "settings",
+            "setting_sources",
             "add_dirs",
             "extra_args",
             "sandbox",
@@ -792,7 +799,7 @@ class ClaudeAgentSDKClient:
         if isinstance(resume, str):
             kwargs["resume"] = resume
 
-        return options_cls(**kwargs)
+        return options_cls(**_filter_options_kwargs(options_cls, kwargs))
 
     def _permission_callback(
         self,
@@ -1050,6 +1057,37 @@ def _coerce_mcp_servers(value: list[Any]) -> Any:
         str(index): server
         for index, server in enumerate(value)
     }
+
+
+def _filter_options_kwargs(options_cls: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Drop kwargs the installed ``ClaudeAgentOptions`` does not accept.
+
+    ``claude-agent-sdk`` is pinned to a range (``>=0.2,<1``) and option fields
+    come and go across releases (``sandbox``, ``enable_file_checkpointing``,
+    ``setting_sources``, ...). Forwarding a key an older installed version does
+    not know raises ``TypeError`` at construction and kills the session. Filtering
+    to the constructor's accepted parameters degrades gracefully: an unsupported
+    option is dropped (with a warning, since the caller asked for it) instead of
+    crashing. Classes whose constructor accepts ``**kwargs`` (e.g. test fakes)
+    are passed through untouched.
+    """
+
+    try:
+        params = inspect.signature(options_cls).parameters
+    except (TypeError, ValueError):  # pragma: no cover - exotic constructors
+        return kwargs
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return kwargs
+    allowed = set(params)
+    dropped = sorted(key for key in kwargs if key not in allowed)
+    if dropped:
+        warnings.warn(
+            f"ClaudeAgentOptions does not accept {', '.join(dropped)}; dropping "
+            "(claude-agent-sdk version skew). Upgrade claude-agent-sdk to use them.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return {key: value for key, value in kwargs.items() if key in allowed}
 
 
 def _workspace_root(workspace: Any) -> str | None:

@@ -3,10 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import pytest
+
 from blackbox.core.approvals import ApprovalDecision
 from blackbox.core.errors import ProviderNotConfiguredError
 from blackbox.core.events import EventTypes
-from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.providers.agent_adapters.claude_code import (
+    ClaudeCodeAgentProvider,
+    _filter_options_kwargs,
+)
 from blackbox.providers.base import AgentSpec, TaskSpec
 from blackbox.workspaces.spec import WorkspaceSpec
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient
@@ -153,6 +158,65 @@ async def test_claude_code_subscription_neutralizes_inherited_api_key(
 
     env = sdk.clients[0].options.kwargs["env"]
     assert env["ANTHROPIC_API_KEY"] == ""
+
+
+async def test_claude_code_forwards_setting_sources_for_project_skills() -> None:
+    # Skills/agents/commands under the workspace ``.claude/`` only load when the
+    # SDK is told to read filesystem settings; the provider must forward
+    # ``setting_sources`` so a caller can opt in.
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(api_key="sk-test", sdk_module=sdk)
+
+    agent = await provider.create_agent(
+        AgentSpec(name="coder", permissions={"setting_sources": ["project"]})
+    )
+    await provider.start_session(
+        agent,
+        TaskSpec(prompt="use the review-pr skill", workspace=WorkspaceSpec.local("/tmp/project")),
+    )
+
+    assert sdk.clients[0].options.kwargs["setting_sources"] == ["project"]
+
+
+async def test_claude_code_setting_sources_via_task_extra() -> None:
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(api_key="sk-test", sdk_module=sdk)
+
+    agent = await provider.create_agent(AgentSpec(name="coder"))
+    await provider.start_session(
+        agent,
+        TaskSpec(prompt="fix bug", extra={"setting_sources": ["project", "user"]}),
+    )
+
+    assert sdk.clients[0].options.kwargs["setting_sources"] == ["project", "user"]
+
+
+def test_filter_options_kwargs_drops_unknown_keys_with_warning() -> None:
+    # An option key the installed SDK doesn't model must be dropped (not raised)
+    # so version skew degrades gracefully; the caller is warned it had no effect.
+    @dataclass(slots=True)
+    class StrictOptions:
+        model: str | None = None
+        cwd: str | None = None
+
+    with pytest.warns(RuntimeWarning, match="setting_sources"):
+        filtered = _filter_options_kwargs(
+            StrictOptions, {"model": "claude", "setting_sources": ["project"]}
+        )
+
+    assert filtered == {"model": "claude"}
+    StrictOptions(**filtered)  # constructs without TypeError
+
+
+def test_filter_options_kwargs_passes_through_var_keyword_classes() -> None:
+    # Classes whose constructor accepts ``**kwargs`` (e.g. test fakes, or a
+    # future SDK that does the same) must not be filtered.
+    class Loose:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+
+    payload = {"setting_sources": ["project"], "anything": 1}
+    assert _filter_options_kwargs(Loose, payload) == payload
 
 
 async def test_claude_code_auth_api_key_requires_key(monkeypatch: Any) -> None:

@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Slice 34 — Claude Code `setting_sources` passthrough (project skills)
+
+Lets the Claude Code provider activate project `.claude/` settings, which is
+what the CLI's native skills/subagents/commands discovery keys off of.
+
+- `ClaudeCodeAgentProvider._build_options` now forwards `setting_sources`
+  (via `spec.permissions` or `task.extra`) into `ClaudeAgentOptions`. The
+  `claude-agent-sdk` does not load filesystem settings by default, so
+  `setting_sources=["project"]` is required for the workspace `cwd`'s
+  `.claude/` (skills, subagents, commands, `CLAUDE.md`) to be discovered —
+  even though the provider already sets `cwd`. Without this, a workspace
+  could ship project skills but the provider couldn't turn them on. (gh #2)
+- Hardening: option kwargs are now filtered to the installed
+  `ClaudeAgentOptions` constructor's accepted parameters before construction.
+  `claude-agent-sdk` is pinned to a range (`>=0.2,<1`) and option fields come
+  and go across releases (`sandbox`, `enable_file_checkpointing`,
+  `setting_sources`, ...); forwarding an unknown key on a version skew used to
+  raise `TypeError` and kill the session. Unknown keys are now dropped with a
+  `RuntimeWarning` instead. Constructors that accept `**kwargs` pass through
+  untouched.
+- This is the Claude Code CLI half of skill activation; the provider-agnostic
+  `SkillSpec` compiler (gh #1) is the follow-up.
+
 ### Slice 33 — Claude Code subscription auth + registry registration
 
 Makes `ClaudeCodeAgentProvider` usable on a Claude Pro/Max subscription, not
