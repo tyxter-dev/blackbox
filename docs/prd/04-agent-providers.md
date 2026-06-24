@@ -114,6 +114,6 @@ Priority order delivered: `OpenAICloudAgentProvider` → `ClaudeCodeAgentProvide
 → `VertexAIAgentEngineProvider` (stub). Cloud agent webhook ingress is
 contract-only (`AgentWebhookProvider`, `runtime.agents.ingest_webhook`) — needs
 one real verifying implementation (Horizon 1). Docs: `docs/AGENT.md`,
-`docs/AGENT_PROVIDER_WORKFLOW_VALIDATION.md`. PRD §9.2, §13.2/13.4/13.6.
+`docs/validation/AGENT_PROVIDER_WORKFLOW_VALIDATION.md`. PRD §9.2, §13.2/13.4/13.6.
 
 → Next: [05 — Tools](05-tools.md)

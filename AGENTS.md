@@ -39,7 +39,9 @@ Read these before making non-trivial changes:
 - `tests/VALIDATION.md` — coverage tracker mapping behaviors to the tests that prove them.
 - `README.md` — public-facing API surface and package layout.
 - `src/blackbox/<package>/README.md` — every domain package has a "Belongs Here / Does Not Belong Here / File Map" README. Read the relevant one before adding code in a package you don't already own.
-- Architecture notes: `docs/ORGANIZATION_PLAN.md`, `docs/AGENT.md`, `docs/MODEL.md`, `docs/WORKSPACE.md`, `docs/WORKFLOW_PROFILES.md`.
+- Architecture notes: `docs/AGENT.md`, `docs/MODEL.md`, `docs/WORKSPACE.md`, `docs/WORKFLOW_PROFILES.md` (and `docs/archive/ORGANIZATION_PLAN.md` for the completed package-reorg history).
+- `docs/adr/` — architecture decision records: the settled "don't re-litigate" decisions, one per file, with context and consequences. Start at `docs/adr/README.md`.
+- `docs/prd/` — feature-split, navigable edition of `docs/PRD.md` (one capability per file); `docs/PRD.md` stays canonical where they disagree.
 - `docs/USE_CASE_VALIDATION.md` — demand-side coverage: real-world agent patterns mapped to examples, the example backlog, and the tiered (offline-first) MCP integration validation strategy.
 
 The PRD is updated when product direction shifts; ask before making sweeping PRD edits. `FEATURES.md` should be kept honest as features land.

@@ -110,6 +110,6 @@ Model adapters are a commodity maintenance treadmill — keep healthy, don't cha
 breadth (`ROADMAP.md` strategic thesis). Bundled model/pricing catalogs are
 snapshots needing periodic refresh. Tests: `tests/golden/<vendor>/` (offline
 fixtures) + `tests/integration/<vendor>/` (network-gated). Docs: `docs/MODEL.md`,
-`docs/MODEL_PROVIDER_WORKFLOW_VALIDATION.md`. PRD §9.1, §13.1/13.3/13.5.
+`docs/validation/MODEL_PROVIDER_WORKFLOW_VALIDATION.md`. PRD §9.1, §13.1/13.3/13.5.
 
 → Next: [04 — Agent providers](04-agent-providers.md)
