@@ -229,15 +229,20 @@ Unchanged from the PRD, restated to resist scope creep on return:
 
 ## Decision log (PRD §26 open questions, settled)
 
-| # | Question | Decision |
-|---|---|---|
-| 1 | Package name | `blackbox` (repo dir `agent_runtime` is legacy-local). Confirm PyPI availability before release. |
-| 2 | First real `AgentProvider` | OpenAI Agents SDK, then Claude Code. Vertex remains open (Horizon 1). |
-| 3 | Workspaces in core? | Yes — shipped in core. |
-| 4 | Dataclasses vs Pydantic for schemas | Dataclasses in core; Pydantic optional (`validate` extra). |
-| 5 | Persistence interfaces immediately? | Yes — store protocols + JSONL/SQLite impls shipped. |
-| 9 | Structured-output validators | Pydantic, dataclasses, raw JSON Schema all supported. |
-| 10 | Retry on validation failure | Fail-fast default (`posthoc_parse`); opt-in `posthoc_parse_with_retry`. |
+Architecture decision records for these — and the broader "don't re-litigate"
+constraints (no LiteLLM, chat-as-projection, separate Model/Agent protocols, raw
+escape hatches, MCP trust boundary, …) — live in
+[`docs/adr/`](docs/adr/README.md).
+
+| # | Question | Decision | ADR |
+|---|---|---|---|
+| 1 | Package name | `blackbox` (repo dir `agent_runtime` is legacy-local). Confirm PyPI availability before release. | [0011](docs/adr/0011-import-name-blackbox-dist-name-deferred.md) |
+| 2 | First real `AgentProvider` | OpenAI Agents SDK, then Claude Code. Vertex remains open (Horizon 1). | — |
+| 3 | Workspaces in core? | Yes — shipped in core. | [0010](docs/adr/0010-workspaces-and-persistence-in-core.md) |
+| 4 | Dataclasses vs Pydantic for schemas | Dataclasses in core; Pydantic optional (`validate` extra). | [0006](docs/adr/0006-zero-dependency-core-pydantic-optional.md) |
+| 5 | Persistence interfaces immediately? | Yes — store protocols + JSONL/SQLite impls shipped. | [0010](docs/adr/0010-workspaces-and-persistence-in-core.md) |
+| 9 | Structured-output validators | Pydantic, dataclasses, raw JSON Schema all supported. | [0006](docs/adr/0006-zero-dependency-core-pydantic-optional.md), [0007](docs/adr/0007-four-output-strategies-fail-fast.md) |
+| 10 | Retry on validation failure | Fail-fast default (`posthoc_parse`); opt-in `posthoc_parse_with_retry`. | [0007](docs/adr/0007-four-output-strategies-fail-fast.md) |
 
 Still open: 6 (sink sync/async stance is de facto async — confirm and close),
 7 (how much provider API through `extra` vs adapter methods — revisit per
