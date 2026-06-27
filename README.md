@@ -91,6 +91,7 @@ src/blackbox/
   planning/         # resolved run specs, prompt composition, and parity checks
   tools/            # local tools, hosted-tool specs, catalogs, and sessions
   mcp/              # MCP server specs, connector, cache, and transports
+  skills/           # portable SKILL.md loading, compilation, and staging
   workspaces/       # workspace abstractions for files, patches, repos, sandboxes
   workspace_agents/ # governed agent package contracts, permissions, schedules, registry
   output/           # structured-output schema conversion and validation helpers
@@ -177,6 +178,33 @@ second = await runtime.run(
     ..., toolsets=[crm], tool_selection="dynamic", tools=visible,
 )
 ```
+
+## Portable skill packs
+
+A skill pack is a directory with a `SKILL.md` entry point. The runtime loads
+frontmatter plus the Markdown body into `SkillSpec`, then compiles active
+skills into existing run primitives: prompt fragments, local tools, hosted
+tools, MCP toolsets, output specs, workspace requirements, and approval policy.
+
+```python
+from blackbox import AgentRuntime, SkillSpec
+
+skill = SkillSpec.from_directory("./skills/review-pr")
+
+result = await runtime.run(
+    provider="openai:gpt-5.4",
+    input="Review this pull request.",
+    skills=[skill],
+    workspace=workspace,
+)
+
+print(skill.to_markdown())
+```
+
+`skills=` is a normal high-level kwarg, not a new facade, and can also be
+supplied through `RuntimeConfig(overrides={"skills": [...]})`. Claude Code
+workspace-agent runs stage active bundles into `.claude/skills/` and enable
+project setting sources so the CLI's native skill engine can discover them.
 
 ## Provider fallback routing
 
@@ -421,6 +449,7 @@ from blackbox import (
     MCPToolset,
     ScheduleSpec,
     ScheduleTrigger,
+    SkillBundleRef,
     ToolPermission,
     WorkspaceAgentSpec,
     run_workspace_agent,
@@ -453,6 +482,7 @@ agent = WorkspaceAgentSpec(
         ToolPermission(ref="lookup_issue", scopes=["read"], connector="github"),
         ToolPermission(ref="mcp:github.list_issues", scopes=["read"], connector="github"),
     ],
+    skills=[SkillBundleRef(name="release-notes", source="./skills/release-notes")],
     schedules=[
         ScheduleSpec(
             name="weekday",

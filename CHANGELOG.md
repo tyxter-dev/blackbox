@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Slice 35 — Portable skill packs (`SkillSpec`)
+
+Implements gh #1: portable skill bundles now activate on top of existing
+runtime primitives instead of remaining inert package metadata.
+
+- New `blackbox.skills` package with `SkillSpec`, dependency-light
+  `SKILL.md` frontmatter parsing, deterministic `to_markdown()` export,
+  `compile_skills(...)`, skill permission policy composition, validation
+  helpers, and `ClaudeCodeSkillStager`.
+- `runtime.plan_run`, `runtime.stream`, and `runtime.run` accept `skills=`
+  directly and through `RuntimeConfig` overrides. Active skills compile into
+  prompt fragments with progressive disclosure, local tool refs, hosted
+  tools, MCP toolsets, output specs, workspace requirements, context flags,
+  and approval policy without adding a new top-level facade.
+- `run_workspace_agent` now forwards package skills into model-runtime runs.
+  For Claude Code agent-provider runs, it stages each bundle into the
+  workspace `.claude/skills/<name>/` and ensures `setting_sources` includes
+  `"project"` so the CLI's native skill engine discovers the staged bundles.
+- Workspace-agent validation now checks existing local skill sources for a
+  present and parseable `SKILL.md`, while preserving URL/registry refs as
+  external and keeping the Windows absolute-path source regression covered.
+
 ### Slice 34 — Claude Code `setting_sources` passthrough (project skills)
 
 Lets the Claude Code provider activate project `.claude/` settings, which is

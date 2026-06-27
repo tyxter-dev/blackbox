@@ -38,7 +38,7 @@ from blackbox.core.stores import (
     RunStore,
     SessionStore,
 )
-from blackbox.mcp import MCPConnector, MCPToolset, resolve_mcp_route, to_remote_mcp
+from blackbox.mcp import MCPConnector, MCPServerSpec, MCPToolset, resolve_mcp_route, to_remote_mcp
 from blackbox.observability.presets import ObservabilityPreset
 from blackbox.observability.traces import TraceContext, trace_metadata_from_events
 from blackbox.output.schema import OutputSchema, build_output_schema
@@ -114,6 +114,8 @@ from blackbox.runtime.tool_routing import (
 from blackbox.runtime.tools import ToolRuntimeFacade
 from blackbox.runtime.workspace_results import _workspace_metadata_from_events
 from blackbox.runtime.workspaces import WorkspaceRuntimeFacade
+from blackbox.skills import SkillInput, SkillSpec, compile_skills, compose_policies
+from blackbox.skills.specs import normalize_skills
 from blackbox.tools.catalog import ToolCatalog
 from blackbox.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
 from blackbox.tools.registry import ToolDefinition
@@ -262,6 +264,7 @@ class AgentRuntime:
         output_spec: OutputSpec | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
         toolsets: list[Any] | None = None,
+        skills: list[SkillInput] | SkillInput | None = None,
         tool_selection: ToolSelection = "static",
         tool_budget: ToolBudget | None = None,
         cache: ModelCacheControl | None = None,
@@ -324,6 +327,8 @@ class AgentRuntime:
             list[Any] | None,
             _consume_config_value(config_values, "toolsets", toolsets),
         )
+        skills = cast(Any, _consume_config_value(config_values, "skills", skills))
+        skill_specs = normalize_skills(skills)
         tool_selection = cast(
             ToolSelection,
             _consume_config_value(config_values, "tool_selection", tool_selection),
@@ -360,6 +365,19 @@ class AgentRuntime:
             _consume_config_value(config_values, "workspace_prefix", workspace_prefix),
         )
         policy = workflow_policy(_consume_config_value(config_values, "policy", policy))
+        mcp_toolsets, local_toolsets = self._split_toolsets(toolsets)
+        skill_expansion = compile_skills(
+            skill_specs,
+            registry=tool_session.registry if tool_session is not None else self.tools.registry,
+            mcp_servers=_mcp_server_index(mcp_toolsets),
+        )
+        policy = compose_policies(policy, skill_expansion.policy)
+        workspace = _merge_skill_workspace(workspace, skill_expansion.workspace)
+        if output_spec is None and skill_expansion.output_spec is not None:
+            output_spec = skill_expansion.output_spec
+        context_flags = _dedupe_strings(
+            [*(context_flags or []), *skill_expansion.context_flags]
+        )
         if provider is None:
             raise ValueError("provider must be provided explicitly or through config.")
         provider_ref = ProviderRef.parse(provider)
@@ -387,12 +405,13 @@ class AgentRuntime:
             tools,
             tool_routing=tool_routing,
         )
-        effective_hosted_tools = list(hosted_tools or [])
+        effective_tools.extend(skill_expansion.local_tools)
+        effective_hosted_tools = [*(hosted_tools or []), *skill_expansion.hosted_tools]
         resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
         opened_workspace: tuple[Any, Any, bool] | None = None
         budget = tool_budget or ToolBudget()
-        mcp_toolsets, local_toolsets = self._split_toolsets(toolsets)
+        mcp_toolsets = [*mcp_toolsets, *skill_expansion.mcp_toolsets]
         try:
             if workspace is not None:
                 effective_tool_session = (
@@ -549,7 +568,7 @@ class AgentRuntime:
 
             prompt_spec = _resolve_prompt_spec(
                 prompt,
-                prompt_mode=prompt_mode,
+                prompt_mode=_skill_prompt_mode(prompt, prompt_mode, skill_expansion.prompt_mode),
                 channel=channel,
             )
             plan = self._resolved_run_spec(
@@ -570,6 +589,7 @@ class AgentRuntime:
                 tool_routing_plan=routing_plan,
                 data_sources=data_sources,
                 context_flags=context_flags,
+                prompt_fragments=skill_expansion.prompt_fragments,
                 tool_session=effective_tool_session,
             )
             plan.prompt = self.prompt_composer.build(plan, prompt_spec)
@@ -606,8 +626,10 @@ class AgentRuntime:
         channel: str | None = None,
         output_schema: OutputSchema | None = None,
         output_strategy: OutputStrategy | None = None,
+        output_spec: OutputSpec | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
         toolsets: list[Any] | None = None,
+        skills: list[SkillInput] | SkillInput | None = None,
         tool_selection: ToolSelection = "static",
         tool_budget: ToolBudget | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
@@ -709,11 +731,9 @@ class AgentRuntime:
             OutputStrategy | None,
             _consume_config_value(config_values, "output_strategy", output_strategy),
         )
-        output_spec = _coerce_output_spec(config_values.pop("output_spec", None))
-        if output_schema is None and output_spec is not None:
-            output_schema = build_output_schema(output_spec)
-            if output_strategy is None:
-                output_strategy = output_spec.strategy
+        output_spec = _coerce_output_spec(
+            _consume_config_value(config_values, "output_spec", output_spec)
+        )
         hosted_tools = cast(
             list[HostedToolSpec] | None,
             _consume_config_value(config_values, "hosted_tools", hosted_tools),
@@ -722,6 +742,8 @@ class AgentRuntime:
             list[Any] | None,
             _consume_config_value(config_values, "toolsets", toolsets),
         )
+        skills = cast(Any, _consume_config_value(config_values, "skills", skills))
+        skill_specs = normalize_skills(skills)
         tool_selection = cast(
             ToolSelection,
             _consume_config_value(config_values, "tool_selection", tool_selection),
@@ -784,18 +806,36 @@ class AgentRuntime:
             raise ValueError("model must be provided explicitly or as 'provider/model'.")
         adapter = self.registry.get_model(provider_ref.provider_key)
         capability_profile = get_model_capability_profile(adapter, model_name)
+        mcp_toolsets, local_toolsets = self._split_toolsets(toolsets)
+        skill_expansion = compile_skills(
+            skill_specs,
+            registry=tool_session.registry if tool_session is not None else self.tools.registry,
+            mcp_servers=_mcp_server_index(mcp_toolsets),
+        )
+        policy = compose_policies(policy, skill_expansion.policy)
+        workspace = _merge_skill_workspace(workspace, skill_expansion.workspace)
+        if output_spec is None and skill_expansion.output_spec is not None:
+            output_spec = skill_expansion.output_spec
+        if output_schema is None and output_spec is not None:
+            output_schema = build_output_schema(output_spec)
+            if output_strategy is None:
+                output_strategy = output_spec.strategy
+        context_flags = _dedupe_strings(
+            [*(context_flags or []), *skill_expansion.context_flags]
+        )
 
         effective_tool_session = tool_session
         effective_tools, effective_tool_routing = _normalize_tools_argument(
             tools,
             tool_routing=tool_routing,
         )
-        effective_hosted_tools = list(hosted_tools or [])
+        effective_tools.extend(skill_expansion.local_tools)
+        effective_hosted_tools = [*(hosted_tools or []), *skill_expansion.hosted_tools]
         resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
         opened_workspace: tuple[Any, Any, bool] | None = None
         budget = tool_budget or ToolBudget()
-        mcp_toolsets, local_toolsets = self._split_toolsets(toolsets)
+        mcp_toolsets = [*mcp_toolsets, *skill_expansion.mcp_toolsets]
         tool_choice_events: list[AgentEvent] = []
         if workspace is not None:
             effective_tool_session = (
@@ -1086,7 +1126,11 @@ class AgentRuntime:
             )
             return True, [event]
 
-        prompt_spec = _resolve_prompt_spec(prompt, prompt_mode=prompt_mode, channel=channel)
+        prompt_spec = _resolve_prompt_spec(
+            prompt,
+            prompt_mode=_skill_prompt_mode(prompt, prompt_mode, skill_expansion.prompt_mode),
+            channel=channel,
+        )
         run_plan = self._resolved_run_spec(
             provider_ref=provider_ref,
             model_name=model_name,
@@ -1098,12 +1142,14 @@ class AgentRuntime:
             effective_hosted_tools=effective_hosted_tools,
             mcp_toolsets=resolved_mcp_toolsets,
             workspace=opened_workspace[1] if opened_workspace is not None else None,
+            output_spec=output_spec,
             output_strategy=output_strategy,
             cache=cache,
             dynamic_loading=dynamic_loading_spec,
             tool_routing_plan=routing_plan,
             data_sources=data_sources,
             context_flags=context_flags,
+            prompt_fragments=skill_expansion.prompt_fragments,
             tool_session=effective_tool_session,
         )
         try:
@@ -1334,6 +1380,7 @@ class AgentRuntime:
         channel: str | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
         toolsets: list[Any] | None = None,
+        skills: list[SkillInput] | SkillInput | None = None,
         tool_selection: ToolSelection = "static",
         tool_budget: ToolBudget | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
@@ -1459,6 +1506,8 @@ class AgentRuntime:
             list[Any] | None,
             _consume_config_value(config_values, "toolsets", toolsets),
         )
+        skills = cast(Any, _consume_config_value(config_values, "skills", skills))
+        skill_specs = normalize_skills(skills)
         tool_selection = cast(
             ToolSelection,
             _consume_config_value(config_values, "tool_selection", tool_selection),
@@ -1515,6 +1564,8 @@ class AgentRuntime:
         kwargs = {**config_values, **kwargs}
         if provider is None:
             raise ValueError("provider must be provided explicitly or through config.")
+        if output_spec is None:
+            output_spec = _skill_output_spec(skill_specs)
         spec = _resolve_output_spec(output_type, output_spec)
         output_schema = build_output_schema(spec)
         provider_ref = ProviderRef.parse(provider)
@@ -1534,7 +1585,7 @@ class AgentRuntime:
             if resolved_strategy != spec.strategy:
                 initial_provider_native_fallback = resolved_strategy
             effective_strategy = resolved_strategy
-            if effective_strategy == "posthoc_parse":
+            if effective_strategy in {"posthoc_parse", "posthoc_parse_with_retry"}:
                 output_schema = None
         attempts_allowed = (
             1 + spec.max_validation_retries
@@ -1560,6 +1611,7 @@ class AgentRuntime:
             text_parts: list[str] = []
             while True:
                 try:
+                    stream_output_spec = spec if output_schema is not None else None
                     async for event in self.stream(
                         provider=provider,
                         input=current_input,
@@ -1581,11 +1633,13 @@ class AgentRuntime:
                         channel=channel,
                         hosted_tools=hosted_tools,
                         toolsets=toolsets,
+                        skills=cast(Any, skill_specs),
                         tool_selection=tool_selection,
                         tool_budget=tool_budget,
                         hosted_tool_handlers=hosted_tool_handlers,
                         output_schema=output_schema,
                         output_strategy=effective_strategy if output_schema is not None else None,
+                        output_spec=stream_output_spec,
                         cache=cache,
                         tool_search=tool_search,
                         dynamic_loading=dynamic_loading,
@@ -1772,6 +1826,7 @@ class AgentRuntime:
         channel: str | None = None,
         hosted_tools: list[HostedToolSpec] | None = None,
         toolsets: list[Any] | None = None,
+        skills: list[SkillInput] | SkillInput | None = None,
         tool_selection: ToolSelection = "static",
         tool_budget: ToolBudget | None = None,
         hosted_tool_handlers: HostedToolHandlers | None = None,
@@ -1886,6 +1941,7 @@ class AgentRuntime:
         tool_routing_plan: ResolvedToolPlan | None = None,
         data_sources: list[DataSourceRef] | None = None,
         context_flags: list[str] | None = None,
+        prompt_fragments: list[Any] | None = None,
         tool_session: ToolSession | None = None,
     ) -> ResolvedRunSpec:
         """Assemble the resolved run plan used for prompt composition."""
@@ -1915,9 +1971,12 @@ class AgentRuntime:
             context_flags=list(context_flags or []),
             available_tool_ids=available_tool_ids,
             available_prompt_fragments=[
-                fragment
-                for tool in registry.all_tools()
-                for fragment in tool.prompt_fragments
+                *list(prompt_fragments or []),
+                *[
+                    fragment
+                    for tool in registry.all_tools()
+                    for fragment in tool.prompt_fragments
+                ],
             ],
             metadata={
                 "prompt_mode": prompt_spec.mode,
@@ -2198,6 +2257,65 @@ def _coerce_workspace(value: Any) -> Any | None:
     if isinstance(value, Mapping):
         return WorkspaceSpec(**dict(value))
     return value
+
+
+def _mcp_server_index(toolsets: list[MCPToolset]) -> dict[str, MCPServerSpec]:
+    return {toolset.server.name: toolset.server for toolset in toolsets}
+
+
+def _merge_skill_workspace(
+    workspace: Any | None,
+    skill_workspace: WorkspaceSpec | None,
+) -> Any | None:
+    if skill_workspace is None:
+        return workspace
+    if workspace is None:
+        return skill_workspace
+    current_kind = getattr(workspace, "kind", None)
+    if isinstance(workspace, WorkspaceSpec):
+        current_kind = workspace.kind
+    if isinstance(current_kind, str) and current_kind != skill_workspace.kind:
+        raise ConfigurationError(
+            f"Skill requires workspace kind {skill_workspace.kind!r}, "
+            f"but run workspace kind is {current_kind!r}."
+        )
+    return workspace
+
+
+def _skill_prompt_mode(
+    prompt: PromptSpec | None,
+    prompt_mode: PromptMode | None,
+    skill_prompt_mode: PromptMode | None,
+) -> PromptMode | None:
+    if prompt_mode is not None:
+        return prompt_mode
+    if skill_prompt_mode is None:
+        return None
+    if prompt is not None and prompt.mode in {"none", "base"}:
+        return None
+    return skill_prompt_mode
+
+
+def _skill_output_spec(skills: list[SkillSpec]) -> OutputSpec | None:
+    selected: OutputSpec | None = None
+    for skill in skills:
+        if skill.output is None:
+            continue
+        if selected is not None and selected != skill.output:
+            raise ConfigurationError("Multiple active skills declare conflicting output specs.")
+        selected = skill.output
+    return selected
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def _coerce_model_catalog(

@@ -152,6 +152,22 @@ concept is structurally a `WorkspaceAgentSpec`.
       (scripted model, faked Cal.com/Slack). Still open: surfacing an
       approval flow in the demo (blocked on the approval-channel item in
       Horizon 1).
+- [x] **Portable skill packs (`SkillSpec`)** — gh #1. Skills are now active:
+      `SkillBundleRef` records a bundle and the package format embeds
+      `skills/<name>/`, and `SkillSpec` parses `SKILL.md` frontmatter and
+      *compiles* into existing
+      primitives (prompt fragments with progressive disclosure, local tool
+      refs, hosted/MCP tools, output spec, policy, workspace), exposed as
+      `runtime.run(..., skills=[...])` — a kwarg, not a new facade. Two
+      activation paths: the in-house model-adapter path
+      (compile-to-primitives) and the Claude Code agent-provider path (stage
+      the bundle into the workspace `.claude/skills/` and set
+      `setting_sources=["project"]`).
+      The latter's prerequisite — forwarding `setting_sources` from the Claude
+      Code provider (gh #2) — landed in Slice 34. Full design and slice plan in
+      `docs/SKILLS.md`. Builds on the cross-platform `_check_skills`
+      source-classifier coverage for Windows absolute paths and external skill
+      bundle refs.
 
 ## Horizon 2½ — The inbound half: environment workers
 

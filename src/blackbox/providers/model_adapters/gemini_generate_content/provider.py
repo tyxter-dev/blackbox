@@ -226,7 +226,7 @@ class GeminiGenerateContentProvider:
                 "GOOGLE_API_KEY, or GEMINI_API_KEY."
             )
         try:
-            from google import genai
+            from google import genai  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ProviderNotConfiguredError(
                 "GeminiGenerateContentProvider needs the 'google-genai' package; "

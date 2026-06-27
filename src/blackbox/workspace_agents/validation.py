@@ -22,12 +22,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Literal
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from blackbox.providers.catalog import bundled_provider_model_catalog
 from blackbox.providers.model_catalog import ProviderModelCatalog
+from blackbox.skills.specs import SkillSpec
 from blackbox.workspace_agents.executor import (
     ScheduleExpressionError,
     parse_cron,
@@ -311,7 +313,19 @@ def _check_skills(spec: WorkspaceAgentSpec, issues: list[ValidationIssue]) -> No
                 )
             )
         seen.add(skill.name)
-        if skill.source and Path(skill.source).is_absolute() and not Path(skill.source).exists():
+        if not skill.name.strip():
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    code="missing_skill_name",
+                    message="Skill bundle name is empty.",
+                    field="skills",
+                )
+            )
+        if not skill.source or not _is_local_skill_source(skill.source):
+            continue
+        source = Path(skill.source).expanduser()
+        if not source.exists():
             issues.append(
                 ValidationIssue(
                     severity="warning",
@@ -323,6 +337,38 @@ def _check_skills(spec: WorkspaceAgentSpec, issues: list[ValidationIssue]) -> No
                     field="skills",
                 )
             )
+            continue
+        skill_md = source / "SKILL.md"
+        if not skill_md.is_file():
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    code="missing_skill_md",
+                    message=f"Skill bundle {skill.name!r} is missing SKILL.md.",
+                    field="skills",
+                )
+            )
+            continue
+        try:
+            SkillSpec.from_directory(source)
+        except Exception as exc:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    code="unparseable_skill_md",
+                    message=f"Skill bundle {skill.name!r} has an invalid SKILL.md: {exc}",
+                    field="skills",
+                )
+            )
+
+
+def _is_local_skill_source(source: str) -> bool:
+    if PureWindowsPath(source).is_absolute():
+        return True
+    parsed = urlparse(source)
+    if parsed.scheme:
+        return False
+    return True
 
 
 def _check_model(

@@ -149,6 +149,30 @@ def test_missing_absolute_skill_source_is_warning(tmp_path: object) -> None:
     assert "duplicate_skill_name" in found
 
 
+def test_local_skill_source_requires_parseable_skill_md(tmp_path: object) -> None:
+    from pathlib import Path
+
+    root = Path(str(tmp_path))
+    missing = root / "missing-md"
+    invalid = root / "invalid"
+    missing.mkdir()
+    invalid.mkdir()
+    (invalid / "SKILL.md").write_text("---\nname: bad\n", encoding="utf-8")
+
+    spec = WorkspaceAgentSpec(
+        name="agent",
+        model_provider="openai",
+        skills=[
+            SkillBundleRef(name="missing", source=str(missing)),
+            SkillBundleRef(name="invalid", source=str(invalid)),
+        ],
+    )
+
+    found = errors(spec)
+    assert "missing_skill_md" in found
+    assert "unparseable_skill_md" in found
+
+
 def test_ensure_valid_raises_on_errors_and_returns_warnings() -> None:
     bad = WorkspaceAgentSpec(name="", model_provider="openai")
     with pytest.raises(WorkspaceAgentValidationError) as excinfo:
