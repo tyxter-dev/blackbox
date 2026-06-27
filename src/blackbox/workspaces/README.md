@@ -1,3 +1,11 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/0010-workspaces-and-persistence-in-core.md
+prd: docs/prd/07-workspaces.md
+---
+
 # workspaces
 
 `workspaces` owns execution substrates for coding agents: files, commands,

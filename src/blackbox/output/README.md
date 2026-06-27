@@ -1,3 +1,13 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr:
+  - docs/adr/0006-zero-dependency-core-pydantic-optional.md
+  - docs/adr/0007-four-output-strategies-fail-fast.md
+prd: docs/prd/10-structured-output.md
+---
+
 # output
 
 `output` owns structured-output schema conversion and validation helpers.

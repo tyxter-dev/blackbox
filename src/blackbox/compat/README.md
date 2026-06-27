@@ -1,3 +1,13 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr:
+  - docs/adr/0002-chat-messages-are-a-projection.md
+  - docs/adr/0008-colon-routing-separator.md
+prd: docs/prd/01-architecture.md
+---
+
 # compat
 
 `compat` contains explicit migration and compatibility surfaces. These helpers

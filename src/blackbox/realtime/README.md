@@ -1,3 +1,11 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/0004-preserve-raw-provider-payloads.md
+prd: docs/prd/12-realtime.md
+---
+
 # realtime
 
 `realtime` owns bidirectional, low-latency model sessions. It is separate from

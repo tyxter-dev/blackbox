@@ -1,3 +1,14 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr:
+  - docs/adr/0003-separate-model-and-agent-protocols.md
+  - docs/adr/0004-preserve-raw-provider-payloads.md
+  - docs/adr/0005-provider-native-provider-state.md
+prd: docs/prd/04-agent-providers.md
+---
+
 # providers.agent_adapters
 
 `providers.agent_adapters` contains `AgentProvider` implementations. These

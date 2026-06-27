@@ -1,3 +1,13 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/README.md
+prd:
+  - docs/prd/05-tools.md
+  - docs/prd/06-mcp.md
+---
+
 # integrations
 
 `integrations` contains optional third-party integration builders that compose

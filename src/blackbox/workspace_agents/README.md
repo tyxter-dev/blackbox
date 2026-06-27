@@ -1,3 +1,11 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/README.md
+prd: docs/prd/08-workspace-agents.md
+---
+
 # workspace_agents
 
 `workspace_agents` owns portable package contracts for governed agents. It is a

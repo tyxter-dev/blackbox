@@ -1,3 +1,13 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr:
+  - docs/adr/0004-preserve-raw-provider-payloads.md
+  - docs/adr/0010-workspaces-and-persistence-in-core.md
+prd: docs/prd/11-observability.md
+---
+
 # observability
 
 `observability` owns runtime inspection: traces, replay, diffs, event sinks, and

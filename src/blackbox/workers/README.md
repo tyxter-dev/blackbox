@@ -1,3 +1,11 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/README.md
+prd: docs/prd/14-environment-workers.md
+---
+
 # `blackbox.workers` — environment workers
 
 The inbound half of the connector. AI-lab control planes (Anthropic Managed

@@ -1,3 +1,15 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr:
+  - docs/adr/0001-no-litellm-in-house-registry.md
+  - docs/adr/0002-chat-messages-are-a-projection.md
+  - docs/adr/0004-preserve-raw-provider-payloads.md
+  - docs/adr/0005-provider-native-provider-state.md
+prd: docs/prd/03-model-providers.md
+---
+
 # providers.model_adapters
 
 `providers.model_adapters` contains `ModelProvider` implementations. Each

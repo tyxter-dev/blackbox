@@ -1,3 +1,21 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr:
+  - docs/adr/0002-chat-messages-are-a-projection.md
+  - docs/adr/0003-separate-model-and-agent-protocols.md
+  - docs/adr/0007-four-output-strategies-fail-fast.md
+  - docs/adr/0008-colon-routing-separator.md
+  - docs/adr/0010-workspaces-and-persistence-in-core.md
+prd:
+  - docs/prd/01-architecture.md
+  - docs/prd/02-blackbox-loop.md
+  - docs/prd/09-approvals-and-policy.md
+  - docs/prd/10-structured-output.md
+  - docs/prd/13-configuration.md
+---
+
 # runtime
 
 `runtime` owns orchestration facades: direct model turns, high-level blackbox

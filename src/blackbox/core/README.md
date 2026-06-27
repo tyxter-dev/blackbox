@@ -1,3 +1,16 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr:
+  - docs/adr/0002-chat-messages-are-a-projection.md
+  - docs/adr/0004-preserve-raw-provider-payloads.md
+  - docs/adr/0005-provider-native-provider-state.md
+  - docs/adr/0006-zero-dependency-core-pydantic-optional.md
+  - docs/adr/0010-workspaces-and-persistence-in-core.md
+prd: docs/prd/01-architecture.md
+---
+
 # core
 
 `core` contains stable runtime primitives that are shared by multiple domains.

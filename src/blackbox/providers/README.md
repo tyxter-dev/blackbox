@@ -1,3 +1,18 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr:
+  - docs/adr/0001-no-litellm-in-house-registry.md
+  - docs/adr/0003-separate-model-and-agent-protocols.md
+  - docs/adr/0004-preserve-raw-provider-payloads.md
+  - docs/adr/0005-provider-native-provider-state.md
+  - docs/adr/0008-colon-routing-separator.md
+prd:
+  - docs/prd/03-model-providers.md
+  - docs/prd/04-agent-providers.md
+---
+
 # providers
 
 `providers` defines provider contracts, the provider registry, and provider

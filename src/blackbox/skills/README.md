@@ -1,3 +1,11 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/README.md
+prd: docs/prd/08-workspace-agents.md
+---
+
 # skills
 
 `skills` owns portable skill-pack loading and compilation. A skill pack is a

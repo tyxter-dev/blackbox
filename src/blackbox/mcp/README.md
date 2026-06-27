@@ -1,3 +1,11 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/0009-mcp-trust-security-boundary.md
+prd: docs/prd/06-mcp.md
+---
+
 # mcp
 
 `mcp` owns Model Context Protocol integration. It connects MCP servers to the

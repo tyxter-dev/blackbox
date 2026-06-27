@@ -1,3 +1,13 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/0011-import-name-blackbox-dist-name-deferred.md
+prd:
+  - docs/prd/00-product-overview.md
+  - docs/prd/01-architecture.md
+---
+
 # blackbox Package Map
 
 `blackbox` is the public SDK package. Its subpackages are organized around

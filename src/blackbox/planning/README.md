@@ -1,3 +1,11 @@
+---
+status: active
+owner: blackbox-src
+since: 2026-06-27
+adr: docs/adr/README.md
+prd: docs/prd/10-structured-output.md
+---
+
 # planning
 
 `planning` owns pre-execution run planning: resolving the effective tool set,
