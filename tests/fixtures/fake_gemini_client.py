@@ -20,6 +20,8 @@ class FakeGenerateContentStream:
             raise StopAsyncIteration
         chunk = self._chunks[self._index]
         self._index += 1
+        if isinstance(chunk, Exception):
+            raise chunk
         return chunk
 
 
@@ -64,11 +66,12 @@ def chunk(
     *,
     response_id: str | None = None,
     parts: list[Any] | None = None,
+    finish_reason: Any = None,
     **fields: Any,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         response_id=response_id,
-        candidates=[SimpleNamespace(content=SimpleNamespace(parts=parts or []))],
+        candidates=[SimpleNamespace(content=SimpleNamespace(parts=parts or []), finish_reason=finish_reason)],
         **fields,
     )
 

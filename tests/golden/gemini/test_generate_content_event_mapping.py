@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
+
+import pytest
 
 from blackbox import AgentRuntime
 from blackbox.core.events import EventTypes
@@ -136,6 +139,91 @@ async def test_reasoning_part_preserves_thought_signature() -> None:
     provider_state = completed.data["provider_state"]
     assert isinstance(provider_state, ProviderState)
     assert provider_state.reasoning_state == {"thought_signatures": ["sig"]}
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("STOP", "STOP"),
+        ("MAX_TOKENS", "MAX_TOKENS"),
+        (None, None),
+        (SimpleNamespace(name="SAFETY"), "SAFETY"),
+        (SimpleNamespace(value="RECITATION"), "RECITATION"),
+    ],
+)
+async def test_completed_event_preserves_raw_terminal_chunk_and_finish_reason(
+    reason: Any, expected: str | None
+) -> None:
+    client = FakeGeminiClient()
+    terminal = chunk(response_id="terminal", parts=[text_part("done")], finish_reason=reason)
+    client.queue([terminal])
+    events = [event async for event in _runtime_with(client).models.stream(provider="google/gemini-test", input="x")]
+    completed = next(event for event in events if event.type == EventTypes.MODEL_COMPLETED)
+    assert completed.raw is terminal
+    assert completed.data["finish_reason"] == expected
+
+
+async def test_terminal_finish_reason_survives_usage_only_trailing_chunk() -> None:
+    client = FakeGeminiClient()
+    terminal = chunk(response_id="terminal", parts=[text_part("done")], finish_reason="STOP")
+    usage_only = SimpleNamespace(response_id="usage", candidates=[], usage_metadata={})
+    client.queue([terminal, usage_only])
+
+    events = [
+        event
+        async for event in _runtime_with(client).models.stream(
+            provider="google/gemini-test", input="x"
+        )
+    ]
+    completed = next(event for event in events if event.type == EventTypes.MODEL_COMPLETED)
+    assert completed.raw is terminal
+    assert completed.data["finish_reason"] == "STOP"
+
+
+async def test_terminal_finish_reason_survives_later_candidate_without_reason() -> None:
+    client = FakeGeminiClient()
+    terminal = chunk(response_id="terminal", parts=[text_part("done")], finish_reason="STOP")
+    trailing = chunk(response_id="trailing", parts=[text_part("usage")])
+    client.queue([terminal, trailing])
+
+    events = [
+        event
+        async for event in _runtime_with(client).models.stream(
+            provider="google/gemini-test", input="x"
+        )
+    ]
+    completed = next(event for event in events if event.type == EventTypes.MODEL_COMPLETED)
+    assert completed.raw is terminal
+    assert completed.data["finish_reason"] == "STOP"
+
+
+async def test_retry_discards_failed_attempt_terminal_and_response_metadata() -> None:
+    class RetryableError(Exception):
+        status_code = 503
+
+    client = FakeGeminiClient()
+    failed_chunk = SimpleNamespace(
+        response_id="failed-response",
+        candidates=[SimpleNamespace(content=SimpleNamespace(parts=[]), finish_reason="STOP")],
+    )
+    successful_chunk = chunk(
+        response_id="successful-response", parts=[text_part("done")], finish_reason="STOP"
+    )
+    client.queue([failed_chunk, RetryableError("retry")])
+    client.queue([successful_chunk])
+    runtime = AgentRuntime()
+    runtime.registry.register_model(GeminiGenerateContentProvider(client=client, max_retries=1))
+
+    events = [
+        event
+        async for event in runtime.models.stream(provider="google/gemini-test", input="x")
+    ]
+    completed = next(event for event in events if event.type == EventTypes.MODEL_COMPLETED)
+    state = completed.data["provider_state"]
+    assert isinstance(state, ProviderState)
+    assert state.conversation_id == "successful-response"
+    assert completed.raw is successful_chunk
+    assert completed.data["finish_reason"] == "STOP"
 
 
 async def test_function_result_run_items_become_function_response_parts() -> None:

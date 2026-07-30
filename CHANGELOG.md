@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Gemini terminal metadata
+
+- Gemini `model.completed` events now preserve the final native chunk in
+  `raw` and expose deterministic candidate-zero `finish_reason` metadata.
+
 ### Slice 35 — Portable skill packs (`SkillSpec`)
 
 Implements gh #1: portable skill bundles now activate on top of existing

@@ -334,10 +334,14 @@ class GeminiGenerateContentProvider:
         source_references: list[dict[str, Any]] = []
         file_handles: list[dict[str, Any]] = []
         usage = None
+        terminal_metadata_chunk: Any | None = None
+        last_candidate_chunk: Any | None = None
+        finish_reason: str | None = None
 
         attempt = 0
         while True:
             emitted_provider_output = False
+            response_id = None
             assistant_parts.clear()
             thought_signatures.clear()
             tool_call_ids.clear()
@@ -345,11 +349,23 @@ class GeminiGenerateContentProvider:
             source_references.clear()
             file_handles.clear()
             usage = None
+            terminal_metadata_chunk = None
+            last_candidate_chunk = None
+            finish_reason = None
             try:
                 stream = client.aio.models.generate_content_stream(**kwargs)
                 if inspect.isawaitable(stream):
                     stream = await stream
                 async for chunk in stream:
+                    candidates = _attr(chunk, "candidates")
+                    if isinstance(candidates, list) and candidates:
+                        last_candidate_chunk = chunk
+                        # Usage-only tail chunks must not erase the candidate
+                        # terminal metadata that actually ended generation.
+                        candidate_reason = _gemini_finish_reason(chunk)
+                        if candidate_reason is not None:
+                            terminal_metadata_chunk = chunk
+                            finish_reason = candidate_reason
                     response_id = _attr(chunk, "response_id") or response_id
                     usage = add_usage(usage, usage_from_gemini_chunk(chunk))
                     for event in _map_chunk(
@@ -391,7 +407,11 @@ class GeminiGenerateContentProvider:
             source_references=source_references,
             file_handles=file_handles,
         )
-        data: dict[str, Any] = {"model": request.model, "provider_state": provider_state}
+        data: dict[str, Any] = {
+            "model": request.model,
+            "provider_state": provider_state,
+            "finish_reason": finish_reason,
+        }
         if usage is not None:
             data["usage"] = usage.to_dict()
             if usage.provider_details:
@@ -400,6 +420,9 @@ class GeminiGenerateContentProvider:
             type=EventTypes.MODEL_COMPLETED,
             provider=self.provider_id,
             data=data,
+            # Raw is the exact candidate-zero chunk from which finish_reason
+            # was derived, not a later usage-only stream envelope.
+            raw=terminal_metadata_chunk or last_candidate_chunk,
         )
 
     @staticmethod
@@ -997,6 +1020,26 @@ def _dedupe_dicts(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         deduped.append(value)
     return deduped
+
+
+def _gemini_finish_reason(chunk: Any | None) -> str | None:
+    """Return candidate-zero's stable terminal reason without flattening raw SDK data."""
+
+    candidates = _attr(chunk, "candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return None
+    value = _attr(candidates[0], "finish_reason")
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.upper()
+    name = _attr(value, "name")
+    if isinstance(name, str):
+        return name.upper()
+    enum_value = _attr(value, "value")
+    if isinstance(enum_value, str):
+        return enum_value.upper()
+    return str(value).upper()
 
 
 def _attr(obj: Any, name: str) -> Any:
