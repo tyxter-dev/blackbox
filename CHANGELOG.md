@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Claude Code turn boundaries and task budgets
+
+- Claude Agent SDK sessions now emit the canonical `model.request.started`
+  event immediately before every initial or follow-up SDK query. The event
+  carries the selected model and a monotonic per-session turn number, giving
+  consumers a replayable, provider-reviewed boundary for per-turn policy.
+- SDK sessions are registered before `connect()` or `query()` so a caller that
+  times out during startup still owns the spawned child for interruption and
+  reaping. Before a public session is returned, the adapter owns startup
+  cleanup: it interrupts, terminates/kills/reaps, disconnects, and removes its
+  provisional aliases. If a child cannot be confirmed stopped, it retains the
+  aliases as an explicit embedding-provider cleanup handoff rather than losing
+  the final process reference. `ClaudeCodeAgentProvider.cleanup_failed_starts()`
+  provides that narrow retry/confirmation handoff without exposing child
+  handles, credentials, or provisional IDs. `task_budget` now accepts only an exact
+  `{"total": positive_int}` mapping up to 1,000,000 tokens and passes a
+  sanitized copy from `TaskSpec.extra` or agent permissions to
+  `ClaudeAgentOptions`.
+
 ### Gemini terminal metadata
 
 - Gemini `model.completed` events now preserve the final native chunk in

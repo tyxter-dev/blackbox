@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -8,7 +9,9 @@ import pytest
 from blackbox.core.approvals import ApprovalDecision
 from blackbox.core.errors import ProviderNotConfiguredError
 from blackbox.core.events import EventTypes
+from blackbox.providers.agent_adapters import claude_code
 from blackbox.providers.agent_adapters.claude_code import (
+    ClaudeAgentSDKClient,
     ClaudeCodeAgentProvider,
     _filter_options_kwargs,
 )
@@ -101,13 +104,24 @@ async def test_claude_code_sdk_backed_provider_runs_without_injected_client() ->
     assert sdk.clients[0].options.kwargs["env"]["ANTHROPIC_API_KEY"] == "sk-test"
     assert sdk.clients[0].options.kwargs["cwd"] == "/tmp/project"
     assert sdk.clients[0].queries == ["fix bug"]
+    assert isinstance(provider._client, ClaudeAgentSDKClient)
+    assert (
+        provider._client._sessions[session.id]
+        is provider._client._sessions[session.metadata["provider_session_id"]]
+    )
     assert [event.type for event in events] == [
+        EventTypes.MODEL_REQUEST_STARTED,
         EventTypes.MODEL_TEXT_DELTA,
         EventTypes.WORKSPACE_FILE_CHANGED,
         EventTypes.SESSION_COMPLETED,
     ]
     assert session.status == "completed"
     assert [artifact.name for artifact in artifacts.items] == ["app.py"]
+
+    replayed = [
+        event async for event in provider.stream_events(session, after_event_id=events[0].id)
+    ]
+    assert [event.id for event in replayed] == [event.id for event in events[1:]]
 
 
 async def test_claude_code_sdk_permission_callback_emits_approval_and_resumes() -> None:
@@ -117,7 +131,9 @@ async def test_claude_code_sdk_permission_callback_emits_approval_and_resumes() 
     session = await provider.start_session(agent, TaskSpec(prompt="run risky command"))
 
     stream = provider.stream_events(session).__aiter__()
+    request_started = await anext(stream)
     approval = await anext(stream)
+    assert request_started.type == EventTypes.MODEL_REQUEST_STARTED
     assert approval.type == EventTypes.APPROVAL_REQUESTED
 
     await provider.approve(approval.item_id or "", ApprovalDecision.approve("allowed"))
@@ -189,6 +205,125 @@ async def test_claude_code_setting_sources_via_task_extra() -> None:
     )
 
     assert sdk.clients[0].options.kwargs["setting_sources"] == ["project", "user"]
+
+
+async def test_claude_code_forwards_task_budget_and_emits_turn_boundaries() -> None:
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(api_key="sk-test", sdk_module=sdk)
+
+    agent = await provider.create_agent(AgentSpec(name="coder", model="agent-fallback"))
+    session = await provider.start_session(
+        agent,
+        TaskSpec(
+            prompt="first request",
+            model="claude-sonnet",
+            extra={"task_budget": {"total": 1024}},
+        ),
+    )
+    first = [event async for event in provider.stream_events(session)]
+    await provider.send_message(session, "follow up")
+    second = [event async for event in provider.stream_events(session)]
+
+    assert sdk.clients[0].options.kwargs["task_budget"] == {"total": 1024}
+    assert first[0].type == EventTypes.MODEL_REQUEST_STARTED
+    assert first[0].data == {"model": "claude-sonnet", "turn": 1}
+    assert second[0].type == EventTypes.MODEL_REQUEST_STARTED
+    assert second[0].data == {"model": "claude-sonnet", "turn": 2}
+
+
+async def test_claude_code_turn_boundary_uses_agent_model_when_task_model_is_absent() -> None:
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(api_key="sk-test", sdk_module=sdk)
+    agent = await provider.create_agent(AgentSpec(name="coder", model="agent-model"))
+    session = await provider.start_session(agent, TaskSpec(prompt="first request"))
+    first = [event async for event in provider.stream_events(session)]
+    await provider.send_message(session, "follow up")
+    second = [event async for event in provider.stream_events(session)]
+
+    assert first[0].data == {"model": "agent-model", "turn": 1}
+    assert second[0].data == {"model": "agent-model", "turn": 2}
+
+
+async def test_claude_code_turn_boundary_preserves_empty_task_model_override() -> None:
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(api_key="sk-test", sdk_module=sdk)
+    agent = await provider.create_agent(AgentSpec(name="coder", model="agent-model"))
+    session = await provider.start_session(agent, TaskSpec(prompt="first request", model=""))
+    first = [event async for event in provider.stream_events(session)]
+    await provider.send_message(session, "follow up")
+    second = [event async for event in provider.stream_events(session)]
+
+    assert sdk.clients[0].options.kwargs["model"] == ""
+    assert first[0].data == {"model": "", "turn": 1}
+    assert second[0].data == {"model": "", "turn": 2}
+
+
+@pytest.mark.parametrize("total", [1, claude_code.MAX_CLAUDE_TASK_BUDGET_TOKENS])
+async def test_claude_code_accepts_task_budget_boundaries(total: int) -> None:
+    sdk = FakeClaudeAgentSDK()
+    provider = ClaudeCodeAgentProvider(api_key="sk-test", sdk_module=sdk)
+    agent = await provider.create_agent(AgentSpec(name="coder"))
+    await provider.start_session(agent, TaskSpec(prompt="budget", extra={"task_budget": {"total": total}}))
+
+    assert sdk.clients[0].options.kwargs["task_budget"] == {"total": total}
+
+
+@pytest.mark.parametrize(
+    ("source", "value"),
+    [
+        ("task", "1024"),
+        ("task", {}),
+        ("task", {"total": True}),
+        ("task", {"total": "1024"}),
+        ("task", {"total": 0}),
+        ("task", {"total": -1}),
+        ("task", {"total": claude_code.MAX_CLAUDE_TASK_BUDGET_TOKENS + 1}),
+        ("task", {"total": 1024, "unreviewed": 1}),
+        ("permissions", {"total": "1024"}),
+    ],
+)
+async def test_claude_code_rejects_unbounded_or_malformed_task_budget(
+    source: str,
+    value: Any,
+) -> None:
+    sdk = FakeClaudeAgentSDK()
+    permissions = {"task_budget": value} if source == "permissions" else {}
+    extra = {"task_budget": value} if source == "task" else {}
+    provider = ClaudeCodeAgentProvider(api_key="sk-test", sdk_module=sdk)
+    agent = await provider.create_agent(AgentSpec(name="coder", permissions=permissions))
+
+    with pytest.raises(ValueError, match="task_budget"):
+        await provider.start_session(agent, TaskSpec(prompt="budget", extra=extra))
+
+
+async def test_claude_code_registers_sdk_owner_before_startup_connect_returns() -> None:
+    class BlockingClient(FakeClaudeSDKClient):
+        async def connect(self) -> None:
+            self.sdk.connect_started.set()
+            await self.sdk.release_connect.wait()
+
+    class BlockingSDK(FakeClaudeAgentSDK):
+        def __init__(self) -> None:
+            super().__init__()
+            self.connect_started = asyncio.Event()
+            self.release_connect = asyncio.Event()
+
+        def _client_factory(self, *, options: FakeClaudeAgentOptions) -> BlockingClient:
+            return BlockingClient(options, self)
+
+    sdk = BlockingSDK()
+    client = ClaudeAgentSDKClient(sdk_module=sdk)
+    agent = await client.create_agent(AgentSpec(name="coder"))
+    startup = asyncio.create_task(client.start_session(agent["id"], TaskSpec(prompt="start")))
+    await sdk.connect_started.wait()
+
+    managed = next(iter(client._sessions.values()))
+    assert managed.client is sdk.clients[0]
+    assert managed.task.prompt == "start"
+
+    startup.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await startup
 
 
 def test_filter_options_kwargs_drops_unknown_keys_with_warning() -> None:
@@ -301,6 +436,27 @@ class FakePermissionResultDeny:
     interrupt: bool
 
 
+class FakeChildProcess:
+    def __init__(self) -> None:
+        self.returncode: int | None = None
+        self.waits = 0
+        self.terminated = 0
+        self.killed = 0
+
+    async def wait(self) -> None:
+        self.waits += 1
+        if self.returncode is None:
+            await asyncio.Event().wait()
+
+    def terminate(self) -> None:
+        self.terminated += 1
+        self.returncode = -15
+
+    def kill(self) -> None:
+        self.killed += 1
+        self.returncode = -9
+
+
 class FakeClaudeSDKClient:
     """Fake Claude Agent SDK client that emits deterministic stream and permission events."""
 
@@ -310,15 +466,27 @@ class FakeClaudeSDKClient:
         self.queries: list[str] = []
         self.permission_result: Any | None = None
         self.interrupted = False
+        self.disconnected = False
+        if sdk.child_process is not None:
+            self._transport = type("Transport", (), {"_process": sdk.child_process})()
         sdk.clients.append(self)
 
     async def connect(self) -> None:
+        self.sdk.connect_started.set()
+        if self.sdk.connect_error:
+            raise RuntimeError("connect failed")
+        if self.sdk.block_connect:
+            await self.sdk.release_connect.wait()
         return None
 
     async def query(self, prompt: str) -> None:
         self.queries.append(prompt)
+        if self.sdk.query_error:
+            raise RuntimeError("query failed")
 
     async def get_server_info(self) -> dict[str, str]:
+        if self.sdk.server_info_error:
+            raise RuntimeError("server info failed")
         return {"session_id": "sdk_sess_1"}
 
     async def receive_response(self) -> Any:
@@ -358,14 +526,33 @@ class FakeClaudeSDKClient:
     async def interrupt(self) -> None:
         self.interrupted = True
 
+    async def disconnect(self) -> None:
+        self.disconnected = True
+
 
 class FakeClaudeAgentSDK:
     ClaudeAgentOptions = FakeClaudeAgentOptions
     PermissionResultAllow = FakePermissionResultAllow
     PermissionResultDeny = FakePermissionResultDeny
 
-    def __init__(self, *, permission_request: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        permission_request: bool = False,
+        connect_error: bool = False,
+        query_error: bool = False,
+        server_info_error: bool = False,
+        block_connect: bool = False,
+        child_process: FakeChildProcess | None = None,
+    ) -> None:
         self.permission_request = permission_request
+        self.connect_error = connect_error
+        self.query_error = query_error
+        self.server_info_error = server_info_error
+        self.block_connect = block_connect
+        self.child_process = child_process
+        self.connect_started = asyncio.Event()
+        self.release_connect = asyncio.Event()
         self.clients: list[FakeClaudeSDKClient] = []
         self.ClaudeSDKClient = self._client_factory
 
@@ -381,3 +568,72 @@ class FakeClaudeAgentSDK:
         import asyncio
 
         await asyncio.sleep(0)
+
+
+@pytest.mark.parametrize("failure", ["connect", "query", "server-info", "cancel"])
+async def test_claude_code_startup_failure_reaps_and_forgets_provisional_owner(
+    monkeypatch: Any,
+    failure: str,
+) -> None:
+    monkeypatch.setattr(claude_code, "CLAUDE_STARTUP_CHILD_GRACE_SECONDS", 0.001)
+    monkeypatch.setattr(claude_code, "CLAUDE_STARTUP_CHILD_KILL_GRACE_SECONDS", 0.001)
+    process = FakeChildProcess()
+    sdk = FakeClaudeAgentSDK(
+        connect_error=failure == "connect",
+        query_error=failure == "query",
+        server_info_error=failure == "server-info",
+        block_connect=failure == "cancel",
+        child_process=process,
+    )
+    client = ClaudeAgentSDKClient(sdk_module=sdk)
+    agent = await client.create_agent(AgentSpec(name="coder"))
+
+    if failure == "cancel":
+        startup = asyncio.create_task(client.start_session(agent["id"], TaskSpec(prompt="start")))
+        await sdk.connect_started.wait()
+        startup.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await startup
+    else:
+        message = "server info failed" if failure == "server-info" else f"{failure} failed"
+        with pytest.raises(RuntimeError, match=message):
+            await client.start_session(agent["id"], TaskSpec(prompt="start"))
+
+    assert client._sessions == {}
+    assert sdk.clients[0].interrupted is True
+    assert sdk.clients[0].disconnected is True
+    assert (process.terminated, process.killed, process.returncode) == (1, 0, -15)
+
+
+@pytest.mark.parametrize("failure", ["connect", "cancel"])
+async def test_claude_code_retains_uninspectable_failed_start_for_explicit_retry(
+    monkeypatch: Any,
+    failure: str,
+) -> None:
+    monkeypatch.setattr(claude_code, "CLAUDE_STARTUP_CHILD_GRACE_SECONDS", 0.001)
+    monkeypatch.setattr(claude_code, "CLAUDE_STARTUP_CHILD_KILL_GRACE_SECONDS", 0.001)
+    sdk = FakeClaudeAgentSDK(
+        connect_error=failure == "connect",
+        block_connect=failure == "cancel",
+    )
+    client = ClaudeAgentSDKClient(sdk_module=sdk)
+    agent = await client.create_agent(AgentSpec(name="coder"))
+
+    if failure == "cancel":
+        startup = asyncio.create_task(client.start_session(agent["id"], TaskSpec(prompt="start")))
+        await sdk.connect_started.wait()
+        startup.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await startup
+    else:
+        with pytest.raises(RuntimeError, match="connect failed"):
+            await client.start_session(agent["id"], TaskSpec(prompt="start"))
+
+    assert len(client._sessions) == 1
+    assert await client.cleanup_failed_starts() is False
+    process = FakeChildProcess()
+    sdk.clients[0]._transport = type("Transport", (), {"_process": process})()
+
+    assert await client.cleanup_failed_starts() is True
+    assert client._sessions == {}
+    assert (process.terminated, process.killed, process.returncode) == (1, 0, -15)

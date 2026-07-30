@@ -14,7 +14,7 @@ import importlib
 import inspect
 import os
 import warnings
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, field, is_dataclass, replace
 from typing import Any, Literal, Protocol, cast, runtime_checkable
 from uuid import uuid4
@@ -38,6 +38,11 @@ AuthMode = Literal["auto", "api_key", "subscription"]
 - ``"subscription"``: force subscription/OAuth auth and neutralize any inherited
   ``ANTHROPIC_API_KEY`` so the CLI never falls back to API-key billing.
 """
+
+MAX_CLAUDE_TASK_BUDGET_TOKENS = 1_000_000
+"""Largest admitted Claude Agent SDK task budget, in output tokens."""
+CLAUDE_STARTUP_CHILD_GRACE_SECONDS = 2.0
+CLAUDE_STARTUP_CHILD_KILL_GRACE_SECONDS = 0.5
 
 
 def _sdk_event_queue() -> asyncio.Queue[dict[str, Any] | None]:
@@ -241,6 +246,20 @@ class ClaudeCodeAgentProvider:
             limit=limit,
         )
         return _coerce_artifact_page(raw)
+
+    async def cleanup_failed_starts(self) -> bool:
+        """Confirm cleanup of a Claude SDK session that failed before publication.
+
+        This intentionally exposes only success/failure, never a process,
+        credential, or provisional session identifier. Embedders use it after
+        a failed ``start_session`` to retry cleanup without losing ownership.
+        """
+
+        client = self._get_client()
+        cleanup = getattr(client, "cleanup_failed_starts", None)
+        if not callable(cleanup):
+            return False
+        return await cleanup() is True
 
     def _get_client(self) -> ClaudeCodeClient:
         if self._client is not None:
@@ -543,12 +562,15 @@ class _SDKSession:
     id: str
     client: Any
     task: TaskSpec
+    model: str | None
     queue: asyncio.Queue[dict[str, Any] | None] = field(default_factory=_sdk_event_queue)
     events: list[dict[str, Any]] = field(default_factory=list)
     artifacts: list[dict[str, Any]] = field(default_factory=list)
     approvals: dict[str, asyncio.Future[ApprovalDecision]] = field(default_factory=dict)
     pump_task: asyncio.Task[None] | None = None
     terminal: bool = False
+    turns_started: int = 0
+    startup_failed: bool = False
 
 
 class ClaudeAgentSDKClient:
@@ -605,34 +627,51 @@ class ClaudeAgentSDKClient:
         sdk = self._load_sdk()
         session_id = f"sess_{uuid4().hex}"
         spec = self._agent_spec(agent)
-        managed = _SDKSession(id=session_id, client=None, task=task)
-        options = self._build_options(sdk, spec, task, managed)
-        sdk_client = sdk.ClaudeSDKClient(options=options)
-        managed.client = sdk_client
-
-        connect = getattr(sdk_client, "connect", None)
-        if callable(connect):
-            await connect()
-        await sdk_client.query(task.prompt)
-
-        server_info = await _maybe_await(getattr(sdk_client, "get_server_info", lambda: None)())
-        provider_session_id = _session_id_from_server_info(server_info) or session_id
-        if provider_session_id != session_id:
-            managed.id = provider_session_id
-        self._sessions[managed.id] = managed
+        managed = _SDKSession(
+            id=session_id,
+            client=None,
+            task=task,
+            model=task.model if task.model is not None else (spec.model if spec is not None else None),
+        )
+        # Keep a provisional owner through every startup step. A child can be
+        # spawned by client construction, connect(), or query(); successful
+        # startup hands this ownership to the returned public session, while a
+        # failed startup reaps before removing these aliases.
         self._sessions[session_id] = managed
+        try:
+            options = self._build_options(sdk, spec, task, managed)
+            sdk_client = sdk.ClaudeSDKClient(options=options)
+            managed.client = sdk_client
+            connect = getattr(sdk_client, "connect", None)
+            if callable(connect):
+                await connect()
+            await self._begin_model_turn(managed)
+            await sdk_client.query(task.prompt)
 
-        return {
-            "id": managed.id,
-            "runtime_session_id": session_id,
-            "provider_session_id": managed.id,
-            "status": "running",
-            "metadata": {
-                "agent_id": spec.name if spec is not None else str(getattr(agent, "id", agent)),
-                "task": task.prompt,
-                "server_info": server_info,
-            },
-        }
+            server_info = await _maybe_await(
+                getattr(sdk_client, "get_server_info", lambda: None)()
+            )
+            provider_session_id = _session_id_from_server_info(server_info) or session_id
+            if provider_session_id != session_id:
+                managed.id = provider_session_id
+            self._sessions[managed.id] = managed
+            self._sessions[session_id] = managed
+
+            return {
+                "id": managed.id,
+                "runtime_session_id": session_id,
+                "provider_session_id": managed.id,
+                "status": "running",
+                "metadata": {
+                    "agent_id": spec.name if spec is not None else str(getattr(agent, "id", agent)),
+                    "task": task.prompt,
+                    "server_info": server_info,
+                },
+            }
+        except BaseException:
+            managed.startup_failed = True
+            await self._cleanup_failed_start(managed)
+            raise
 
     async def stream_events(
         self,
@@ -662,6 +701,7 @@ class ClaudeAgentSDKClient:
                 "Cannot send a Claude Agent SDK follow-up while the current response is streaming."
             )
         session.terminal = False
+        await self._begin_model_turn(session)
         await session.client.query(message)
         return {"id": f"inv_{uuid4().hex}", "provider_session_id": provider_session_id}
 
@@ -708,6 +748,19 @@ class ClaudeAgentSDKClient:
             if type is None or artifact.get("type") == type
         ]
         return {"items": items[:limit], "has_more": len(items) > limit}
+
+    async def cleanup_failed_starts(self) -> bool:
+        """Retry and confirm cleanup of pre-public session owners only."""
+
+        seen: set[int] = set()
+        failed_starts: list[_SDKSession] = []
+        for session in self._sessions.values():
+            if session.startup_failed and id(session) not in seen:
+                seen.add(id(session))
+                failed_starts.append(session)
+        for session in failed_starts:
+            await self._cleanup_failed_start(session)
+        return not any(session.startup_failed for session in self._sessions.values())
 
     def _load_sdk(self) -> Any:
         if self._sdk is not None:
@@ -763,6 +816,11 @@ class ClaudeAgentSDKClient:
         if task.model is not None:
             kwargs["model"] = task.model
 
+        if "task_budget" in permissions:
+            kwargs["task_budget"] = _normalize_task_budget(permissions["task_budget"])
+        elif "task_budget" in task.extra:
+            kwargs["task_budget"] = _normalize_task_budget(task.extra["task_budget"])
+
         workspace_root = _workspace_root(task.workspace)
         if workspace_root is not None:
             kwargs["cwd"] = workspace_root
@@ -800,6 +858,54 @@ class ClaudeAgentSDKClient:
             kwargs["resume"] = resume
 
         return options_cls(**_filter_options_kwargs(options_cls, kwargs))
+
+    async def _begin_model_turn(self, session: _SDKSession) -> None:
+        """Emit the canonical boundary immediately before each SDK query."""
+
+        session.turns_started += 1
+        await self._put_event(
+            session,
+            {
+                "type": EventTypes.MODEL_REQUEST_STARTED,
+                "data": {
+                    "model": session.model,
+                    "turn": session.turns_started,
+                },
+            },
+        )
+
+    async def _cleanup_failed_start(self, session: _SDKSession) -> None:
+        """Reap a pre-public-session child before dropping its only owner.
+
+        If a process cannot be confirmed stopped, preserve the provisional
+        aliases as an explicit cleanup handoff for the embedding provider.
+        This prevents a timeout handler from losing the last process reference.
+        """
+
+        sdk_client = session.client
+        if sdk_client is None:
+            self._remove_session_aliases(session)
+            return
+        await _bounded_sdk_operation(
+            getattr(sdk_client, "interrupt", None), CLAUDE_STARTUP_CHILD_KILL_GRACE_SECONDS
+        )
+        process = getattr(getattr(sdk_client, "_transport", None), "_process", None)
+        # A constructed SDK client without an inspectable process is not proof
+        # that no child exists. Retain this owner for cleanup_failed_starts()
+        # so an embedding runtime can retry or fail closed without guessing.
+        if process is None:
+            return
+        if not await _reap_startup_process(process):
+            return
+        await _bounded_sdk_operation(
+            getattr(sdk_client, "disconnect", None), CLAUDE_STARTUP_CHILD_KILL_GRACE_SECONDS
+        )
+        self._remove_session_aliases(session)
+
+    def _remove_session_aliases(self, session: _SDKSession) -> None:
+        for key, candidate in tuple(self._sessions.items()):
+            if candidate is session:
+                del self._sessions[key]
 
     def _permission_callback(
         self,
@@ -890,6 +996,80 @@ class ClaudeAgentSDKClient:
                 f"Claude Agent SDK session {provider_session_id!r} is not active in this process."
             )
         return session
+
+
+def _normalize_task_budget(value: Any) -> dict[str, int]:
+    """Admit only a finite, exact provider-side output-token budget."""
+
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"total"}
+        or type(value["total"]) is not int
+        or not 1 <= value["total"] <= MAX_CLAUDE_TASK_BUDGET_TOKENS
+    ):
+        raise ValueError(
+            "task_budget must be exactly {'total': <positive int>} and no greater than "
+            f"{MAX_CLAUDE_TASK_BUDGET_TOKENS}."
+        )
+    return {"total": value["total"]}
+
+
+def _consume_background_task(task: asyncio.Future[Any]) -> None:
+    try:
+        task.exception()
+    except (asyncio.CancelledError, Exception):
+        pass
+
+
+async def _bounded_sdk_operation(operation: Any, timeout_seconds: float) -> None:
+    """Bound a startup cleanup callback without making child reaping optional."""
+
+    if not callable(operation):
+        return
+    try:
+        task = asyncio.ensure_future(operation())
+    except Exception:
+        return
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            await asyncio.shield(task)
+    except TimeoutError:
+        task.cancel()
+        task.add_done_callback(_consume_background_task)
+    except Exception:
+        return
+
+
+async def _reap_startup_process(process: Any) -> bool:
+    """Prove a startup child exited before relinquishing its SDK owner."""
+
+    if process is None or getattr(process, "returncode", None) is not None:
+        return True
+
+    async def wait_for_reap(timeout_seconds: float) -> bool:
+        wait = getattr(process, "wait", None)
+        if not callable(wait):
+            return False
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                await wait()
+        except TimeoutError:
+            return False
+        return getattr(process, "returncode", None) is not None
+
+    if await wait_for_reap(CLAUDE_STARTUP_CHILD_GRACE_SECONDS):
+        return True
+    try:
+        process.terminate()
+    except Exception:
+        pass
+    if await wait_for_reap(CLAUDE_STARTUP_CHILD_KILL_GRACE_SECONDS):
+        return True
+    try:
+        process.kill()
+    except Exception:
+        pass
+    return await wait_for_reap(CLAUDE_STARTUP_CHILD_KILL_GRACE_SECONDS)
 
 
 def _events_from_stream_event(data: dict[str, Any], base: dict[str, Any]) -> list[dict[str, Any]]:
