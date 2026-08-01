@@ -15,6 +15,14 @@
   quality checks from the cross-platform test matrix. Dependabot now tracks
   pip and GitHub Actions updates weekly.
 
+### Automated releases
+
+- Pushing a `vX.Y.Z` tag now verifies the matching package version and locked
+  quality gates, builds one wheel/source-distribution artifact set, publishes it
+  to PyPI through OIDC Trusted Publishing, and creates or updates the matching
+  GitHub Release with those same files. See `docs/RELEASING.md` for the required
+  one-time PyPI publisher and GitHub environment setup.
+
 ### MCP and Gemini optional-dependency upgrades
 
 - The `mcp` and `google-genai` extras now allow their supported 2.x major
