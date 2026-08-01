@@ -15,6 +15,16 @@
   quality checks from the cross-platform test matrix. Dependabot now tracks
   pip and GitHub Actions updates weekly.
 
+### MCP and Gemini optional-dependency upgrades
+
+- The `mcp` and `google-genai` extras now allow their supported 2.x major
+  versions. The committed lockfile upgrades Google GenAI to 2.x and preserves
+  a compatible MCP 1.x resolution when it is installed alongside
+  `openai-agents`, whose current published requirement remains `mcp<2`.
+- Raises the OpenAI Agents SDK minimum version from 0.6 to 0.19. Its latest
+  published 0.19.x release still requires MCP 1.x, so this does not yet permit
+  MCP 2.x in the combined `all` environment.
+
 ### Codex app-server AgentProvider
 
 - Adds `CodexAgentProvider`, backed by the app-server thread/turn lifecycle
