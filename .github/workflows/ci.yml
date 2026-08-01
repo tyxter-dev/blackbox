@@ -11,16 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
+          version: "0.11.28"
           python-version: "3.11"
-          cache: pip
+          enable-cache: true
       - name: Install
-        run: pip install -e .[dev]
+        run: uv sync --locked --extra dev
       - name: Lint
-        run: ruff check src tests examples
+        run: uv run --no-sync ruff check src tests examples
       - name: Type-check
-        run: mypy src
+        run: uv run --no-sync mypy src
 
   tests:
     name: Tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
@@ -32,27 +33,26 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
+          version: "0.11.28"
           python-version: ${{ matrix.python-version }}
-          cache: pip
+          enable-cache: true
       - name: Install
-        run: pip install -e .[dev]
+        run: uv sync --locked --extra dev
       - name: Test (offline suite)
         # Live integration/journey tests are deselected at collection time
         # by tests/conftest.py, so this never needs provider keys.
-        run: pytest -q
+        run: uv run --no-sync pytest -q
 
   build:
     name: Build wheel (Linux, Python 3.12)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
+          version: "0.11.28"
           python-version: "3.12"
-          cache: pip
       - name: Build wheel
-        run: |
-          pip install build
-          python -m build --wheel
+        run: uv build --wheel

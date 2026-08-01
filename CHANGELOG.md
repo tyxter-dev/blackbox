@@ -4,6 +4,8 @@
 
 ### CI dependency coverage
 
+- CI and contributor commands now use `uv sync`/`uv run` with a committed
+  `uv.lock`, replacing mutable pip installs with locked environments.
 - The `dev` extra now installs the existing OpenAI, Anthropic, and Google
   provider extras required to type-check every optional adapter under strict
   mypy. The dependency-free SKILL.md frontmatter fallback also accepts the

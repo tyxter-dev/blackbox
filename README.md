@@ -534,7 +534,7 @@ Runnable scripts live under `examples/`:
 - `examples/echo_run.py` — minimal model turn with the dependency-free echo provider.
 - `examples/local_agent_with_tool.py` — local agent driving a tool-call loop end-to-end.
 - `examples/openai_responses_run.py` — provider-native OpenAI Responses streaming
-  (requires `OPENAI_API_KEY` and `pip install -e .[openai]`).
+  (requires `OPENAI_API_KEY` and `uv sync --extra openai`).
 - `examples/model_provider_classification.py` — one-call classification with
   provider-native structured output.
 - `examples/model_provider_form_fill.py` — one-call extraction into several
@@ -1127,15 +1127,15 @@ result = await runtime.run(
 ## Tests
 
 ```bash
-pip install -e .[dev]
-pytest                            # offline suite
-python -m pytest tests/perf -q    # offline performance benchmark smoke suite
-python benchmarks/run_perf.py     # emit performance benchmark JSON
-pytest -m integration_openai      # network-gated, requires OPENAI_API_KEY
-pytest -m integration_xai         # network-gated, requires XAI_API_KEY
-pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
-pytest -m integration_gemini      # network-gated, requires GOOGLE_API_KEY
-pytest tests/journey              # live journey suites, requires provider keys
+uv sync --extra dev
+uv run pytest                            # offline suite
+uv run python -m pytest tests/perf -q    # offline performance benchmark smoke suite
+uv run python benchmarks/run_perf.py     # emit performance benchmark JSON
+uv run pytest -m integration_openai      # network-gated, requires OPENAI_API_KEY
+uv run pytest -m integration_xai         # network-gated, requires XAI_API_KEY
+uv run pytest -m integration_anthropic   # network-gated, requires ANTHROPIC_API_KEY
+uv run pytest -m integration_gemini      # network-gated, requires GOOGLE_API_KEY
+uv run pytest tests/journey              # live journey suites, requires provider keys
 ```
 
 Live tests stay out of the default run at collection time: anything under

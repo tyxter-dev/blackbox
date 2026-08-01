@@ -14,7 +14,7 @@ examples instead of assertion-oriented tests.
 Install live OpenAI dependencies:
 
 ```bash
-pip install -e .[openai]
+uv sync --extra openai
 ```
 
 Set credentials and, optionally, a model:

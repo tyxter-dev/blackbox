@@ -49,17 +49,17 @@ The PRD is updated when product direction shifts; ask before making sweeping PRD
 ## Quick commands
 
 ```bash
-pip install -e .[dev]                  # editable install with pytest, ruff, mypy
-pytest -q                              # offline suite (default)
-pytest -q tests/unit tests/runtime tests/contracts tests/golden
-pytest -m integration_openai           # network-gated; needs OPENAI_API_KEY
-ruff check src tests examples
-mypy src                               # strict mode is configured in pyproject
+uv sync --extra dev                    # locked environment with pytest, ruff, mypy
+uv run pytest -q                       # offline suite (default)
+uv run pytest -q tests/unit tests/runtime tests/contracts tests/golden
+uv run pytest -m integration_openai    # network-gated; needs OPENAI_API_KEY
+uv run ruff check src tests examples
+uv run mypy src                        # strict mode is configured in pyproject
 
-python examples/echo_run.py
-python examples/local_agent_with_tool.py
-python examples/run_with_typed_output.py
-python examples/launchmybakery.py      # hosted tools and MCP integrations
+uv run python examples/echo_run.py
+uv run python examples/local_agent_with_tool.py
+uv run python examples/run_with_typed_output.py
+uv run python examples/launchmybakery.py  # hosted tools and MCP integrations
 ```
 
 All three quality gates (pytest / ruff / mypy --strict) must pass before committing. The focused structural gate is `pytest -q tests/unit tests/runtime tests/contracts tests/golden`; current baseline is **479 passing + 1 skipped**. Broader integration suites (`tests/integration/*`) and report-oriented journey tests (`tests/journey/*`) are network-gated and need provider credentials.

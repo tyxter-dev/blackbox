@@ -16,7 +16,7 @@ examples instead of assertion-oriented tests.
 Install live OpenAI and validation dependencies:
 
 ```bash
-pip install -e .[openai,validate]
+uv sync --extra openai --extra validate
 ```
 
 Set credentials and, optionally, a model:
