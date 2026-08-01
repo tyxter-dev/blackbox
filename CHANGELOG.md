@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### CI dependency coverage
+
+- The `dev` extra now installs the existing OpenAI, Anthropic, and Google
+  provider extras required to type-check every optional adapter under strict
+  mypy. The dependency-free SKILL.md frontmatter fallback also accepts the
+  exporter’s nested list-map form, so the offline CI suite does not depend on
+  PyYAML being installed incidentally.
+
 ### Codex app-server AgentProvider
 
 - Adds `CodexAgentProvider`, backed by the app-server thread/turn lifecycle

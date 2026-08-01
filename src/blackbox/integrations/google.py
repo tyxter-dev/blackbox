@@ -104,8 +104,8 @@ def google_application_default_bigquery_auth(
 ) -> GoogleBigQueryMCPAuth:
     """Resolve a BigQuery OAuth token and project through Google ADC."""
     try:
-        import google.auth  # type: ignore[import-untyped]
-        from google.auth.transport.requests import Request  # type: ignore[import-untyped]
+        import google.auth
+        from google.auth.transport.requests import Request
     except ImportError as exc:
         raise RuntimeError(
             "Google BigQuery MCP auth requires google-auth. Install with "

@@ -59,6 +59,10 @@ dev = [
   "ruff>=0.9,<1",
   "mypy>=1.15,<2",
   "pydantic>=2,<3",
+  "openai>=2,<3",
+  "anthropic>=0.40,<1",
+  "google-auth>=2,<3",
+  "google-genai>=1,<2",
 ]
 all = [
   "openai>=2,<3",

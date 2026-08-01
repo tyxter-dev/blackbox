@@ -6,7 +6,7 @@ import pytest
 
 from blackbox.core.policy import PolicyDecision, PolicyRequest
 from blackbox.mcp import MCPServerSpec
-from blackbox.skills import SkillPermissionPolicy, SkillSpec, compile_skills
+from blackbox.skills import SkillPermissionPolicy, SkillSpec, compile_skills, frontmatter
 from blackbox.tools.hosted.specs import WebSearch
 from blackbox.tools.registry import ToolRegistry
 from blackbox.workspace_agents import ApprovalRequirement, ToolPermission
@@ -46,6 +46,31 @@ Check correctness before style.
     assert skill.permissions[0].approval.mode == "always"
     assert exported.name == skill.name
     assert exported.instructions == "Check correctness before style."
+
+
+def test_skill_spec_export_round_trips_without_pyyaml(monkeypatch: pytest.MonkeyPatch) -> None:
+    original_import_module = frontmatter.importlib.import_module
+
+    def import_without_yaml(name: str) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError(name)
+        return original_import_module(name)
+
+    monkeypatch.setattr(frontmatter.importlib, "import_module", import_without_yaml)
+    skill = SkillSpec(
+        name="review-pr",
+        permissions=(
+            ToolPermission(
+                ref="post_comment",
+                scopes=["write"],
+                approval=ApprovalRequirement(mode="always"),
+            ),
+        ),
+    )
+
+    exported = SkillSpec.from_skill_md(skill.to_markdown())
+
+    assert exported.permissions == skill.permissions
 
 
 def test_compile_skills_builds_deterministic_runtime_expansion() -> None:

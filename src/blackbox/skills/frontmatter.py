@@ -88,7 +88,7 @@ def _parse_mapping(
         if current_indent > indent:
             raise ConfigurationError(f"Unexpected indentation in SKILL.md frontmatter: {line!r}.")
         stripped = line.strip()
-        if stripped.startswith("- "):
+        if _is_list_item(stripped):
             break
         key, sep, raw_value = stripped.partition(":")
         if not sep or not key.strip():
@@ -109,7 +109,7 @@ def _parse_nested(lines: list[str], start: int, indent: int) -> tuple[Any, int]:
     if index >= len(lines) or _indent(lines[index]) < indent:
         return None, index
     stripped = lines[index].strip()
-    if stripped.startswith("- "):
+    if _is_list_item(stripped):
         return _parse_list(lines, index, indent)
     return _parse_mapping(lines, index, indent)
 
@@ -125,7 +125,7 @@ def _parse_list(lines: list[str], start: int, indent: int) -> tuple[list[Any], i
         current_indent = _indent(line)
         if current_indent < indent:
             break
-        if current_indent != indent or not line.strip().startswith("- "):
+        if current_indent != indent or not _is_list_item(line.strip()):
             break
         item_text = line.strip()[2:].strip()
         index += 1
@@ -143,7 +143,7 @@ def _parse_list(lines: list[str], start: int, indent: int) -> tuple[list[Any], i
                     continue
                 if _indent(child) < indent + 2:
                     break
-                if _indent(child) != indent + 2 or child.strip().startswith("- "):
+                if _indent(child) != indent + 2 or _is_list_item(child.strip()):
                     break
                 child_key, sep, child_raw = child.strip().partition(":")
                 if not sep:
@@ -317,3 +317,7 @@ def _indent(line: str) -> int:
 def _looks_like_mapping_item(text: str) -> bool:
     key, sep, _ = text.partition(":")
     return bool(sep and key.strip() and not key.strip().startswith(("[", "{", "'", '"')))
+
+
+def _is_list_item(text: str) -> bool:
+    return text == "-" or text.startswith("- ")
