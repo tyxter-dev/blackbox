@@ -9,6 +9,9 @@
   mypy. The dependency-free SKILL.md frontmatter fallback also accepts the
   exporter’s nested list-map form, so the offline CI suite does not depend on
   PyYAML being installed incidentally.
+- Windows installs `tzdata` for IANA timezone support, and CI separates Linux
+  quality checks from the cross-platform test matrix. Dependabot now tracks
+  pip and GitHub Actions updates weekly.
 
 ### Codex app-server AgentProvider
 
