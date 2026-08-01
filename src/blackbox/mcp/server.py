@@ -100,7 +100,7 @@ class MCPServer:
         self,
         name: str,
         *,
-        version: str = "0.1.0",
+        version: str = "0.1.1",
         instructions: str | None = None,
         protocol_version: str = "2025-11-25",
     ) -> None:

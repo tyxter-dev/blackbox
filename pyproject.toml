@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tyxter-blackbox"
-version = "0.1.0"
+version = "0.1.1"
 description = "Provider-native runtime for building agents and distributable agent workspaces across OpenAI, Anthropic, Gemini, and xAI."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -118,7 +118,7 @@ async def test_mcp_server_handles_jsonrpc_initialize_list_and_call() -> None:
         )
     )
 
-    assert initialize["result"]["serverInfo"] == {"name": "demo", "version": "0.1.0"}
+    assert initialize["result"]["serverInfo"] == {"name": "demo", "version": "0.1.1"}
     assert initialize["result"]["instructions"] == "Use carefully."
     assert tools["result"]["tools"][0]["name"] == "add"
     assert call["result"]["structuredContent"] == {"total": 5}

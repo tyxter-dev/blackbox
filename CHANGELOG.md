@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.1
+
 ### CI dependency coverage
 
 - CI and contributor commands now use `uv sync`/`uv run` with a committed
