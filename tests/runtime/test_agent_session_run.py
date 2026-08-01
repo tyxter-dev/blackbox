@@ -7,8 +7,10 @@ from pathlib import Path
 
 from blackbox import AgentRuntime, AgentSessionResult, EventTypes, MarkupPolicy, ModelPricing
 from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.providers.agent_adapters.codex import CodexAgentProvider
 from blackbox.workspaces import WorkspaceRef, WorkspaceSpec
 from tests.fixtures.fake_claude_code_client import FakeClaudeCodeClient
+from tests.fixtures.fake_codex_client import FakeCodexAppServerClient
 
 
 @dataclass(slots=True)
@@ -226,6 +228,49 @@ async def test_provider_native_workspace_events_gain_workspace_context(
     file_event = result.events[1]
     assert file_event.data["workspace_id"] == workspace.id
     assert file_event.data["workspace_kind"] == "local"
+
+
+async def test_agents_run_collects_a_codex_app_server_session() -> None:
+    client = FakeCodexAppServerClient(
+        events=[
+            {
+                "id": "evt_started",
+                "method": "turn/started",
+                "params": {"threadId": "thread_1", "turn": {"id": "turn_1"}},
+            },
+            {
+                "id": "evt_delta",
+                "method": "item/agentMessage/delta",
+                "params": {
+                    "delta": "fixed tests",
+                    "itemId": "message_1",
+                    "threadId": "thread_1",
+                    "turnId": "turn_1",
+                },
+            },
+            {
+                "id": "evt_completed",
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "thread_1",
+                    "turn": {"id": "turn_1", "status": "completed"},
+                },
+            },
+        ]
+    )
+    runtime = AgentRuntime()
+    runtime.registry.register_agent(CodexAgentProvider(client=client))
+
+    result: AgentSessionResult[str] = await runtime.agents.run(
+        provider="codex",
+        agent="repo-fixer",
+        task="Fix failing tests",
+    )
+
+    assert result.output == "fixed tests"
+    assert result.status == "completed"
+    assert result.session_ref.provider == "codex"
+    assert result.session_ref.id == "thread_1"
 
 
 def _git(cwd: Path, *args: str) -> None:

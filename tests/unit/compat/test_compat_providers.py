@@ -13,6 +13,7 @@ from blackbox.compat.providers import (
 from blackbox.loop import AgentLoop as CompatAgentLoop
 from blackbox.models.xai_responses import XAIResponsesProvider as CompatXAIResponsesProvider
 from blackbox.providers.agent_adapters.claude_code import ClaudeCodeAgentProvider
+from blackbox.providers.agent_adapters.codex import CodexAgentProvider
 from blackbox.providers.agent_adapters.local import LocalAgentProvider
 from blackbox.providers.model_adapters.xai_responses import XAIResponsesProvider
 from blackbox.providers.registry import ProviderRegistry
@@ -94,15 +95,23 @@ def test_create_runtime_with_default_providers() -> None:
     assert runtime.registry.list_model_providers() == ["anthropic"]
 
 
-def test_register_default_agent_providers_includes_claude_code() -> None:
+def test_register_default_agent_providers_includes_coding_agent_providers() -> None:
     runtime = AgentRuntime()
     register_default_agent_providers(runtime)
 
-    assert runtime.registry.list_agent_providers() == ["claude-code", "claude_code", "local"]
+    assert runtime.registry.list_agent_providers() == [
+        "claude-code",
+        "claude_code",
+        "codex",
+        "codex-app-server",
+        "codex_app_server",
+        "local",
+    ]
     resolved = runtime.registry.get_agent("claude-code")
     assert isinstance(resolved, ClaudeCodeAgentProvider)
     # Both the canonical id and the underscore alias resolve to the same instance.
     assert runtime.registry.get_agent("claude_code") is resolved
+    assert isinstance(runtime.registry.get_agent("codex"), CodexAgentProvider)
 
 
 def test_register_default_agent_providers_explicit_include() -> None:
@@ -110,6 +119,17 @@ def test_register_default_agent_providers_explicit_include() -> None:
     register_default_agent_providers(runtime, include=["claude-code"])
 
     assert runtime.registry.list_agent_providers() == ["claude-code", "claude_code"]
+
+
+def test_register_default_agent_providers_can_include_codex() -> None:
+    runtime = AgentRuntime()
+    register_default_agent_providers(runtime, include=["codex-app-server"])
+
+    assert runtime.registry.list_agent_providers() == [
+        "codex",
+        "codex-app-server",
+        "codex_app_server",
+    ]
 
 
 def test_register_default_agent_providers_rejects_unknown_include() -> None:

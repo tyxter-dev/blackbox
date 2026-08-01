@@ -19,7 +19,7 @@ loop, SDK, or cloud agent surface.
 ## Belongs Here
 
 - Local model-backed agent providers.
-- Cloud or SDK-backed coding-agent providers.
+- Cloud or SDK-backed coding-agent providers, including Codex app-server.
 - Agent-session lifecycle mapping.
 - Provider-native session, approval, artifact, and continuation state.
 - Agent response projection events such as multi-message conversational replies.

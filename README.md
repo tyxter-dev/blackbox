@@ -10,7 +10,7 @@ surface over three layers that usually require three separate stacks:
   GenerateContent, and xAI — with hosted tools, MCP, structured output,
   caching, and usage accounting.
 - **Agent sessions** across local model-backed agents and provider-managed
-  agents (OpenAI Agents SDK, Claude Code, cloud agent engines).
+  agents (OpenAI Agents SDK, Claude Code, Codex app-server, cloud agent engines).
 - **Workspaces and agent packages** — contracts for where agents work
   (`WorkspaceRuntime`) and how governed agents are described, permissioned,
   scheduled, and distributed as portable packages (`WorkspaceAgentSpec`).
@@ -62,7 +62,7 @@ ModelProvider
 AgentProvider
   Runs agent sessions.
   Examples: Local model-backed agents, OpenAI Agents SDK, Claude Code,
-  Vertex AI Agent Engine.
+  Codex app-server, Vertex AI Agent Engine.
 
 Workspace contracts
   Describe where agents work and how packaged workspace agents are governed.

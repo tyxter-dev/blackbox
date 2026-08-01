@@ -43,6 +43,7 @@ openai-agents = ["openai-agents>=0.6,<1"]
 xai = ["openai>=2,<3"]
 anthropic = ["anthropic>=0.40,<1"]
 claude-agent = ["claude-agent-sdk>=0.2,<1"]
+codex = ["openai-codex==0.144.4"]
 google = ["google-auth>=2,<3", "google-genai>=1,<2"]
 mcp = ["mcp>=1,<2"]
 validate = ["pydantic>=2,<3"]
@@ -64,6 +65,7 @@ all = [
   "openai-agents>=0.6,<1",
   "anthropic>=0.40,<1",
   "claude-agent-sdk>=0.2,<1",
+  "openai-codex==0.144.4",
   "google-auth>=2,<3",
   "google-genai>=1,<2",
   "mcp>=1,<2",
@@ -90,6 +92,7 @@ markers = [
   "integration_sandbox: requires a sandbox backend",
   "integration_docker: requires Docker CLI and a runnable Docker daemon",
   "integration_openai_sandbox: requires OpenAI sandbox credentials and optional extra",
+  "integration_codex: requires a logged-in Codex / ChatGPT subscription and optional extra",
   "perf: offline performance benchmarks and optional strict budget checks",
   "journey_model_provider: live goal-oriented ModelProvider journeys that emit LLM-readable reports",
   "journey_agent_provider: live goal-oriented AgentProvider journeys that emit LLM-readable reports",

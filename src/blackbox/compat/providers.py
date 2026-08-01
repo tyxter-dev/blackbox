@@ -14,7 +14,7 @@ from blackbox.providers.registry import ProviderRegistry
 
 ProviderKey = Literal["openai", "anthropic", "google", "xai"]
 ProviderAlias = Literal["openai", "anthropic", "google", "gemini", "xai"]
-AgentProviderAlias = Literal["local", "claude-code"]
+AgentProviderAlias = Literal["local", "claude-code", "codex"]
 
 _EXPLICIT_PREFIXES: dict[str, ProviderKey] = {
     "openai/": "openai",
@@ -169,6 +169,12 @@ def register_default_agent_providers(
         # offline. auth="auto" prefers API-key billing and falls back to a
         # logged-in Claude Pro/Max subscription.
         registry.register_agent(ClaudeCodeAgentProvider())
+    if "codex" in selected:
+        from blackbox.providers.agent_adapters.codex import CodexAgentProvider
+
+        # Codex resolves its own logged-in ChatGPT subscription inside the
+        # version-pinned optional SDK runtime. Construction remains offline-safe.
+        registry.register_agent(CodexAgentProvider())
     return registry
 
 
@@ -217,15 +223,17 @@ def _normalize_agent_include(
     include: Iterable[AgentProviderAlias | str] | None,
 ) -> set[AgentProviderAlias]:
     if include is None:
-        return {"local", "claude-code"}
+        return {"local", "claude-code", "codex"}
     selected: set[AgentProviderAlias] = set()
     for value in include:
         if value == "local":
             selected.add("local")
         elif value in {"claude-code", "claude_code"}:
             selected.add("claude-code")
+        elif value in {"codex", "codex-app-server", "codex_app_server"}:
+            selected.add("codex")
         else:
             raise ValueError(
-                f"Unknown agent provider '{value}'. Expected one of: local, claude-code."
+                f"Unknown agent provider '{value}'. Expected one of: local, claude-code, codex."
             )
     return selected

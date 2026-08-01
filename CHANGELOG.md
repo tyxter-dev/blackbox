@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Codex app-server AgentProvider
+
+- Adds `CodexAgentProvider`, backed by the app-server thread/turn lifecycle
+  through the version-pinned `openai-codex==0.144.4` optional extra. It
+  reuses the native Codex/ChatGPT subscription credential without Blackbox
+  parsing, copying, or refreshing tokens; inherited/provided `OPENAI_API_KEY`
+  values are rejected so turns do not silently switch to API-key billing.
+- Maps reviewed app-server thread, turn, item, file-change, command, and
+  approval messages while preserving raw JSON-RPC payloads; unknown server
+  requests fail closed.
+- Supports streamed events, command/file approval pauses, active-turn steering,
+  interruption followed by bounded child-process termination, and file-change
+  artifacts. Blackbox local tools and `MCPServerSpec` injection remain
+  intentionally unsupported pending native mapping work.
+
 ### Claude Code turn boundaries and task budgets
 
 - Claude Agent SDK sessions now emit the canonical `model.request.started`

@@ -4,6 +4,7 @@ from typing import Any
 __all__ = [
     "AnthropicManagedAgentProvider",
     "ClaudeCodeAgentProvider",
+    "CodexAgentProvider",
     "GoogleAgentPlatformProvider",
     "LocalAgentProvider",
     "OpenAICloudAgentProvider",
@@ -18,6 +19,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ClaudeCodeAgentProvider": (
         "blackbox.providers.agent_adapters.claude_code",
         "ClaudeCodeAgentProvider",
+    ),
+    "CodexAgentProvider": (
+        "blackbox.providers.agent_adapters.codex",
+        "CodexAgentProvider",
     ),
     "GoogleAgentPlatformProvider": (
         "blackbox.providers.agent_adapters.vertex_agent_engine",
