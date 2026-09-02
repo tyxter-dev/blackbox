@@ -106,9 +106,8 @@ def to_remote_mcp(toolset: MCPToolset) -> RemoteMCP:
         headers.update({str(key): str(value) for key, value in provider_headers.items()})
     authorization = _pop_optional_str(extra, "authorization") or server.authorization
     defer_loading = extra.pop("defer_loading", None)
-    require_approval = cast(
-        Literal["always", "never"] | None,
-        server.require_approval if server.require_approval in {"always", "never"} else None,
+    require_approval = (
+        server.require_approval if server.require_approval in {"always", "never"} else None
     )
     return RemoteMCP(
         server_label=server.name,
