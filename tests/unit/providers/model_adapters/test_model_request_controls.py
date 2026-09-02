@@ -290,10 +290,28 @@ def test_anthropic_messages_maps_common_controls_to_native_kwargs() -> None:
     )
 
     assert kwargs["system"] == "Be brief."
-    assert kwargs["temperature"] == 0.2
-    assert kwargs["top_p"] == 0.9
+    assert kwargs["extra_body"] == {"temperature": 0.2, "top_p": 0.9}
     assert kwargs["max_tokens"] == 64
     assert kwargs["tool_choice"] == {"type": "auto"}
+
+
+def test_anthropic_provider_extra_body_overrides_common_sampling_controls() -> None:
+    request = TurnRequest(
+        model="claude-test",
+        input="hi",
+        controls=ModelRequestControls(temperature=0.2, top_p=0.9),
+        extra={"extra_body": {"temperature": 0.4, "custom": True}},
+    )
+
+    kwargs = AnthropicMessagesProvider._build_request_kwargs(
+        request, [{"role": "user", "content": "hi"}]
+    )
+
+    assert kwargs["extra_body"] == {
+        "temperature": 0.4,
+        "top_p": 0.9,
+        "custom": True,
+    }
 
 
 def test_anthropic_maps_reasoning_effort_to_thinking_budget() -> None:
