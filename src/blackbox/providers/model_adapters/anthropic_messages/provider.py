@@ -370,10 +370,16 @@ class AnthropicMessagesProvider:
         controls = request.controls
         if controls.instructions is not None:
             kwargs["system"] = _system_payload(controls.instructions, controls.cache)
+        sampling_extra_body: dict[str, Any] = {}
         if controls.temperature is not None:
-            kwargs["temperature"] = controls.temperature
+            sampling_extra_body["temperature"] = controls.temperature
         if controls.top_p is not None:
-            kwargs["top_p"] = controls.top_p
+            sampling_extra_body["top_p"] = controls.top_p
+        provider_extra_body = extra.pop("extra_body", None)
+        if provider_extra_body is not None:
+            sampling_extra_body.update(dict(provider_extra_body))
+        if sampling_extra_body:
+            kwargs["extra_body"] = sampling_extra_body
         if controls.max_output_tokens is not None:
             kwargs["max_tokens"] = controls.max_output_tokens
         if controls.reasoning_effort is not None:
