@@ -32,7 +32,7 @@ from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from blackbox.providers.base import AgentSpec, TaskSpec
 
-CODEX_SDK_VERSION = "0.144.4"
+CODEX_SDK_VERSION = "0.147.0"
 """The ``openai-codex`` SDK version used by this app-server adapter."""
 
 CODEX_CANCEL_GRACE_SECONDS = 2.0
