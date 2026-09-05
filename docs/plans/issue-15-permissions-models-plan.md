@@ -84,6 +84,7 @@ Execution realm: local Linux checkout, Python 3.13.5, locked dev environment
 | Baseline focused tests | Original source and locked environment | 0 / 1 | proven | 1 | Establish clean reference after setup |
 | Section global gates | Source, tests, catalogs, docs | 2 / 2 | proven | 12 | One implementation and independent acceptance per section; corrections justify reruns |
 | Offline package walkthrough | Shared loop and package policy | 1 / 1 | proven through existing scripted loop tests | 2 | Implementer/root acceptance embedded in A1 suites; repeated executions counted under global gates, no separate invocation |
+| Final-review correction gates | Cache accounting and result metadata reader | 0 / 0 | proven section environment | 2 | Unplanned correction after complement-reader finding; implementer/root full acceptance |
 | Final default pytest | Reviewed final checkout | 0 / 1 | proven focused baseline; network tests are gated | 0 | Once after whole-branch review |
 | Provider live calls / deployment | External credentials | 0 / 0 | not-required | 0 | Offline acceptance requested and sufficient; no deployment scope |
 
@@ -159,7 +160,7 @@ flowchart LR
   A1 --> P{"Offline package walkthrough"}
   P --> G1{"Goal 1 — grants enforced"}
   A2 --> G2{"Goal 2 — models verified"}
-  G1 --> FR{"Whole-branch independent review on origin/master"}
+  G1 --> FR{"Whole-branch independent review on origin/master 🔁×1"}
   G2 --> FR
   FR --> CI{"Final default pytest ×1"}
   CI --> H(["Local commits + handoff"])
@@ -191,7 +192,7 @@ Reader sweep:
 - Policy metadata: src/blackbox/runtime/tool_routing.py:404, src/blackbox/runtime/agent_loop.py:734, src/blackbox/mcp/connector.py:827 and src/blackbox/tools/hosted_runtime.py:88; authoritative metadata must survive each boundary.
 - Catalog identities: src/blackbox/providers/model_catalog.py:49, src/blackbox/pricing/catalog.py:56 and src/blackbox/workspace_agents/validation.py:374; inspect capability selectors, accounting and lifecycle example for changed assumptions.
 
-A1 trace: modeled exposure/dispatch and provider equivalence risks occurred and were handled. Missed by initial implementation: typed native tool-search control synthesis and approval-retry context; custom workspace prefixes also needed explicit identity metadata. R1 resolved all three. A2 trace: model-specific controls/provenance risks occurred. Initial evidence missed OpenAI migration requirements; the late accounting reader sweep found exclusive Anthropic counts incompatible with generic pricing. R1 corrected these and bounded Fable replay after scope/doc review. The section-global budget overran 4 planned runs to 12 actual (A1: implementer 3/root 2; A2: implementer 5/root 2). Initial lint/setup adjustments, missed API constraints, review defects and a final capability-profile correction explain this >1.5× overrun; future planning must check migration guides and native-response-to-price flows before first gates. Two additional early A1 structural-only runs are supplemental, not full three-command gates. Final branch trace comparison remains pending.
+A1 trace: modeled exposure/dispatch and provider equivalence risks occurred and were handled. Missed by initial implementation: typed native tool-search control synthesis and approval-retry context; custom workspace prefixes also needed explicit identity metadata. R1 resolved all three. A2 trace: model-specific controls/provenance risks occurred. Initial evidence missed OpenAI migration requirements; the late accounting reader sweep found exclusive Anthropic counts incompatible with generic pricing. R1 corrected these and bounded Fable replay after scope/doc review. The section-global budget overran 4 planned runs to 12 actual (A1: implementer 3/root 2; A2: implementer 5/root 2). Initial lint/setup adjustments, missed API constraints, review defects and a final capability-profile correction explain this >1.5× overrun; future planning must check migration guides and native-response-to-price flows before first gates. Two additional early A1 structural-only runs are supplemental, not full three-command gates. Final branch trace: the complement-reader risk occurred in core/cache.py. Its hit ratio consumed the widened combined cache counter and counted writes as hits, despite a correct boolean hit. Independent final review caught this after section acceptance; F1 corrects the reader before final default pytest. Other initial whole-surface contracts and claim checks were clean. This is an additional missed reader finding and requires two unplanned correction gates.
 
 ### Corrections in force
 
@@ -350,13 +351,17 @@ Read full diff and claims. Verify gates, necessary offline e2e, scope, conventio
 
 - [x] A1 Enforce workspace agent package permissions — Goal 1 — accepted 2026-09-05 b1c26a4b3966e20e272c9f2807a0efb019680428 — rounds: 1 — review: independent — routing: requested=gpt-6-astra/low implementer, gpt-5.6-terra/high reviewers; role=confirmed; effective model/effort=unknown; attestation=none — cost: tokens unavailable / 5 worker handles — env-retries: 1
   - R1 security: native ToolSearchControl bypass, workspace-prefix identity and approval retry context corrected; independent security/API/doc-truth approved. Root 766 tests, Ruff and strict mypy171 files green.
-- [x] A2 Refresh Anthropic, OpenAI and xAI models — Goal 2 — accepted 2026-09-05 this commit (SHA resolved next ledger update) — rounds: 1 — review: independent — routing: requested=gpt-6-astra/low implementer, gpt-5.6-terra/high reviewers; role=confirmed; effective model/effort=unknown; attestation=none — cost: tokens unavailable / 3 reused worker handles — env-retries: 0
+- [x] A2 Refresh Anthropic, OpenAI and xAI models — Goal 2 — accepted 2026-09-05 921780d050531475d223907a7367e32fd7b919a5 — rounds: 1 — review: independent — routing: requested=gpt-6-astra/low implementer, gpt-5.6-terra/high reviewers; role=confirmed; effective model/effort=unknown; attestation=none — cost: tokens unavailable / 3 reused worker handles — env-retries: 0
   - R1 contract: initial root gates 837 tests/Ruff/mypy172 green; scope/doc-truth rejected all-model Anthropic replay drift, and root found additional OpenAI sampling/cache/accounting migration requirements. Corrections complete, root 870 tests/Ruff/mypy172 green; five restored R1 sensitivity probes. Independent contract/scope/doc-truth re-review approved. The same-pattern sweep found no other cache usage extraction path beyond core/accounting.py; core/cache.py consumes the corrected normalized counters. Non-Fable native replay and old OpenAI retention now have explicit regression coverage.
+
+### Final review correction
+
+F1 cache metrics: corrected 2026-09-05 in this additive commit (SHA resolved next ledger update). Independent complement-reader review found combined read/write tokens inflating ProviderCacheUsage.hit_ratio. Same implementer changed the ratio to reads with legacy fallback; seven public runtime cases and three restored sensitivity probes cover it. Implementer/root gates both pass: 877 tests, Ruff, strict mypy172. Two whole-branch re-reviews pending. Requested routing unchanged, effective runtime unknown, token counts unavailable. Sibling sweep: observability/metrics.py consumes the ratio directly; cache record hit counting already excludes writes. No remaining correction deferral.
 
 ## Completion
 
 - [x] Every section committed with ledger record.
-- [ ] Re-baselined on origin/master before whole-branch final review.
+- [x] Re-baselined on origin/master before whole-branch final review. Fresh fetch after A2: a95ad79ea167c6ea6b8066fa5979568dd91e402d, no ahead commits; candidate 921780d050531475d223907a7367e32fd7b919a5 already contains it.
 - [ ] Independent whole-branch review is clean; corrections committed.
 - [ ] All goal exit tests pass with evidence.
 - [ ] Budget actual runs and overruns recorded.

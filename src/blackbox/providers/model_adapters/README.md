@@ -102,3 +102,8 @@ normalizes their sum into inclusive `input_tokens` and adds output for
 the same estimator charge ordinary/read/write components once, including across
 accumulated turns. See [Claude input accounting](https://platform.claude.com/docs/en/api/rate-limits),
 retrieved 2026-09-05.
+
+Runtime cache `hit_ratio` counts cache-read tokens divided by normalized input
+tokens. Combined cached tokens are the legacy fallback when both split read/write
+counters are zero; cache writes alone do not count as hits. Nonpositive input
+counts leave the ratio absent.

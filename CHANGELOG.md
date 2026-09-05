@@ -4,6 +4,9 @@
 
 ### Current model catalog refresh
 
+- Corrected runtime cache hit ratios to count reads, excluding writes, with the
+  combined-count fallback retained for legacy usage reports.
+
 - Added ten verified OpenAI, Claude, and Grok model identities with dated sources;
   refreshed retirement metadata and standard token/cache rates, including Grok 4.3.
 - Added exact model effort validation, Claude adaptive/structured-output merging,
