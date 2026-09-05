@@ -1,7 +1,7 @@
 ---
 gdi_schema: 2
 gdi_version: 0.3.0
-status: implemented
+status: verified
 approval: user requested planning and implementation; no unresolved repository floor items
 harness: codex
 ---
@@ -85,7 +85,7 @@ Execution realm: local Linux checkout, Python 3.13.5, locked dev environment
 | Section global gates | Source, tests, catalogs, docs | 2 / 2 | proven | 12 | One implementation and independent acceptance per section; corrections justify reruns |
 | Offline package walkthrough | Shared loop and package policy | 1 / 1 | proven through existing scripted loop tests | 2 | Implementer/root acceptance embedded in A1 suites; repeated executions counted under global gates, no separate invocation |
 | Final-review correction gates | Cache accounting and result metadata reader | 0 / 0 | proven section environment | 2 | Unplanned correction after complement-reader finding; implementer/root full acceptance |
-| Final default pytest | Reviewed final checkout | 0 / 1 | proven focused baseline; network tests are gated | 0 | Once after whole-branch review |
+| Final default pytest | Reviewed final checkout | 0 / 1 | proven focused baseline; network tests are gated | 1 | Once after whole-branch review |
 | Provider live calls / deployment | External credentials | 0 / 0 | not-required | 0 | Offline acceptance requested and sufficient; no deployment scope |
 
 ### Rulings
@@ -356,18 +356,33 @@ Read full diff and claims. Verify gates, necessary offline e2e, scope, conventio
 
 ### Final review correction
 
-F1 cache metrics: corrected 2026-09-05 in this additive commit (SHA resolved next ledger update). Independent complement-reader review found combined read/write tokens inflating ProviderCacheUsage.hit_ratio. Same implementer changed the ratio to reads with legacy fallback; seven public runtime cases and three restored sensitivity probes cover it. Implementer/root gates both pass: 877 tests, Ruff, strict mypy172. Two whole-branch re-reviews pending. Requested routing unchanged, effective runtime unknown, token counts unavailable. Sibling sweep: observability/metrics.py consumes the ratio directly; cache record hit counting already excludes writes. No remaining correction deferral.
+F1 cache metrics: corrected 2026-09-05 in a3eff31b29d6b9ad6847d723defa02cae79a6ed4. Independent complement-reader review found combined read/write tokens inflating ProviderCacheUsage.hit_ratio. Same implementer changed the ratio to reads with legacy fallback; seven public runtime cases and three restored sensitivity probes cover it. Implementer/root gates both pass: 877 tests, Ruff, strict mypy172. Two whole-branch re-reviews returned CLEAN on a3eff31; all final reports validated with no warnings. Requested routing unchanged, effective runtime unknown, token counts unavailable. Sibling sweep: observability/metrics.py consumes the ratio directly; cache record hit counting already excludes writes. No remaining correction deferral.
 
 ## Completion
 
 - [x] Every section committed with ledger record.
 - [x] Re-baselined on origin/master before whole-branch final review. Fresh fetch after A2: a95ad79ea167c6ea6b8066fa5979568dd91e402d, no ahead commits; candidate 921780d050531475d223907a7367e32fd7b919a5 already contains it.
-- [ ] Independent whole-branch review is clean; corrections committed.
-- [ ] All goal exit tests pass with evidence.
-- [ ] Budget actual runs and overruns recorded.
-- [ ] Deferrals tracked or none; routing uncertainty and token availability reported honestly.
-- [ ] Graph and ledger agree; validator passes and graph re-rendered.
+- [x] Independent whole-branch review is clean; corrections committed.
+- [x] All goal exit tests pass with evidence.
+- [x] Budget actual runs and overruns recorded.
+- [x] Deferrals tracked or none; routing uncertainty and token availability reported honestly.
+- [x] Graph and ledger agree; validator passes and graph re-rendered.
+
+## Verification evidence
+
+Verified 2026-09-05 on product candidate a3eff31b29d6b9ad6847d723defa02cae79a6ed4. The final ledger commit changes only this plan.
+
+- Default offline suite after clean final reviews: `uv run --no-sync pytest -q` — **880 passed, 47 deselected in 8.41s**. The deselected integration/journey tests require explicit live selection; no provider generation was performed.
+- Final correction root global gate: **877 passed in 5.69s**, `uv run --no-sync ruff check src tests examples` all checks passed, `uv run --no-sync mypy --strict src` success for **172 source files**.
+- Goal 1 exits: tests/runtime/test_package_permissions.py, tests/runtime/test_package_permission_regressions.py, tests/contracts/test_package_permission_capabilities.py, tests/unit/workspace_agents/test_permission_enforcement.py and tests/e2e/test_permissioned_package.py. These prove compatible defaults, legitimate execution, denied exposure/dispatch, scope/connector identity, dynamic/MCP/workspace/hosted boundaries, local-session isolation and unsupported managed startup.
+- Goal 2 exits: tests/unit/providers/test_bundled_model_catalog.py, tests/unit/providers/model_adapters/test_current_model_controls.py, tests/unit/core/test_pricing_catalog.py, tests/unit/core/test_model_accounting.py and tests/runtime/test_cache_metadata.py. These prove exact IDs/aliases/capacities/lifecycle, overrides, effective native controls, preserved replay, usage-to-cost and read-based cache ratios.
+- Independent section reviews: A1 security/API/doc-truth APPROVE after R1; A2 contract/scope/doc-truth APPROVE after R1. Final seams and conformance reviewers both CLEAN after F1. Reports validated; selected final reviewer suites passed 183 and 43 tests respectively.
+- Sensitivity: A1 enforcement and R1 bypass probes, seven initial A2 model probes, five A2 R1 probes, and three final ratio/compatibility probes all detected the intended disabled behavior after early fixture corrections and were restored before gates. Root accepted pasted failures instead of repeating fault injections.
+- Graph findings confirmed: dual execution surfaces, authoritative dispatch, native capability constraints, catalog/accounting readers and late claim checks required explicit coverage. Missed initially: native search synthesis, approval retry metadata, current OpenAI migration controls/cache accounting, legacy replay scope, and the cache-ratio reader. All are corrected. No upstream conflict, new dependency/facade/trust primitive, human floor ruling, deployment or publication occurred.
+- Gate budget: baseline 1 planned/1 actual; section full gates 4/12; unplanned final correction full gates 0/2; dedicated walkthrough acceptance 2/2 (embedded in suites); final default pytest 1/1; live generation/deployment 0/0. The overrun explanation is recorded in Graph Findings. Total full implementation/acceptance gates: 14 versus 4 originally planned, excluding baseline and final default pytest.
+- Tokens: unavailable for A1, A2 and F1; no fabricated cost total. All worker routes were explicitly requested and role-confirmed; effective model/effort attestation remains unavailable.
+- Artifact: graph rendered to `/tmp/goal-driven-plans/issue-15-permissions-models-plan.graph.html`; temporary reports/logs are outside the commit. Product changes are local commits on `feat/issue-15-workspace-permissions-models`.
 
 ## Deferrals
 
-None.
+None within the accepted goals. Documented unsupported managed/native permission surfaces and nonstandard pricing/advanced provider workflows are explicit contract boundaries and scope exclusions, not unfinished enforcement paths.
