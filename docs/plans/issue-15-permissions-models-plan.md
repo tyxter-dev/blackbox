@@ -1,7 +1,7 @@
 ---
 gdi_schema: 2
 gdi_version: 0.3.0
-status: implemented
+status: shipped
 approval: user requested planning and implementation; no unresolved repository floor items
 harness: codex
 ---
@@ -134,9 +134,9 @@ The user now explicitly requests a PR and publication. This supersedes the prior
 | Release gate | Planned runs | Actual runs | Condition |
 | --- | --- | --- | --- |
 | Release metadata full gates | 2 | 2 | Sole implementer and root; locked environment |
-| PR CI | 1 | 0 | Quality, four platform/Python tests, wheel build |
-| Tag release workflow | 1 | 0 | Verify, build, PyPI OIDC publish, GitHub Release |
-| Published artifact check | 1 | 0 | PyPI version/files and clean installed wheel smoke |
+| PR CI | 1 | 1 | Quality, four platform/Python tests, wheel build |
+| Tag release workflow | 1 | 1 | Verify, build, PyPI OIDC publish, GitHub Release |
+| Published artifact check | 1 | 1 | PyPI version/files and clean installed wheel smoke |
 
 ## 1. Goals — observable definition of done
 
@@ -158,8 +158,8 @@ The user now explicitly requests a PR and publication. This supersedes the prior
 ### Goal 3 — Published release
 
 - [x] Version0.2.0 metadata, lockfile and changelog agree; dependency resolutions remain unchanged.
-- [ ] PR opened and merged after CI; the annotated release tag points to the merged candidate on master.
-- [ ] Release workflow succeeds and PyPI/GitHub expose matching0.2.0 artifacts; installed wheel imports and completes an offline run.
+- [x] PR opened and merged after CI; the annotated release tag points to the merged candidate on master.
+- [x] Release workflow succeeds and PyPI/GitHub expose matching0.2.0 artifacts; installed wheel imports and completes an offline run.
 
 ## 2. Topology graph and recommended order
 
@@ -422,7 +422,7 @@ Read full diff and claims. Verify gates, necessary offline e2e, scope, conventio
 - [x] A2 Refresh Anthropic, OpenAI and xAI models — Goal 2 — accepted 2026-09-05 921780d050531475d223907a7367e32fd7b919a5 — rounds: 1 — review: independent — routing: requested=gpt-6-astra/low implementer, gpt-5.6-terra/high reviewers; role=confirmed; effective model/effort=unknown; attestation=none — cost: tokens unavailable / 3 reused worker handles — env-retries: 0
   - R1 contract: initial root gates 837 tests/Ruff/mypy172 green; scope/doc-truth rejected all-model Anthropic replay drift, and root found additional OpenAI sampling/cache/accounting migration requirements. Corrections complete, root 870 tests/Ruff/mypy172 green; five restored R1 sensitivity probes. Independent contract/scope/doc-truth re-review approved. The same-pattern sweep found no other cache usage extraction path beyond core/accounting.py; core/cache.py consumes the corrected normalized counters. Non-Fable native replay and old OpenAI retention now have explicit regression coverage.
 
-- [x] A3 Prepare and publish version 0.2.0 — Goal 3 — accepted 2026-09-05 this release-preparation commit — rounds: 0 — review: independent — routing: requested=gpt-6-astra/low writer, gpt-5.6-terra/high reviewers; effective runtime unknown; attestation none — cost: tokens unavailable / 3 reused worker handles — env-retries: 1
+- [x] A3 Prepare and publish version 0.2.0 — Goal 3 — accepted 2026-09-05 d4678eddd495b0d1ab15d88458bf1ee6424cf4c4 — rounds: 0 — review: independent — routing: requested=gpt-6-astra/low writer, gpt-5.6-terra/high reviewers; effective runtime unknown; attestation none — cost: tokens unavailable / 3 reused worker handles — env-retries: 1
 
 ### Final review correction
 
@@ -433,7 +433,7 @@ F1 cache metrics: corrected 2026-09-05 in a3eff31b29d6b9ad6847d723defa02cae79a6e
 - [x] Every section committed with ledger record.
 - [x] Re-baselined on origin/master before whole-branch final review. Fresh fetch after A2: a95ad79ea167c6ea6b8066fa5979568dd91e402d, no ahead commits; candidate 921780d050531475d223907a7367e32fd7b919a5 already contains it.
 - [x] Independent whole-branch review is clean; corrections committed.
-- [ ] All goal exit tests pass with evidence. Original implementation exits pass; Goal3 publication pending.
+- [x] All goal exit tests pass with evidence, including published artifacts and isolated installed-wheel smoke.
 - [x] Budget actual runs and overruns recorded.
 - [x] Deferrals tracked or none; routing uncertainty and token availability reported honestly.
 - [x] Graph and ledger agree; validator passes and graph re-rendered.
@@ -457,6 +457,16 @@ Verified 2026-09-05 on product candidate a3eff31b29d6b9ad6847d723defa02cae79a6ed
 
 None within the accepted goals. Documented unsupported managed/native permission surfaces and nonstandard pricing/advanced provider workflows are explicit contract boundaries and scope exclusions, not unfinished enforcement paths.
 
-Release follow-through is in progress; prior verified implementation evidence above remains historical and valid. No published-release claim is made until workflow and artifact checks complete.
+Release follow-through completed; prior implementation evidence above remains historical and valid. Publication receipts follow.
 
-A3 preparation evidence: implementer/root default gates both pass880 tests (47 live deselected), Ruff and strict mypy172. Offline lock check passes; parsed lock diff is only the root project version. Four unrelated marker rewrites from lock regeneration were restored; no dependency updates. Historical implementation-slice0.2.0 heading is explicitly labeled to distinguish it from the new package release. Independent contract/scope/doc-truth reviews APPROVE and both whole-branch final reviews CLEAN; reports validated. PR/publication gates remain pending.
+A3 preparation evidence: implementer/root default gates both pass880 tests (47 live deselected), Ruff and strict mypy172. Offline lock check passes; parsed lock diff is only the root project version. Four unrelated marker rewrites from lock regeneration were restored; no dependency updates. Historical implementation-slice0.2.0 heading is explicitly labeled to distinguish it from the new package release. Independent contract/scope/doc-truth reviews APPROVE and both whole-branch final reviews CLEAN; reports validated. PR/publication gates completed successfully.
+
+
+## Release 0.2.0 receipt
+
+- User-authorized publication completed 2026-09-05. [PR21](https://github.com/tyxter-dev/blackbox/pull/21) merged normally after all six [PR CI jobs](https://github.com/tyxter-dev/blackbox/actions/runs/33984809789) passed. Issue15 closed through the PR.
+- Merge commit and annotated v0.2.0 tag target: `8dcbe0ab1af4787f02ddefa586aed2c4021ef637`. Its tree is identical to the independently reviewed release candidate d4678ed. [Master CI](https://github.com/tyxter-dev/blackbox/actions/runs/33984868489) also passed.
+- [Release workflow33984894196](https://github.com/tyxter-dev/blackbox/actions/runs/33984894196) succeeded in verify, build, PyPI publication and GitHub Release jobs. [PyPI0.2.0](https://pypi.org/project/tyxter-blackbox/0.2.0/) and [GitHubv0.2.0](https://github.com/tyxter-dev/blackbox/releases/tag/v0.2.0) are public; GitHub publication timestamp18:43:52UTC.
+- Downloaded GitHub wheel and source archive match the PyPI0.2.0 JSON sizes and SHA256 digests: wheel `0a5337adcaec93f0008e3dbfd49e3aae1466ed9a96bf9a4152ff9e96f7682f6c` (451274 bytes), sdist `9a50aa96e2aeecabf099cb04998776c684d7030b19f5a1ef4a842d73412d455b` (859403 bytes).
+- A fresh isolated venv installed `tyxter-blackbox==0.2.0` directly from PyPI without optional dependencies. Python isolated mode imported the installed wheel, verified version0.2.0 and ten new model identities, and completed an allowlist_v1 Echo package run with text `release smoke` and seven events.
+- A3 actual gates matched plan: two local full gates, one six-job PR CI run, one four-job release workflow, one published-artifact/install check. Existing automatic master CI also passed. No release retries or remaining deferrals; worker token counts/attestation remain unavailable. This receipt changes only the plan and does not move the immutable release tag.
