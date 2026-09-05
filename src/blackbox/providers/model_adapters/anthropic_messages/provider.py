@@ -48,6 +48,12 @@ from blackbox.providers.model_adapters._support import (
     sleep_for_retry,
     strip_private_fields,
 )
+from blackbox.providers.model_adapters.anthropic_messages.controls import (
+    ADAPTIVE_MODELS,
+    EFFORTS,
+    apply_current_controls,
+    record_replay_prefix,
+)
 from blackbox.tools.hosted.specs import (
     anthropic_beta_values,
     anthropic_deferred_tools,
@@ -90,14 +96,12 @@ class AnthropicMessagesProvider:
             supports_structured_output=supports_structured_output,
             hosted_tools={
                 "web_search": HostedToolSupport("web_search", True, True, True, False),
-                "web_fetch": HostedToolSupport("web_fetch", True, True, True, False),
-                "code_interpreter": HostedToolSupport(
-                    "code_interpreter", True, True, True, False
+                "web_fetch": HostedToolSupport(
+                    "web_fetch", model != "claude-opus-5", True, model != "claude-opus-5", False
                 ),
+                "code_interpreter": HostedToolSupport("code_interpreter", True, True, True, False),
                 "tool_search": HostedToolSupport("tool_search", True, True, True, False),
-                "bash": HostedToolSupport(
-                    "bash", True, True, False, True, requires_handler=True
-                ),
+                "bash": HostedToolSupport("bash", True, True, False, True, requires_handler=True),
                 "computer_use": HostedToolSupport(
                     "computer_use", True, True, False, True, requires_handler=True
                 ),
@@ -123,16 +127,15 @@ class AnthropicMessagesProvider:
                 "remote_mcp": CapabilityDetail(
                     status="supported", native_name="mcp_servers/mcp_toolset"
                 ),
-                "web_search": CapabilityDetail(
-                    status="supported", native_name="web_search"
+                "web_search": CapabilityDetail(status="supported", native_name="web_search"),
+                "web_fetch": CapabilityDetail(
+                    status="unsupported" if model == "claude-opus-5" else "supported",
+                    native_name="web_fetch",
                 ),
-                "web_fetch": CapabilityDetail(status="supported", native_name="web_fetch"),
                 "code_interpreter": CapabilityDetail(
                     status="supported", native_name="code_execution"
                 ),
-                "tool_search": CapabilityDetail(
-                    status="supported", native_name="tool_search"
-                ),
+                "tool_search": CapabilityDetail(status="supported", native_name="tool_search"),
                 "bash": CapabilityDetail(
                     status="supported",
                     native_name="bash",
@@ -166,18 +169,32 @@ class AnthropicMessagesProvider:
                         "4.5+ / 4.6+ / 4.7 model versions."
                     ),
                 ),
-                "finalizer_tool": CapabilityDetail(status="supported"),
+                "finalizer_tool": CapabilityDetail(
+                    status="unsupported" if model == "claude-fable-5-1" else "supported"
+                ),
                 "posthoc_parse": CapabilityDetail(status="supported"),
                 "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
             },
             controls={
                 "instructions": CapabilityDetail(status="supported", native_name="system"),
-                "temperature": CapabilityDetail(status="supported", native_name="temperature"),
-                "top_p": CapabilityDetail(status="supported", native_name="top_p"),
-                "max_output_tokens": CapabilityDetail(
-                    status="supported", native_name="max_tokens"
+                "temperature": CapabilityDetail(
+                    status="supported",
+                    native_name="temperature",
+                    supported_values=(1,) if model in ADAPTIVE_MODELS else (),
                 ),
-                "tool_choice": CapabilityDetail(status="supported", native_name="tool_choice"),
+                "top_p": CapabilityDetail(
+                    status="supported",
+                    native_name="top_p",
+                    supported_values=(1,) if model in ADAPTIVE_MODELS else (),
+                ),
+                "max_output_tokens": CapabilityDetail(status="supported", native_name="max_tokens"),
+                "tool_choice": CapabilityDetail(
+                    status="conditional" if model == "claude-fable-5-1" else "supported",
+                    native_name="tool_choice",
+                    reason="Fable 5.1 accepts only auto or none; forced choice is unsupported."
+                    if model == "claude-fable-5-1"
+                    else None,
+                ),
                 "parallel_tool_calls": CapabilityDetail(status="supported"),
                 "cache": CapabilityDetail(status="supported"),
                 "cache_ttl": CapabilityDetail(status="supported", native_name="cache_control.ttl"),
@@ -186,8 +203,12 @@ class AnthropicMessagesProvider:
                 ),
                 "reasoning_effort": CapabilityDetail(
                     status="supported",
-                    native_name="thinking.budget_tokens",
-                    supported_values=("minimal", "low", "medium", "high", "xhigh"),
+                    native_name="output_config.effort"
+                    if model in ADAPTIVE_MODELS
+                    else "thinking.budget_tokens",
+                    supported_values=EFFORTS
+                    if model in ADAPTIVE_MODELS
+                    else ("minimal", "low", "medium", "high", "xhigh"),
                 ),
                 "tool_search": CapabilityDetail(status="unsupported"),
                 "compaction": CapabilityDetail(
@@ -268,9 +289,9 @@ class AnthropicMessagesProvider:
 
     async def stream_turn(self, request: TurnRequest) -> AsyncIterator[AgentEvent]:
         """Stream one Anthropic Messages turn as normalized events and final provider state."""
-        client = self._get_client()
         messages = _compose_messages(request)
         kwargs = self._build_request_kwargs(request, messages)
+        client = self._get_client()
 
         yield AgentEvent(
             type=EventTypes.MODEL_REQUEST_STARTED,
@@ -316,7 +337,12 @@ class AnthropicMessagesProvider:
                 )
                 attempt += 1
 
-        provider_state = _build_provider_state(messages, final_message)
+        effective = {**kwargs, **(kwargs.get("extra_body") or {})}
+        replay_messages = (
+            effective["messages"] if effective["model"] == "claude-fable-5-1" else messages
+        )
+        provider_state = _build_provider_state(replay_messages, final_message)
+        record_replay_prefix(provider_state, kwargs)
         usage = usage_from_anthropic_message(final_message)
         data: dict[str, Any] = {"model": request.model, "provider_state": provider_state}
         if usage is not None:
@@ -382,7 +408,7 @@ class AnthropicMessagesProvider:
             kwargs["extra_body"] = sampling_extra_body
         if controls.max_output_tokens is not None:
             kwargs["max_tokens"] = controls.max_output_tokens
-        if controls.reasoning_effort is not None:
+        if controls.reasoning_effort is not None and request.model not in ADAPTIVE_MODELS:
             _validate_anthropic_thinking_controls(controls)
             thinking, max_tokens = _anthropic_thinking_config(
                 controls.reasoning_effort,
@@ -402,6 +428,7 @@ class AnthropicMessagesProvider:
         if beta_values:
             kwargs["betas"] = _dedupe(beta_values)
         kwargs.update(extra)
+        apply_current_controls(request, kwargs)
         return kwargs
 
 
@@ -487,6 +514,8 @@ def _normalized_model(model: str | None) -> str:
 
 def _anthropic_supports_structured_outputs(model: str | None) -> bool:
     normalized = _normalized_model(model)
+    if normalized in ADAPTIVE_MODELS:
+        return True
     if not normalized:
         return False
     return any(
@@ -505,6 +534,8 @@ def _anthropic_supports_structured_outputs(model: str | None) -> bool:
 
 def _anthropic_supports_compaction(model: str | None) -> bool:
     normalized = _normalized_model(model)
+    if normalized in ADAPTIVE_MODELS:
+        return True
     return any(
         token in normalized
         for token in (

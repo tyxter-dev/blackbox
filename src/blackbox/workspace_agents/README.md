@@ -71,7 +71,8 @@ callable and metadata; replacement after approval must pass fresh authorization.
 
 Static and dynamic exposure, search/load results, and actual local dispatch are
 checked. Internal search/load tools remain available to navigate the filtered
-catalog; structured-output finalizers remain available to finish a run.
+catalog; structured-output finalizers remain available when the selected model
+supports the finalizer output strategy.
 `LocalAgentProvider` uses the same loop, snapshots per-session constraints, and
 restores the caller context between yielded events and on close/cancellation.
 

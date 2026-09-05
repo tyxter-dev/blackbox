@@ -403,12 +403,15 @@ def usage_from_openai_response(response: Any) -> ModelUsage | None:
         return None
     input_details = _attr(usage, "input_tokens_details")
     output_details = _attr(usage, "output_tokens_details")
+    cache_read = _int(_attr(input_details, "cached_tokens"))
+    cache_write = _int(_attr(input_details, "cache_write_tokens"))
     return ModelUsage(
         input_tokens=_int(_attr(usage, "input_tokens")),
         output_tokens=_int(_attr(usage, "output_tokens")),
         total_tokens=_int(_attr(usage, "total_tokens")),
-        cached_input_tokens=_int(_attr(input_details, "cached_tokens")),
-        cache_read_input_tokens=_int(_attr(input_details, "cached_tokens")),
+        cached_input_tokens=cache_read + cache_write,
+        cache_read_input_tokens=cache_read,
+        cache_creation_input_tokens=cache_write,
         reasoning_tokens=_int(_attr(output_details, "reasoning_tokens")),
         provider_details=_to_plain(usage),
     )
@@ -422,6 +425,7 @@ def usage_from_anthropic_message(message: Any) -> ModelUsage | None:
     output_tokens = _int(_attr(usage, "output_tokens"))
     cache_read = _int(_attr(usage, "cache_read_input_tokens"))
     cache_creation = _int(_attr(usage, "cache_creation_input_tokens"))
+    input_tokens += cache_read + cache_creation
     return ModelUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,

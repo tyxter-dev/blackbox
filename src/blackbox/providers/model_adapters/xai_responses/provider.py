@@ -11,6 +11,7 @@ from blackbox.core.capabilities import (
 )
 from blackbox.providers.base import TurnRequest
 from blackbox.providers.model_adapters.openai_responses import OpenAIResponsesProvider
+from blackbox.providers.model_adapters.openai_responses.provider import _validate_model_effort
 from blackbox.tools.hosted.specs import HostedToolRaw, WebSearch
 
 
@@ -73,9 +74,7 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
                 "image_generation": CapabilityDetail(status="unsupported"),
             },
             output_strategies={
-                "provider_native": CapabilityDetail(
-                    status="supported", native_name="text.format"
-                ),
+                "provider_native": CapabilityDetail(status="supported", native_name="text.format"),
                 "finalizer_tool": CapabilityDetail(status="supported"),
                 "posthoc_parse": CapabilityDetail(status="supported"),
                 "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
@@ -95,7 +94,13 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
                 "parallel_tool_calls": CapabilityDetail(
                     status="supported", native_name="parallel_tool_calls"
                 ),
-                "reasoning_effort": CapabilityDetail(status="conditional"),
+                "reasoning_effort": CapabilityDetail(
+                    status="supported" if model == "grok-4.6" else "conditional",
+                    native_name="reasoning.effort",
+                    supported_values=("low", "medium", "high", "xhigh")
+                    if model == "grok-4.6"
+                    else (),
+                ),
                 "tool_search": CapabilityDetail(status="unsupported"),
                 "compaction": CapabilityDetail(status="unsupported"),
                 "modalities": CapabilityDetail(status="unsupported"),
@@ -123,6 +128,7 @@ class XAIResponsesProvider(OpenAIResponsesProvider):
             kwargs["input"] = _prepend_system_input(kwargs["input"], instructions)
         if "tools" in kwargs:
             kwargs["tools"] = [_sanitize_xai_tool(tool) for tool in kwargs["tools"]]
+        _validate_model_effort(kwargs, {"grok-4.6": ("low", "medium", "high", "xhigh")})
         return kwargs
 
 

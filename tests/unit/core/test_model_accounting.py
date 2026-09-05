@@ -538,9 +538,9 @@ def test_anthropic_usage_extraction_handles_cache_tokens() -> None:
 
     assert usage is not None
     assert usage.to_dict() == {
-        "input_tokens": 100,
+        "input_tokens": 115,
         "output_tokens": 25,
-        "total_tokens": 125,
+        "total_tokens": 140,
         "cached_input_tokens": 15,
         "cache_read_input_tokens": 10,
         "cache_creation_input_tokens": 5,

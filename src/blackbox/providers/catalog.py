@@ -5,15 +5,15 @@ from typing import Any
 
 from blackbox.providers.model_catalog import ModelLifecycle, ProviderModel, ProviderModelCatalog
 
-BUNDLED_PROVIDER_MODEL_CATALOG_VERSION = "2026-05-06"
-BUNDLED_PROVIDER_MODEL_RETRIEVED_AT = "2026-05-06"
+BUNDLED_PROVIDER_MODEL_CATALOG_VERSION = "2026-09-05"
+BUNDLED_PROVIDER_MODEL_RETRIEVED_AT = "2026-09-05"
 BUNDLED_PROVIDER_MODEL_SOURCE = "blackbox-bundled"
 
 _OPENAI_MODELS_URL = "https://developers.openai.com/api/docs/models"
-_ANTHROPIC_MODELS_URL = "https://platform.claude.com/docs/en/about-claude/models/overview"
+_ANTHROPIC_MODELS_URL = "https://platform.claude.com/docs/en/models/overview"
 _GEMINI_MODELS_URL = "https://ai.google.dev/gemini-api/docs/models"
 _XAI_MODELS_URL = "https://docs.x.ai/developers/models"
-_XAI_DEPRECATION_URL = "https://docs.x.ai/developers/migration/may-15-deprecation"
+_XAI_DEPRECATION_URL = "https://docs.x.ai/developers/migration/may-15-retirement"
 
 
 def bundled_provider_models() -> list[ProviderModel]:
@@ -54,6 +54,7 @@ def _model(
     context_window: int | None = None,
     max_output_tokens: int | None = None,
     metadata: dict[str, Any] | None = None,
+    retrieved_at: str = "2026-05-06",
 ) -> ProviderModel:
     return ProviderModel(
         provider=provider,
@@ -68,7 +69,7 @@ def _model(
         max_output_tokens=max_output_tokens,
         source=BUNDLED_PROVIDER_MODEL_SOURCE,
         catalog_version=BUNDLED_PROVIDER_MODEL_CATALOG_VERSION,
-        retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+        retrieved_at=retrieved_at,
         source_url=source_url,
         metadata=metadata or {},
     )
@@ -77,6 +78,60 @@ def _model(
 def _openai_models() -> list[ProviderModel]:
     metadata = {"reasoning_efforts": ["none", "low", "medium", "high", "xhigh"]}
     return [
+        *[
+            _model(
+                provider="openai",
+                model=model,
+                display_name=name,
+                family=family,
+                aliases=("gpt-5.6",) if model == "gpt-5.6-sol" else (),
+                modalities=("text", "image", "tools"),
+                context_window=1_050_000,
+                max_output_tokens=128_000,
+                source_url=f"{_OPENAI_MODELS_URL}/{model}",
+                retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+                metadata={
+                    "knowledge_cutoff": cutoff,
+                    "max_input_tokens": 922_000,
+                    "reasoning_efforts": efforts,
+                    **(
+                        {"availability": "account_access_dependent"}
+                        if model == "gpt-6-astra"
+                        else {}
+                    ),
+                },
+            )
+            for model, name, family, cutoff, efforts in (
+                (
+                    "gpt-6-astra",
+                    "GPT-6 Astra",
+                    "gpt-6",
+                    "2026-04-30",
+                    ["low", "medium", "high", "xhigh", "max"],
+                ),
+                (
+                    "gpt-5.6-sol",
+                    "GPT-5.6 Sol",
+                    "gpt-5.6",
+                    "2026-02-16",
+                    ["none", "low", "medium", "high", "xhigh", "max"],
+                ),
+                (
+                    "gpt-5.6-terra",
+                    "GPT-5.6 Terra",
+                    "gpt-5.6",
+                    "2026-02-16",
+                    ["none", "low", "medium", "high", "xhigh", "max"],
+                ),
+                (
+                    "gpt-5.6-luna",
+                    "GPT-5.6 Luna",
+                    "gpt-5.6",
+                    "2026-02-16",
+                    ["none", "low", "medium", "high", "xhigh", "max"],
+                ),
+            )
+        ],
         _model(
             provider="openai",
             model="gpt-5.5",
@@ -117,6 +172,77 @@ def _openai_models() -> list[ProviderModel]:
 def _anthropic_models() -> list[ProviderModel]:
     current_modalities = ("text", "image", "tools")
     return [
+        *[
+            _model(
+                provider="anthropic",
+                model=model,
+                display_name=name,
+                family=family,
+                modalities=current_modalities,
+                context_window=1_000_000,
+                max_output_tokens=128_000,
+                source_url=(
+                    "https://platform.claude.com/docs/de/models/opus-4-8/overview"
+                    if model == "claude-opus-4-8"
+                    else f"https://platform.claude.com/docs/en/models/{model.removeprefix('claude-')}/overview"
+                ),
+                retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+                metadata={
+                    "reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+                    "thinking": "adaptive",
+                    **details,
+                },
+            )
+            for model, name, family, details in (
+                (
+                    "claude-fable-5-1",
+                    "Claude Fable 5.1",
+                    "claude-fable",
+                    {
+                        "knowledge_cutoff": "2026-06",
+                        "training_cutoff": "2026-06",
+                        "released_at": "2026-09-01",
+                        "thinking_always_on": True,
+                    },
+                ),
+                (
+                    "claude-fable-5",
+                    "Claude Fable 5",
+                    "claude-fable",
+                    {
+                        "thinking_always_on": True,
+                        "knowledge_cutoff": "2026-01",
+                        "released_at": "2026-06-09",
+                    },
+                ),
+                (
+                    "claude-opus-5",
+                    "Claude Opus 5",
+                    "claude-opus",
+                    {"knowledge_cutoff": "2026-05", "released_at": "2026-07-24"},
+                ),
+                (
+                    "claude-sonnet-5",
+                    "Claude Sonnet 5",
+                    "claude-sonnet",
+                    {
+                        "knowledge_cutoff": "2026-01",
+                        "training_cutoff": "2026-01",
+                        "released_at": "2026-06-30",
+                    },
+                ),
+                (
+                    "claude-opus-4-8",
+                    "Claude Opus 4.8",
+                    "claude-opus",
+                    {
+                        "knowledge_cutoff": "2026-01",
+                        "released_at": "2026-05-28",
+                        "thinking_default": "disabled",
+                    },
+                ),
+            )
+        ],
         _model(
             provider="anthropic",
             model="claude-opus-4-7",
@@ -163,9 +289,11 @@ def _anthropic_legacy_models() -> list[ProviderModel]:
             display_name="Claude Opus 4.1",
             family="claude-opus",
             aliases=("claude-opus-4-1-20250805",),
-            lifecycle="unknown",
-            replacement_model="claude-opus-4-7",
-            source_url=_ANTHROPIC_MODELS_URL,
+            lifecycle="retired",
+            replacement_model="claude-opus-4-8",
+            source_url="https://platform.claude.com/docs/en/about-claude/model-deprecations",
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+            metadata={"retired_at": "2026-08-05"},
         ),
         _model(
             provider="anthropic",
@@ -173,9 +301,11 @@ def _anthropic_legacy_models() -> list[ProviderModel]:
             display_name="Claude Opus 4",
             family="claude-opus",
             aliases=("claude-opus-4-20250514",),
-            lifecycle="unknown",
-            replacement_model="claude-opus-4-7",
-            source_url=_ANTHROPIC_MODELS_URL,
+            lifecycle="retired",
+            replacement_model="claude-opus-4-8",
+            source_url="https://platform.claude.com/docs/en/about-claude/model-deprecations",
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+            metadata={"retired_at": "2026-06-15"},
         ),
         _model(
             provider="anthropic",
@@ -183,8 +313,8 @@ def _anthropic_legacy_models() -> list[ProviderModel]:
             display_name="Claude Sonnet 4.5",
             family="claude-sonnet",
             aliases=("claude-sonnet-4-5-20250929",),
-            lifecycle="unknown",
-            replacement_model="claude-sonnet-4-6",
+            lifecycle="active",
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
             context_window=200_000,
             max_output_tokens=64_000,
             source_url=_ANTHROPIC_MODELS_URL,
@@ -196,9 +326,11 @@ def _anthropic_legacy_models() -> list[ProviderModel]:
             display_name="Claude Sonnet 4",
             family="claude-sonnet",
             aliases=("claude-sonnet-4-20250514",),
-            lifecycle="unknown",
+            lifecycle="retired",
             replacement_model="claude-sonnet-4-6",
-            source_url=_ANTHROPIC_MODELS_URL,
+            source_url="https://platform.claude.com/docs/en/about-claude/model-deprecations",
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+            metadata={"retired_at": "2026-06-15"},
         ),
         _model(
             provider="anthropic",
@@ -206,9 +338,11 @@ def _anthropic_legacy_models() -> list[ProviderModel]:
             display_name="Claude Haiku 3.5",
             family="claude-haiku",
             aliases=("claude-3-5-haiku-20241022",),
-            lifecycle="unknown",
+            lifecycle="retired",
             replacement_model="claude-haiku-4-5",
-            source_url=_ANTHROPIC_MODELS_URL,
+            source_url="https://platform.claude.com/docs/en/about-claude/model-deprecations",
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+            metadata={"retired_at": "2026-02-19"},
         ),
     ]
 
@@ -262,8 +396,21 @@ def _xai_models() -> list[ProviderModel]:
     deprecation_metadata = {
         "deprecates_at": "2026-05-15T12:00:00-07:00",
         "deprecation_url": _XAI_DEPRECATION_URL,
+        "retired_at": "2026-05-15",
+        "redirect_model": "grok-4.3",
     }
     return [
+        _model(
+            provider="xai",
+            model="grok-4.6",
+            display_name="Grok 4.6",
+            family="grok-4",
+            modalities=("text", "image", "tools"),
+            context_window=500_000,
+            source_url=f"{_XAI_MODELS_URL}/grok-4.6",
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+            metadata={"reasoning_efforts": ["low", "medium", "high", "xhigh"]},
+        ),
         _model(
             provider="xai",
             model="grok-4.3",
@@ -271,7 +418,8 @@ def _xai_models() -> list[ProviderModel]:
             family="grok-4",
             modalities=("text", "image", "tools"),
             context_window=1_000_000,
-            source_url=_XAI_MODELS_URL,
+            source_url=f"{_XAI_MODELS_URL}/grok-4.3",
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
         ),
         _model(
             provider="xai",
@@ -288,23 +436,25 @@ def _xai_models() -> list[ProviderModel]:
             model="grok-4-1-fast-reasoning",
             display_name="Grok 4.1 Fast Reasoning",
             family="grok-4",
-            lifecycle="deprecating",
+            lifecycle="retired",
             replacement_model="grok-4.3",
             modalities=("text", "image", "tools"),
             context_window=2_000_000,
-            source_url=_XAI_MODELS_URL,
-            metadata=deprecation_metadata,
+            source_url=_XAI_DEPRECATION_URL,
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+            metadata={**deprecation_metadata, "redirect_reasoning_effort": "low"},
         ),
         _model(
             provider="xai",
             model="grok-4-1-fast-non-reasoning",
             display_name="Grok 4.1 Fast Non-Reasoning",
             family="grok-4",
-            lifecycle="deprecating",
-            replacement_model="grok-4.20-0309-non-reasoning",
+            lifecycle="retired",
+            replacement_model="grok-4.3",
             modalities=("text", "image", "tools"),
             context_window=2_000_000,
-            source_url=_XAI_MODELS_URL,
-            metadata=deprecation_metadata,
+            source_url=_XAI_DEPRECATION_URL,
+            retrieved_at=BUNDLED_PROVIDER_MODEL_RETRIEVED_AT,
+            metadata={**deprecation_metadata, "redirect_reasoning_effort": "none"},
         ),
     ]

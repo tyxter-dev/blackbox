@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Current model catalog refresh
+
+- Added ten verified OpenAI, Claude, and Grok model identities with dated sources;
+  refreshed retirement metadata and standard token/cache rates, including Grok 4.3.
+- Added exact model effort validation, Claude adaptive/structured-output merging,
+  Opus 5 WebFetch rejection, and Fable 5.1 forced-choice and replay restrictions.
+- Mapped current OpenAI cache TTL and native cache-write usage; rejected unsupported
+  Astra sampling/logprob parameters. Astra catalog presence is account-dependent.
+- Corrected normalized Claude input totals to include cache reads/writes while
+  preserving native exclusive counts in usage details.
+- Preserved defaults, user price overrides, legacy identities, native thinking
+  blocks, and older retrieval dates for unchanged rows. Rates remain standard-tier
+  estimates; see the model adapter README for exclusions and replay limitations.
+
 ### Workspace agent runtime permissions (#15)
 
 - Added explicit `inherit` / `allowlist_v1` modes with compatible manifest

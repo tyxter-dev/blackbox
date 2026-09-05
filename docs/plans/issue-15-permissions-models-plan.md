@@ -1,7 +1,7 @@
 ---
 gdi_schema: 2
 gdi_version: 0.3.0
-status: executing
+status: implemented
 approval: user requested planning and implementation; no unresolved repository floor items
 harness: codex
 ---
@@ -23,6 +23,10 @@ Feature map: flat repository; scout found 440 files, no recognized feature units
 - Provider model metadata and token pricing are separate catalogs, both dated May 6: src/blackbox/providers/catalog.py:8 and src/blackbox/pricing/catalog.py:9. Refresh both and preserve their distinct roles.
 
 - The model mapper's initial catalog-only suggestion for OpenAI/xAI was incomplete: fetched official effort values require model-specific request validation as well.
+
+- Grok 4.3 already has an identity row in the baseline; it needs missing pricing and refreshed verified provenance, not a duplicate identity. A root dispatch misstatement was corrected against git show before implementation depended on it.
+
+- A2 review found legacy Anthropic replay unintentionally changed by the Fable guard. Root also found missed OpenAI migration guidance: Astra sampling/logprob restrictions, GPT-5.6+ cache TTL field changes and native cache-write accounting. R1 narrows replay and completes these model contracts using fetched official guidance. The accounting reader sweep also confirmed a pre-existing Anthropic mismatch: exclusive native input was passed to an estimator that subtracts cache counts; normalize inclusive input/total while retaining native usage in provider_details.
 
 ## 0. Execution contract
 
@@ -78,8 +82,8 @@ Execution realm: local Linux checkout, Python 3.13.5, locked dev environment
 | Gate | Consumes / invalidated by | Planned runs (impl / orch) | Preflight | Actual runs | Why this count is safe |
 | --- | --- | --- | --- | --- | --- |
 | Baseline focused tests | Original source and locked environment | 0 / 1 | proven | 1 | Establish clean reference after setup |
-| Section global gates | Source, tests, catalogs, docs | 2 / 2 | proven | 5 | One implementation and independent acceptance per section; corrections justify reruns |
-| Offline package walkthrough | Shared loop and package policy | 1 / 1 | proven through existing scripted loop tests | 0 | In-process real public API calls, no paid service or build |
+| Section global gates | Source, tests, catalogs, docs | 2 / 2 | proven | 12 | One implementation and independent acceptance per section; corrections justify reruns |
+| Offline package walkthrough | Shared loop and package policy | 1 / 1 | proven through existing scripted loop tests | 2 | Implementer/root acceptance embedded in A1 suites; repeated executions counted under global gates, no separate invocation |
 | Final default pytest | Reviewed final checkout | 0 / 1 | proven focused baseline; network tests are gated | 0 | Once after whole-branch review |
 | Provider live calls / deployment | External credentials | 0 / 0 | not-required | 0 | Offline acceptance requested and sufficient; no deployment scope |
 
@@ -91,7 +95,7 @@ Execution realm: local Linux checkout, Python 3.13.5, locked dev environment
 | --- | --- | --- | --- | --- | --- |
 | F0 | all | Repository-declared floor in AGENTS.md | Follow existing contracts | No rename, new facade, dependency, MCP trust primitive, or sweeping product redline | No unresolved floor items; user authorized issue implementation |
 | F1 | all | Stable errors | Reuse ConfigurationError / UnsupportedFeatureError and canonical policy denial results | Reuse existing families | Within requested enforcement scope |
-| F2 | all | Terminal action | Local commits | Two reviewable slice commits and final report | Authorized implementation scope; no publication required |
+| F2 | all | Terminal action | Local commits | Two reviewable slice commits, final verification ledger commit and report | Authorized implementation scope; no publication required |
 
 #### Recorded calls (orchestrator-ruled under the floor, user-vetoable)
 
@@ -106,6 +110,9 @@ Execution realm: local Linux checkout, Python 3.13.5, locked dev environment
 | R6 | A1 | ⇢ One cohesive permission slice | Exposure and dispatch must ship together; an intermediate opt-in mode that silently permits a sibling surface is unsafe |
 | R7 | A2 | ⇢ Refresh supported text/tool model inventory, lifecycle, rates and model-specific capability recognition using official sources; preserve user overrides and existing model choices | User requested new models; no default migration or new audio/image backend is needed |
 | R8 | all | ⇢ Reuse independent reviewer handles sequentially when the tool thread cap prevents a third new reviewer | Three section lenses still run independently of the writer and root; direct-pinned reviewer routing is retained |
+| R9 | A2 | ⇢ Reject supplied top_k on verified new Claude models; preserve supported default temperature/top_p and document conditional tool choice | No authoritative top_k default sentinel was established; explicit bounded rejection is truthful and avoids guessing |
+| R10 | A2 | ⇢ Use current OpenAI cache TTL mapping and existing cache-creation usage field; reject Astra unsupported controls before dispatch | Model refresh must preserve usable request construction and truthful cost estimates; no public schema or dependency change |
+| R11 | A2 | ⇢ Normalize Anthropic input/total to include cache counts, preserve exclusive native fields in provider_details | Generic ModelUsage pricing subtracts cache counts; aligning the adapter fixes underpriced cached Claude requests without changing raw payloads or adding a schema flag |
 
 ### Base drift policy
 
@@ -132,9 +139,9 @@ Fetch `origin/master` before whole-branch final review; merge it if ahead, prese
 
 ### Goal 2 — Current provider models
 
-- [ ] Officially verified current OpenAI, Anthropic and xAI text models resolve in the provider model catalog with source date, lifecycle, capacity and supported capability metadata.
-- [ ] Their standard token and cache rates resolve through bundled pricing and aliases, while user overrides still win and unsupported rate dimensions remain documented.
-- [ ] Targeted catalog/capability tests and global gates pass; current model support does not silently alter existing model selections.
+- [x] Officially verified current OpenAI, Anthropic and xAI text models resolve in the provider model catalog with source date, lifecycle, capacity and supported capability metadata.
+- [x] Their standard token and cache rates resolve through bundled pricing and aliases, while user overrides still win and unsupported rate dimensions remain documented.
+- [x] Targeted catalog/capability tests and global gates pass; current model support does not silently alter existing model selections.
 
 ## 2. Topology graph and recommended order
 
@@ -145,7 +152,7 @@ flowchart LR
   I15(["Issue 15 + implementation note"])
   IM(["User: refresh three model providers"])
   A1["A1 — package permission enforcement ✅ 🔁×1 ⇢"]
-  A2["A2 — current model catalogs ⇢"]
+  A2["A2 — current provider models ✅ 🔁×1 ⇢"]
   I15 -.-> A1
   IM -.-> A2
   A1 -.-> A2
@@ -184,7 +191,7 @@ Reader sweep:
 - Policy metadata: src/blackbox/runtime/tool_routing.py:404, src/blackbox/runtime/agent_loop.py:734, src/blackbox/mcp/connector.py:827 and src/blackbox/tools/hosted_runtime.py:88; authoritative metadata must survive each boundary.
 - Catalog identities: src/blackbox/providers/model_catalog.py:49, src/blackbox/pricing/catalog.py:56 and src/blackbox/workspace_agents/validation.py:374; inspect capability selectors, accounting and lifecycle example for changed assumptions.
 
-A1 trace: modeled exposure/dispatch and provider equivalence risks occurred and were handled. Missed by initial implementation: typed native tool-search control synthesis and approval-retry context; custom workspace prefixes also needed explicit identity metadata. R1 resolved all three. Final branch trace comparison remains pending.
+A1 trace: modeled exposure/dispatch and provider equivalence risks occurred and were handled. Missed by initial implementation: typed native tool-search control synthesis and approval-retry context; custom workspace prefixes also needed explicit identity metadata. R1 resolved all three. A2 trace: model-specific controls/provenance risks occurred. Initial evidence missed OpenAI migration requirements; the late accounting reader sweep found exclusive Anthropic counts incompatible with generic pricing. R1 corrected these and bounded Fable replay after scope/doc review. The section-global budget overran 4 planned runs to 12 actual (A1: implementer 3/root 2; A2: implementer 5/root 2). Initial lint/setup adjustments, missed API constraints, review defects and a final capability-profile correction explain this >1.5× overrun; future planning must check migration guides and native-response-to-price flows before first gates. Two additional early A1 structural-only runs are supplemental, not full three-command gates. Final branch trace comparison remains pending.
 
 ### Corrections in force
 
@@ -341,13 +348,14 @@ Read full diff and claims. Verify gates, necessary offline e2e, scope, conventio
 
 ## Phase A — Permission enforcement and model support
 
-- [x] A1 Enforce workspace agent package permissions — Goal 1 — accepted 2026-09-05 this commit (SHA resolved in next ledger update) — rounds: 1 — review: independent — routing: requested=gpt-6-astra/low implementer, gpt-5.6-terra/high reviewers; role=confirmed; effective model/effort=unknown; attestation=none — cost: tokens unavailable / 5 worker handles — env-retries: 1
+- [x] A1 Enforce workspace agent package permissions — Goal 1 — accepted 2026-09-05 b1c26a4b3966e20e272c9f2807a0efb019680428 — rounds: 1 — review: independent — routing: requested=gpt-6-astra/low implementer, gpt-5.6-terra/high reviewers; role=confirmed; effective model/effort=unknown; attestation=none — cost: tokens unavailable / 5 worker handles — env-retries: 1
   - R1 security: native ToolSearchControl bypass, workspace-prefix identity and approval retry context corrected; independent security/API/doc-truth approved. Root 766 tests, Ruff and strict mypy171 files green.
-- [ ] A2 Refresh Anthropic, OpenAI and xAI models — Goal 2
+- [x] A2 Refresh Anthropic, OpenAI and xAI models — Goal 2 — accepted 2026-09-05 this commit (SHA resolved next ledger update) — rounds: 1 — review: independent — routing: requested=gpt-6-astra/low implementer, gpt-5.6-terra/high reviewers; role=confirmed; effective model/effort=unknown; attestation=none — cost: tokens unavailable / 3 reused worker handles — env-retries: 0
+  - R1 contract: initial root gates 837 tests/Ruff/mypy172 green; scope/doc-truth rejected all-model Anthropic replay drift, and root found additional OpenAI sampling/cache/accounting migration requirements. Corrections complete, root 870 tests/Ruff/mypy172 green; five restored R1 sensitivity probes. Independent contract/scope/doc-truth re-review approved. The same-pattern sweep found no other cache usage extraction path beyond core/accounting.py; core/cache.py consumes the corrected normalized counters. Non-Fable native replay and old OpenAI retention now have explicit regression coverage.
 
 ## Completion
 
-- [ ] Every section committed with ledger record.
+- [x] Every section committed with ledger record.
 - [ ] Re-baselined on origin/master before whole-branch final review.
 - [ ] Independent whole-branch review is clean; corrections committed.
 - [ ] All goal exit tests pass with evidence.
