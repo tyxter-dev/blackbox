@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0
+
 ### Current model catalog refresh
 
 - Corrected runtime cache hit ratios to count reads, excluding writes, with the
@@ -752,7 +754,7 @@ Second real `ModelProvider`, mirroring the M1 OpenAI Responses pattern.
 - 71 → 79 passing offline tests; 1 skipped (network-gated). Ruff +
   mypy --strict clean.
 
-## 0.2.0 — Blackbox `runtime.run(...)` and `AgentResult[T]`
+## Historical implementation slice 0.2.0 — Blackbox `runtime.run(...)` and `AgentResult[T]`
 
 Closes the gap between PRD §6 UC0 and the v0.1 scaffold. The high-level
 product promise from `llm_factory_toolkit` v1 is now restored on top of the

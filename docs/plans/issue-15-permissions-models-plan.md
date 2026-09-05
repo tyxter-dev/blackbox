@@ -1,7 +1,7 @@
 ---
 gdi_schema: 2
 gdi_version: 0.3.0
-status: verified
+status: implemented
 approval: user requested planning and implementation; no unresolved repository floor items
 harness: codex
 ---
@@ -127,6 +127,17 @@ Fetch `origin/master` before whole-branch final review; merge it if ahead, prese
 - Main session reads complete diffs and independently reruns gates. Review uses at least three lenses including doc-truth, and security for A1.
 - Preserve original changes; none existed. Generated maps, reports and logs are temporary artifacts.
 
+### Authorized release follow-through — 2026-09-05
+
+The user now explicitly requests a PR and publication. This supersedes the prior local-only terminal action. Release as 0.2.0 for the additive permission/model features and corrected usage semantics. Follow docs/RELEASING.md: release metadata commit, PR, green CI, merge to master, annotated v0.2.0 tag, GitHub Actions publication, registry/artifact verification. PyPI latest and GitHub latest were both0.1.1 at preflight; master is unprotected and the pypi environment has no required reviewers. No additional permission request is needed.
+
+| Release gate | Planned runs | Actual runs | Condition |
+| --- | --- | --- | --- |
+| Release metadata full gates | 2 | 2 | Sole implementer and root; locked environment |
+| PR CI | 1 | 0 | Quality, four platform/Python tests, wheel build |
+| Tag release workflow | 1 | 0 | Verify, build, PyPI OIDC publish, GitHub Release |
+| Published artifact check | 1 | 0 | PyPI version/files and clean installed wheel smoke |
+
 ## 1. Goals — observable definition of done
 
 ### Goal 1 — Permission enforcement
@@ -143,6 +154,12 @@ Fetch `origin/master` before whole-branch final review; merge it if ahead, prese
 - [x] Officially verified current OpenAI, Anthropic and xAI text models resolve in the provider model catalog with source date, lifecycle, capacity and supported capability metadata.
 - [x] Their standard token and cache rates resolve through bundled pricing and aliases, while user overrides still win and unsupported rate dimensions remain documented.
 - [x] Targeted catalog/capability tests and global gates pass; current model support does not silently alter existing model selections.
+
+### Goal 3 — Published release
+
+- [x] Version0.2.0 metadata, lockfile and changelog agree; dependency resolutions remain unchanged.
+- [ ] PR opened and merged after CI; the annotated release tag points to the merged candidate on master.
+- [ ] Release workflow succeeds and PyPI/GitHub expose matching0.2.0 artifacts; installed wheel imports and completes an offline run.
 
 ## 2. Topology graph and recommended order
 
@@ -163,7 +180,11 @@ flowchart LR
   G1 --> FR{"Whole-branch independent review on origin/master 🔁×1"}
   G2 --> FR
   FR --> CI{"Final default pytest ×1"}
-  CI --> H(["Local commits + handoff"])
+  CI --> H(["Implementation verified"])
+  H --> A3["A3 — prepare release0.2.0 ✅ ⇢"]
+  A3 --> RPR{"PR CI + merge"}
+  RPR --> RT{"Tag + release workflow"}
+  RT --> G3{"Goal 3 — published and installed"}
 ```
 
 ### Graph Findings
@@ -210,7 +231,7 @@ A2 follows A1 to keep the sole writer sequential and produce distinct commits.
 
 ### Recommended linear order
 
-A1 -> section gates/review/commit -> A2 -> section gates/review/commit -> refresh origin/master -> whole-branch review -> final default pytest -> handoff.
+A1 -> section gates/review/commit -> A2 -> section gates/review/commit -> refresh origin/master -> whole-branch review -> final default pytest -> initial handoff. Authorized follow-through: A3 release metadata -> candidate review -> PR CI -> merge -> annotated tag -> publish -> artifact verification.
 
 ## 3. Sections
 
@@ -341,6 +362,53 @@ Every Goal 2 clause passes; official URLs and retrieval dates support catalog fa
 COMMIT:
 feat(models): refresh Anthropic OpenAI and xAI catalogs
 
+## A3 — Prepare and publish version 0.2.0
+
+GOAL:
+Prepare consistent release metadata and publish the reviewed changes through the existing PR/tag workflow.
+
+SOURCES:
+User follow-up to open a PR and publish; docs/RELEASING.md; .github/workflows/ci.yml and release.yml; verified PyPI/GitHub latest0.1.1.
+
+TARGET:
+pyproject.toml, uv.lock, CHANGELOG.md; first-party client/server version strings and their existing assertions if they represent the library release. No runtime behavior or dependency upgrade.
+
+DEPENDS ON:
+A1, A2
+
+IMPLEMENTER PROFILE:
+Same sole direct-pinned implementer gpt-6-astra/low; root owns plan, reviews, commits and publication.
+
+CONTEXT TO AGGREGATE:
+pyproject.toml:7, uv.lock project entry, docs/RELEASING.md:23, src/blackbox/mcp/client.py:53, src/blackbox/mcp/server.py:103, src/blackbox/providers/agent_adapters/codex.py:567.
+
+WRITERS:
+Project version metadata, lockfile project entry, changelog heading, native first-party client identity versions. Consumers: package builder, tag verifier, wheel metadata and provider handshake readers.
+
+SIBLING SURFACES:
+Preserve SDK version pins and optional dependency requirements. Runtime defaults/model IDs stay as accepted. Existing0.1.1 historical changelog remains intact.
+
+LIFECYCLE / GATE EFFECTS:
+Release metadata invalidates build/tag verification. Prior functional implementation reviews remain evidence; independent final review checks the combined release candidate before pushing the PR. PR CI proves supported platforms. Only a green merged candidate is tagged; publication is already authorized.
+
+IMPLEMENT:
+Bump to0.2.0, regenerate lock with no dependency upgrades, promote current unreleased notes to0.2.0, update genuine first-party library version strings and existing assertions. Run locked full gates. Root opens PR with Closes #15, waits for CI, merges normally, creates annotated tag and observes release workflow. Verify public registry version and install/import/offline run from released wheel.
+
+CONTRACT DECISION — ESCALATE:
+No unresolved repository floor. User explicitly authorizes PR and publication; merge/tag are required by release workflow. Do not bypass any actual CI or environment protection gate.
+
+VERIFY:
+Implementer/root full gates; independent scope/contract/doc-truth review; PR CI; tag workflow; published artifact smoke.
+
+REVIEW:
+contract/scope and doc-truth release checks, then prior whole-branch seams revalidated on final metadata candidate.
+
+ACCEPTANCE:
+Metadata is consistent, dependency resolutions unchanged, full gates and release candidate reviews pass. Publication clauses complete through the authorized lifecycle gates after the preparation commit.
+
+COMMIT:
+chore(release): prepare 0.2.0
+
 ## 4. Main-session acceptance protocol
 
 Read full diff and claims. Verify gates, necessary offline e2e, scope, conventions, no unresolved floor item, mapped exit tests and tracked safe deferrals. Validate worker reports. Independent reviewers supply at least three section lenses. Resume same implementer for concrete corrections, commit accepted product changes with this ledger, and carry factual corrections forward.
@@ -354,6 +422,8 @@ Read full diff and claims. Verify gates, necessary offline e2e, scope, conventio
 - [x] A2 Refresh Anthropic, OpenAI and xAI models — Goal 2 — accepted 2026-09-05 921780d050531475d223907a7367e32fd7b919a5 — rounds: 1 — review: independent — routing: requested=gpt-6-astra/low implementer, gpt-5.6-terra/high reviewers; role=confirmed; effective model/effort=unknown; attestation=none — cost: tokens unavailable / 3 reused worker handles — env-retries: 0
   - R1 contract: initial root gates 837 tests/Ruff/mypy172 green; scope/doc-truth rejected all-model Anthropic replay drift, and root found additional OpenAI sampling/cache/accounting migration requirements. Corrections complete, root 870 tests/Ruff/mypy172 green; five restored R1 sensitivity probes. Independent contract/scope/doc-truth re-review approved. The same-pattern sweep found no other cache usage extraction path beyond core/accounting.py; core/cache.py consumes the corrected normalized counters. Non-Fable native replay and old OpenAI retention now have explicit regression coverage.
 
+- [x] A3 Prepare and publish version 0.2.0 — Goal 3 — accepted 2026-09-05 this release-preparation commit — rounds: 0 — review: independent — routing: requested=gpt-6-astra/low writer, gpt-5.6-terra/high reviewers; effective runtime unknown; attestation none — cost: tokens unavailable / 3 reused worker handles — env-retries: 1
+
 ### Final review correction
 
 F1 cache metrics: corrected 2026-09-05 in a3eff31b29d6b9ad6847d723defa02cae79a6ed4. Independent complement-reader review found combined read/write tokens inflating ProviderCacheUsage.hit_ratio. Same implementer changed the ratio to reads with legacy fallback; seven public runtime cases and three restored sensitivity probes cover it. Implementer/root gates both pass: 877 tests, Ruff, strict mypy172. Two whole-branch re-reviews returned CLEAN on a3eff31; all final reports validated with no warnings. Requested routing unchanged, effective runtime unknown, token counts unavailable. Sibling sweep: observability/metrics.py consumes the ratio directly; cache record hit counting already excludes writes. No remaining correction deferral.
@@ -363,7 +433,7 @@ F1 cache metrics: corrected 2026-09-05 in a3eff31b29d6b9ad6847d723defa02cae79a6e
 - [x] Every section committed with ledger record.
 - [x] Re-baselined on origin/master before whole-branch final review. Fresh fetch after A2: a95ad79ea167c6ea6b8066fa5979568dd91e402d, no ahead commits; candidate 921780d050531475d223907a7367e32fd7b919a5 already contains it.
 - [x] Independent whole-branch review is clean; corrections committed.
-- [x] All goal exit tests pass with evidence.
+- [ ] All goal exit tests pass with evidence. Original implementation exits pass; Goal3 publication pending.
 - [x] Budget actual runs and overruns recorded.
 - [x] Deferrals tracked or none; routing uncertainty and token availability reported honestly.
 - [x] Graph and ledger agree; validator passes and graph re-rendered.
@@ -386,3 +456,7 @@ Verified 2026-09-05 on product candidate a3eff31b29d6b9ad6847d723defa02cae79a6ed
 ## Deferrals
 
 None within the accepted goals. Documented unsupported managed/native permission surfaces and nonstandard pricing/advanced provider workflows are explicit contract boundaries and scope exclusions, not unfinished enforcement paths.
+
+Release follow-through is in progress; prior verified implementation evidence above remains historical and valid. No published-release claim is made until workflow and artifact checks complete.
+
+A3 preparation evidence: implementer/root default gates both pass880 tests (47 live deselected), Ruff and strict mypy172. Offline lock check passes; parsed lock diff is only the root project version. Four unrelated marker rewrites from lock regeneration were restored; no dependency updates. Historical implementation-slice0.2.0 heading is explicitly labeled to distinguish it from the new package release. Independent contract/scope/doc-truth reviews APPROVE and both whole-branch final reviews CLEAN; reports validated. PR/publication gates remain pending.
