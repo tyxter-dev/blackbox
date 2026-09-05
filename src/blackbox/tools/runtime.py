@@ -3,10 +3,18 @@ from __future__ import annotations
 import asyncio
 import inspect
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from blackbox.core.errors import ToolExecutionError
+from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.tool_permissions import (
+    approval_key,
+    approved_package_call,
+    internal_discovery_tool,
+    package_decision,
+    tool_request,
+)
 from blackbox.tools.registry import ToolDefinition, ToolRegistry
 from blackbox.tools.results import ToolResult
 
@@ -20,6 +28,7 @@ class ToolRuntime:
     max_concurrent: int | None = None
     timeout: float | None = None
     allowed_tools: set[str] | None = None
+    package_approvals: frozenset[tuple[str, int, str]] = frozenset()
 
     async def call(
         self,
@@ -30,13 +39,45 @@ class ToolRuntime:
     ) -> ToolResult:
         if self.allowed_tools is not None and name not in self.allowed_tools:
             raise ToolExecutionError(f"Tool is not visible in this session: {name}")
-        definition = self.registry.get(name)
+        registered = self.registry.get(name)
+        definition = replace(
+            registered,
+            scopes=list(registered.scopes),
+            metadata=dict(registered.metadata),
+            parameters=dict(registered.parameters),
+        )
+        if not internal_discovery_tool(definition):
+            decision = package_decision(
+                tool_request(definition, checkpoint="before_tool_call", arguments=arguments)
+            )
+            if decision.verdict == "deny" or (
+                decision.verdict == "require_approval"
+                and approval_key(definition) not in self.package_approvals
+            ):
+                return ToolResult(
+                    content=decision.reason or "Package permission denied.",
+                    error="denied_by_policy",
+                    events=[
+                        AgentEvent(
+                            type=EventTypes.TOOL_CHOICE_REJECTED,
+                            data={
+                                "name": name,
+                                "reason": decision.reason,
+                                "checkpoint": "before_tool_call",
+                            },
+                        )
+                    ],
+                )
         if mock:
             return ToolResult(
                 content=f"Mocked execution for tool '{name}'.",
                 metadata={"mock": True, "tool_name": name},
             )
-        return await self._execute(definition, arguments or {})
+        approved_request = (
+            tool_request(definition) if approval_key(definition) in self.package_approvals else None
+        )
+        with approved_package_call(approved_request):
+            return await self._execute(definition, arguments or {})
 
     async def call_many(
         self,

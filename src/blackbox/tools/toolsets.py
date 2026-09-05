@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from blackbox.core.events import AgentEvent, EventTypes
+from blackbox.core.tool_permissions import active_permissions, definition_allowed
 from blackbox.planning.prompts import PromptFragment
 from blackbox.tools.catalog import ToolCatalog
 from blackbox.tools.registry import ToolCallable, ToolDefinition, ToolRegistry
@@ -130,7 +131,12 @@ class DynamicToolsetSession:
 
     def provider_tools(self) -> list[dict[str, Any]]:
         tools = self.registry.to_provider_tools()
-        return [tool for tool in tools if tool.get("name") in self.visible_names]
+        return [
+            tool
+            for tool in tools
+            if tool.get("name") in self.visible_names
+            and definition_allowed(self.registry.get(tool["name"]))
+        ]
 
     def initial_events(self) -> list[AgentEvent]:
         events = [
@@ -164,6 +170,10 @@ class DynamicToolsetSession:
     ) -> ToolResult:
         """Search the catalog and return loadable tools outside the core meta-tools."""
 
+        if active_permissions():
+            self.catalog = ToolCatalog(
+                [tool for tool in self.registry.all_tools() if definition_allowed(tool)]
+            )
         result_limit = min(limit or self.budget.search_result_limit, self.budget.search_result_limit)
         entries = self.catalog.search(
             query=query,
@@ -225,6 +235,22 @@ class DynamicToolsetSession:
         events: list[AgentEvent] = []
 
         for name in tool_names:
+            if active_permissions() and (
+                name not in {tool.name for tool in self.registry.all_tools()}
+                or not definition_allowed(self.registry.get(name))
+            ):
+                invalid.append(name)
+                events.append(
+                    AgentEvent(
+                        type=EventTypes.TOOL_CHOICE_REJECTED,
+                        data={
+                            "name": name,
+                            "reason": "denied_by_package",
+                            "checkpoint": "before_tool_exposure",
+                        },
+                    )
+                )
+                continue
             if not self.catalog.has_entry(name):
                 invalid.append(name)
                 continue

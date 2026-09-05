@@ -23,10 +23,11 @@ from blackbox.core.errors import (
     ProviderNotConfiguredError,
     ProviderNotFoundError,
     ToolExecutionError,
+    UnsupportedFeatureError,
 )
 from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.items import RunItem
-from blackbox.core.policy import Policy, PolicyDecision, PolicyRequest
+from blackbox.core.policy import Policy, PolicyDecision
 from blackbox.core.results import AgentResult, OutputSpec, OutputStrategy, ToolPayload
 from blackbox.core.state import ProviderState
 from blackbox.core.stores import (
@@ -37,6 +38,14 @@ from blackbox.core.stores import (
     InMemorySessionStore,
     RunStore,
     SessionStore,
+)
+from blackbox.core.tool_permissions import (
+    active_permissions,
+    definition_allowed,
+    hosted_request,
+    package_decision,
+    tool_request,
+    validate_package_model_config,
 )
 from blackbox.mcp import MCPConnector, MCPServerSpec, MCPToolset, resolve_mcp_route, to_remote_mcp
 from blackbox.observability.presets import ObservabilityPreset
@@ -117,7 +126,7 @@ from blackbox.runtime.workspaces import WorkspaceRuntimeFacade
 from blackbox.skills import SkillInput, SkillSpec, compile_skills, compose_policies
 from blackbox.skills.specs import normalize_skills
 from blackbox.tools.catalog import ToolCatalog
-from blackbox.tools.hosted.specs import HostedToolHandlers, HostedToolSpec
+from blackbox.tools.hosted.specs import HostedToolHandlers, HostedToolSpec, hosted_tool_kind
 from blackbox.tools.registry import ToolDefinition
 from blackbox.tools.routing import (
     ResolvedToolPlan,
@@ -406,7 +415,9 @@ class AgentRuntime:
             tool_routing=tool_routing,
         )
         effective_tools.extend(skill_expansion.local_tools)
-        effective_hosted_tools = [*(hosted_tools or []), *skill_expansion.hosted_tools]
+        effective_hosted_tools = validate_package_model_config(
+            [*(hosted_tools or []), *skill_expansion.hosted_tools], {}
+        )
         resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
         opened_workspace: tuple[Any, Any, bool] | None = None
@@ -830,7 +841,9 @@ class AgentRuntime:
             tool_routing=tool_routing,
         )
         effective_tools.extend(skill_expansion.local_tools)
-        effective_hosted_tools = [*(hosted_tools or []), *skill_expansion.hosted_tools]
+        effective_hosted_tools = validate_package_model_config(
+            [*(hosted_tools or []), *skill_expansion.hosted_tools], {}
+        )
         resolved_mcp_toolsets: list[ResolvedMCPToolset] = []
         active_mcp_connectors: list[MCPConnector] = []
         opened_workspace: tuple[Any, Any, bool] | None = None
@@ -1185,13 +1198,50 @@ class AgentRuntime:
         async def stream_factory(
             *, input: str | list[Any], provider_state: ProviderState | None
         ) -> AsyncIterator[AgentEvent]:
+            turn_hosted_tools = validate_package_model_config(effective_hosted_tools, {})
+            if active_permissions() and policy is not None:
+                admitted_hosted = []
+                for hosted_spec in turn_hosted_tools:
+                    request = hosted_request(
+                        hosted_tool_kind(hosted_spec), checkpoint="before_hosted_tool_config"
+                    )
+                    decision = await policy.check(request)
+                    if decision.verdict == "require_approval":
+                        raise UnsupportedFeatureError(
+                            "Hosted configuration approval requires an external approval channel."
+                        )
+                    if decision.verdict == "deny":
+                        yield AgentEvent(
+                            type=EventTypes.TOOL_CHOICE_REJECTED,
+                            data={
+                                "name": request.action,
+                                "checkpoint": request.checkpoint,
+                                "reason": decision.reason,
+                            },
+                        )
+                    else:
+                        admitted_hosted.append(hosted_spec)
+                turn_hosted_tools = admitted_hosted
             async for event in self.models.stream(
                 provider=provider,
                 model=model_name,
                 input=input,
                 provider_state=provider_state,
-                tools=current_tool_definitions(),
-                hosted_tools=effective_hosted_tools,
+                tools=[
+                    tool
+                    for tool in current_tool_definitions()
+                    if not active_permissions()
+                    or (
+                        output_schema is not None
+                        and output_strategy == "finalizer_tool"
+                        and tool.get("name") == _FINALIZER_TOOL_NAME
+                    )
+                    or (
+                        isinstance(tool.get("name"), str)
+                        and definition_allowed(tool_runtime.registry.get(tool["name"]))
+                    )
+                ],
+                hosted_tools=turn_hosted_tools,
                 output_schema=output_schema,
                 output_strategy=output_strategy,
                 instructions=prompt_bundle.instructions or None,
@@ -1211,7 +1261,8 @@ class AgentRuntime:
             stream_factory=stream_factory,
             tools=(
                 tool_runtime
-                if effective_tools
+                if active_permissions()
+                or effective_tools
                 or _routing_enabled(effective_tool_routing)
                 or (output_schema is not None and output_strategy == "finalizer_tool")
                 else None
@@ -1228,15 +1279,9 @@ class AgentRuntime:
                 else None
             ),
             tool_plan_refresh=(
-                refresh_routing_plan
-                if _routing_enabled(effective_tool_routing)
-                else None
+                refresh_routing_plan if _routing_enabled(effective_tool_routing) else None
             ),
-            tool_late_binder=(
-                late_bind_tool
-                if _routing_enabled(effective_tool_routing)
-                else None
-            ),
+            tool_late_binder=(late_bind_tool if _routing_enabled(effective_tool_routing) else None),
         )
         self._active_loops[run_id] = loop
         event_recorder = EventStoreBatcher(self.event_store)
@@ -2375,21 +2420,8 @@ async def _tool_exposure_decision(
     definition: ToolDefinition,
     policy: Policy | None,
 ) -> PolicyDecision:
-    if policy is None:
-        return PolicyDecision.allow()
-    return await policy.check(
-        PolicyRequest(
-            checkpoint="before_tool_exposure",
-            action=definition.name,
-            metadata={
-                "category": definition.category,
-                "tags": list(definition.tags),
-                "risk": definition.risk,
-                "scopes": list(definition.scopes),
-                "latency": definition.latency,
-                "cost": definition.cost,
-                "side_effects": list(definition.side_effects),
-                "tool_metadata": dict(definition.metadata),
-            },
-        )
-    )
+    request = tool_request(definition)
+    decision = package_decision(request)
+    if decision.verdict == "deny" or policy is None:
+        return decision
+    return await policy.check(request)

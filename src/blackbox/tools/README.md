@@ -32,3 +32,7 @@ execution.
 
 `blackbox.hosted_tools` remains as a re-export shim for older imports.
 New code should import specs from `blackbox.tools.hosted.specs`.
+
+`ToolRuntime` checks active package grants against the current definition and
+pins that definition before scheduling execution. Dynamic sessions filter
+search/load results and schemas against the same boundary.

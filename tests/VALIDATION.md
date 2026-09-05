@@ -302,3 +302,14 @@ connector.call_tool(...)
 | 7.16 | ✅ | MCP output and error hardening | `unit/mcp/test_mcp_connector.py::test_mcp_call_failed_event_redacts_errors_by_default`, `::test_mcp_tool_policy_output_limit_overrides_server_limit`, `unit/mcp/test_mcp_transports.py` | MCP failure events redact by default, per-tool output limits override server defaults, and transport timeouts issue cancellation notifications. |
 | 7.17 | ✅ | Provider-native/local MCP metadata parity | `golden/openai/test_responses_event_mapping.py::test_mcp_items_include_typed_run_item_data`, `golden/anthropic/test_messages_event_mapping.py::test_mcp_blocks_map_to_typed_run_items`, `unit/mcp/test_mcp_connector.py::test_mcp_tool_policy_output_limit_overrides_server_limit` | Provider-native RemoteMCP and local MCP dispatch expose comparable server/tool/ref/route metadata. |
 | 7.18 | ✅ | MCP server authoring helpers | `unit/mcp/test_mcp_server.py` | First-party stdio MCP servers can register Pydantic-backed tools, validate arguments, normalize structured/error results, handle JSON-RPC lifecycle methods, and interoperate with `MCPConnector`. |
+
+## Workspace package runtime permissions (#15)
+
+| Status | Behavior | Evidence |
+| --- | --- | --- |
+| ✅ | Versioned hydration, immutable grants, scope fallback, connector scope/binding validation, standalone preparation rejection | `unit/workspace_agents/test_permission_enforcement.py` |
+| ✅ | Model/local exposure and continuation, deny-all, config overrides, dynamic discovery, fresh dispatch and approvals, isolated concurrent contexts, follow-up/close/cancel, finalizer | `runtime/test_package_permissions.py` |
+| ✅ | Local MCP, workspace operations, representable WebSearch configuration, client-hosted handlers and opaque-native rejection | `runtime/test_package_permissions.py` |
+| ✅ | Managed fail-before-start and conservative adapter capability reporting | `contracts/test_package_permission_capabilities.py` |
+| ✅ | Public package save/load and permitted/denied execution through model and local-session surfaces | `e2e/test_permissioned_package.py` |
+| ✅ | Custom workspace prefixes, package/workspace dual approval, and enabled/disabled native tool-search control injection | `runtime/test_package_permission_regressions.py` |

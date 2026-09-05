@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Workspace agent runtime permissions (#15)
+
+- Added explicit `inherit` / `allowlist_v1` modes with compatible manifest
+  hydration, immutable run/session grants, and exact scope/connector checks.
+- Filtered static/dynamic tool exposure and discovery; checked current tool
+  requirements at dispatch and bound approvals to checked callable metadata.
+- Kept local sessions on AgentLoop, retained permissions on follow-ups, and
+  rejected unsupported managed startup before workspace/agent side effects.
+- Added local MCP/workspace enforcement, WebSearch read-grant configuration,
+  client-hosted handler gates, and offline unit/runtime/contract/package tests.
+- Native RemoteMCP/ToolSearch, opaque provider extras, and other server-executed
+  hosted tools remain explicitly unsupported in allowlist mode. Standalone
+  `prepare_agent_spec` and `WorkspaceAgentSpec.to_agent_spec()` reject restricted packages; use `run_workspace_agent`.
+
 ## 0.1.1
 
 ### CI dependency coverage

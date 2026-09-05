@@ -34,3 +34,8 @@ loop, SDK, or cloud agent surface.
 ## Compatibility
 
 `blackbox.agents` remains as a compatibility package for older imports.
+
+LocalAgentProvider advertises package permission enforcement and retains immutable
+constraints per session. Managed adapters report this capability as false even
+when injected clients advertise it; their native execution does not consume the
+package boundary. The runtime rejects restricted managed startup.

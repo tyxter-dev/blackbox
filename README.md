@@ -434,6 +434,46 @@ Runnable AgentProvider examples live in `examples/`:
 
 ## Workspace agent packages
 
+Opt in to runtime tool grants with `permission_mode="allowlist_v1"` and execute
+through `run_workspace_agent`. An empty grant list denies tools; the default
+`inherit` mode preserves existing behavior and old manifests.
+
+```python
+from blackbox import ToolPermission, WorkspaceAgentSpec, run_workspace_agent
+
+runtime.tools.register(read_ticket, name="read_ticket", scopes=["read"])
+agent = WorkspaceAgentSpec(
+    name="ticket-reader",
+    model_provider="openai",
+    model="openai:gpt-5.5",
+    tools=["read_ticket"],
+    permission_mode="allowlist_v1",
+    permissions=[ToolPermission("local:read_ticket", scopes=["read"])],
+)
+result = await run_workspace_agent(runtime, agent, input="Read ticket 42.")
+```
+
+Model runs and `LocalAgentProvider` sessions filter tools before exposure and
+check current registered requirements again at dispatch. Unannotated local
+tools require `execute`; a `read` grant does not imply execution permission.
+Connector-backed registrations declare `metadata={"connector": "crm",
+"connector_scopes": ["tickets.read"]}` alongside their operation scopes.
+The package connector must bind the tool ref and contain the required connector
+scopes. These declarations describe authority; the application still supplies
+credentials and trustworthy tool implementations.
+
+Restricted packages support locally routed MCP and workspace tools. Hosted
+`WebSearch` supports a `hosted:web_search` read grant without a connector or
+per-call approval. Client-executed Shell, ApplyPatch, ComputerUse, TextEditor,
+and Memory handlers use execute grants and preserve failed continuation on
+denial. Provider-executed hosted tools other than WebSearch, native RemoteMCP,
+opaque hosted specs, provider-native extra parameters, and managed agent
+providers without package enforcement raise typed errors. Local sessions retain
+their captured grants for follow-ups. Use the bridge for restricted packages;
+`prepare_agent_spec` and `WorkspaceAgentSpec.to_agent_spec()` reject them because
+plain kwargs cannot preserve the
+boundary. See the [permission contract](src/blackbox/workspace_agents/README.md).
+
 `WorkspaceAgentSpec` describes a governed agent as a portable package:
 instructions, model/provider preference, tools, hosted tools, MCP servers,
 connectors, permissions, schedules, skills, memory policy, publication

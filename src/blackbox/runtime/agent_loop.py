@@ -13,12 +13,12 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from blackbox.core.approvals import ApprovalDecision
 from blackbox.core.artifacts import Artifact
-from blackbox.core.errors import ApprovalError, SessionError
+from blackbox.core.errors import ApprovalError, SessionError, ToolExecutionError
 from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.items import ItemTypes, RunItem
 from blackbox.core.policy import (
@@ -28,6 +28,12 @@ from blackbox.core.policy import (
     PolicyRequest,
 )
 from blackbox.core.state import ProviderState
+from blackbox.core.tool_permissions import (
+    approval_key,
+    internal_discovery_tool,
+    package_decision,
+    tool_request,
+)
 from blackbox.tools.hosted.calls import HostedToolCall, HostedToolContext
 from blackbox.tools.hosted.specs import (
     ApplyPatch,
@@ -302,6 +308,7 @@ class AgentLoop:
             tool_runtime = self.tools
             tool_results: list[RunItem | None] = [None] * len(pending_calls)
             allowed_calls: list[tuple[int, _PendingToolCall]] = []
+            package_approvals: set[tuple[str, int, str]] = set()
             for index, call in enumerate(pending_calls):
                 if (
                     tool_runtime.allowed_tools is not None
@@ -368,10 +375,21 @@ class AgentLoop:
                         },
                     )
                     continue
-                if effective_policy is not None:
-                    decision = await effective_policy.check(_policy_request_for_call(call))
-                else:
-                    decision = PolicyDecision.allow()
+                request = _policy_request_for_call(call)
+                internal = False
+                try:
+                    definition = tool_runtime.registry.get(call.name)
+                    request = tool_request(
+                        definition, checkpoint=request.checkpoint, arguments=call.arguments
+                    )
+                    internal = internal_discovery_tool(definition)
+                except ToolExecutionError:
+                    pass
+                decision = PolicyDecision.allow() if internal else package_decision(request)
+                if decision.verdict != "deny" and effective_policy is not None:
+                    user_decision = await effective_policy.check(request)
+                    if user_decision.verdict != "allow":
+                        decision = user_decision
 
                 if decision.verdict == "deny":
                     tool_results[index] = RunItem(
@@ -400,6 +418,7 @@ class AgentLoop:
                     continue
 
                 if decision.verdict == "require_approval":
+                    approved_key = approval_key(tool_runtime.registry.get(call.name))
                     async for ev in self._await_approval(
                         call, session_id=session_id, provider_id=provider_id
                     ):
@@ -431,6 +450,8 @@ class AgentLoop:
                         )
                         continue
 
+                    package_approvals.add(approved_key)
+
                 allowed_calls.append((index, call))
                 self._tool_calls_used += 1
 
@@ -450,7 +471,8 @@ class AgentLoop:
                     data={"call_id": call.call_id, "name": call.name},
                 )
 
-            task_results = await tool_runtime.call_many(
+            dispatch_runtime = replace(tool_runtime, package_approvals=frozenset(package_approvals))
+            task_results = await dispatch_runtime.call_many(
                 [(call.name, call.arguments) for _, call in allowed_calls],
                 mock=mock_tools,
             )
@@ -477,7 +499,7 @@ class AgentLoop:
                             },
                         )
                         continue
-                    result = await tool_runtime.call(
+                    result = await dispatch_runtime.call(
                         call.name,
                         call.arguments,
                         mock=mock_tools,
@@ -564,17 +586,16 @@ class AgentLoop:
                     item_id=call.call_id,
                     data=completed_data,
                 )
-                tool_results[index] = (
-                    RunItem(
-                        type=ItemTypes.FUNCTION_RESULT,
-                        provider=provider_id,
-                        status="completed",
-                        data={
-                            "call_id": call.call_id,
-                            "name": call.name,
-                            "content": result.content,
-                        },
-                    )
+                tool_results[index] = RunItem(
+                    type=ItemTypes.FUNCTION_RESULT,
+                    provider=provider_id,
+                    status="failed" if result.error else "completed",
+                    data={
+                        "call_id": call.call_id,
+                        "name": call.name,
+                        "content": result.content,
+                        **({"error": result.error} if result.error else {}),
+                    },
                 )
 
             turn_input = [

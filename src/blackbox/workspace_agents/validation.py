@@ -27,6 +27,7 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
+from blackbox.core.errors import ConfigurationError
 from blackbox.providers.catalog import bundled_provider_model_catalog
 from blackbox.providers.model_catalog import ProviderModelCatalog
 from blackbox.skills.specs import SkillSpec
@@ -35,6 +36,7 @@ from blackbox.workspace_agents.executor import (
     parse_cron,
     parse_interval,
 )
+from blackbox.workspace_agents.permissions import compile_package_permissions
 from blackbox.workspace_agents.spec import WorkspaceAgentSpec
 
 ValidationSeverity = Literal["error", "warning"]
@@ -75,6 +77,13 @@ def validate_workspace_agent(
     """
 
     issues: list[ValidationIssue] = []
+    if spec.permission_mode == "allowlist_v1":
+        try:
+            compile_package_permissions(spec.permissions, spec.connectors)
+        except ConfigurationError as exc:
+            issues.append(
+                ValidationIssue("error", "invalid_permission_grants", str(exc), "permissions")
+            )
     _check_identity(spec, issues)
     _check_tool_refs(spec, issues)
     _check_connectors(spec, issues)

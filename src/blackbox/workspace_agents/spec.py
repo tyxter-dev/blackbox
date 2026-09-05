@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 from uuid import uuid4
 
+from blackbox.core.errors import ConfigurationError
 from blackbox.mcp import MCPServerSpec, MCPToolset
 from blackbox.providers.base import AgentSpec
 from blackbox.workspace_agents.permissions import ConnectorSpec, ToolPermission
@@ -88,6 +89,11 @@ class WorkspaceAgentSpec:
     version: WorkspaceAgentVersion = field(default_factory=WorkspaceAgentVersion)
     metadata: WorkspaceAgentMetadata = field(default_factory=WorkspaceAgentMetadata)
     extra: dict[str, Any] = field(default_factory=dict)
+    permission_mode: Literal["inherit", "allowlist_v1"] = "inherit"
+
+    def __post_init__(self) -> None:
+        if self.permission_mode not in {"inherit", "allowlist_v1"}:
+            raise ConfigurationError(f"Unknown package permission mode: {self.permission_mode!r}.")
 
     def resolved_mcp_toolsets(self) -> list[MCPToolset]:
         """Return MCP routing specs for direct runtime execution."""
@@ -95,6 +101,14 @@ class WorkspaceAgentSpec:
         return [*(MCPToolset(server=server) for server in self.mcp_servers), *self.mcp_toolsets]
 
     def to_agent_spec(self) -> AgentSpec:
+        """Lower inherited packages; restricted packages require run_workspace_agent."""
+        if self.permission_mode != "inherit":
+            raise ConfigurationError(
+                "Use run_workspace_agent for allowlist_v1; AgentSpec alone cannot carry its boundary."
+            )
+        return self._to_agent_spec()
+
+    def _to_agent_spec(self) -> AgentSpec:
         mcp_servers = [
             *self.mcp_servers,
             *(toolset.server for toolset in self.mcp_toolsets),

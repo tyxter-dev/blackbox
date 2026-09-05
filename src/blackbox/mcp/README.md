@@ -88,3 +88,7 @@ raise SystemExit(server.run_stdio())
 Tool handler failures that should reach the caller as MCP tool errors can raise
 `MCPToolError`. Unexpected handler exceptions are contained as `isError` tool
 results instead of crashing the server process.
+
+Package allowlists additionally check freshly resolved MCP descriptors before
+dispatch. Operation scopes and connector OAuth scopes remain distinct; these
+checks supplement MCP trust and output handling.

@@ -10,6 +10,7 @@ from blackbox.core.errors import ApprovalError, MCPAuthenticationError, MCPError
 from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.policy import Policy, PolicyDecision, PolicyRequest
 from blackbox.core.raw import RawEnvelope
+from blackbox.core.tool_permissions import package_call_approved, package_decision
 from blackbox.mcp.auth import MCPAuthProvider
 from blackbox.mcp.cache import MCPToolCacheEntry, mcp_tool_cache_key
 from blackbox.mcp.client import MCPClient
@@ -207,6 +208,30 @@ class MCPConnector:
             definition = self._resolve(server, tool)
         args = dict(arguments or {})
         await self._policy_gate(definition, args)
+        # Re-resolve after asynchronous policy callbacks, then pin this descriptor.
+        fresh = self._resolve(server, tool)
+        request = PolicyRequest(
+            checkpoint="before_mcp_call",
+            action=fresh.ref,
+            arguments=args,
+            metadata=self._policy_metadata(fresh),
+        )
+        decision = package_decision(request)
+        if decision.verdict == "deny" or (
+            decision.verdict == "require_approval" and not package_call_approved(request)
+        ):
+            self._emit(
+                EventTypes.TOOL_CHOICE_REJECTED,
+                data={
+                    "name": fresh.ref,
+                    "reason": decision.reason,
+                    "checkpoint": "before_mcp_call",
+                },
+            )
+            raise MCPError(decision.reason or "Package permission denied MCP tool.")
+        if fresh is not definition:
+            raise MCPError("MCP tool changed during policy evaluation; retry required.")
+        definition = fresh
         self._emit(
             EventTypes.MCP_CALL_STARTED,
             data={
@@ -318,7 +343,13 @@ class MCPConnector:
                     name=ref,
                     description=str(descriptor.get("description") or ref),
                     parameters=dict(descriptor.get("parameters") or {"type": "object"}),
+                    scopes=_operation_scopes(descriptor_metadata),
                     metadata={
+                        **descriptor_metadata,
+                        "connector_scopes": _string_list(
+                            trust_metadata.get("required_scopes"),
+                            descriptor_metadata.get("required_scopes"),
+                        ),
                         "mcp": True,
                         "server": tool_server,
                         "tool": tool_name,
@@ -842,6 +873,10 @@ class MCPConnector:
             "ref": definition.ref,
             "transport": spec.transport,
             "scopes": scopes,
+            "permission_scopes": _operation_scopes(definition.metadata),
+            "connector_scopes": scopes,
+            "connector": definition.metadata.get("connector"),
+            "tool_ref": definition.ref,
             "risks": risks,
             "read_only": definition.metadata.get("read_only"),
             "destructive": definition.metadata.get("destructive"),
@@ -1032,3 +1067,14 @@ def _redact_known_secret_values(message: str, spec: MCPServerSpec) -> str:
         if value:
             redacted = redacted.replace(value, "<redacted>")
     return redacted
+
+
+def _operation_scopes(metadata: dict[str, Any]) -> list[str]:
+    explicit = metadata.get("permission_scopes")
+    if isinstance(explicit, list) and explicit:
+        return [str(scope) for scope in explicit]
+    if metadata.get("destructive") is True:
+        return ["delete"]
+    if metadata.get("read_only") is True:
+        return ["read"]
+    return ["execute"]
