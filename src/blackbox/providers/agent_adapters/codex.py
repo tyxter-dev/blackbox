@@ -117,9 +117,9 @@ class CodexAgentProvider:
         if callable(advertised):
             capabilities = advertised()
             if isinstance(capabilities, AgentCapabilities):
-                return capabilities
+                return replace(capabilities, supports_package_permissions=False)
             if isinstance(capabilities, dict):
-                return AgentCapabilities(**capabilities)
+                return AgentCapabilities(**{**capabilities, "supports_package_permissions": False})
         # Auth is intentionally not inspected: the Codex runtime owns the
         # subscription credential and can refresh it while starting a thread.
         return AgentCapabilities(
@@ -564,7 +564,7 @@ class _CodexAppServerConnection:
                 "clientInfo": {
                     "name": "blackbox",
                     "title": "Blackbox Codex AgentProvider",
-                    "version": "0.1.1",
+                    "version": "0.2.0",
                 }
             },
         )

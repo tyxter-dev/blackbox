@@ -94,6 +94,8 @@ class ProviderCacheUsage:
     def hit_ratio(self) -> float | None:
         if self.input_tokens <= 0:
             return None
+        if self.cache_read_input_tokens != 0 or self.cache_creation_input_tokens != 0:
+            return self.cache_read_input_tokens / self.input_tokens
         return self.cached_input_tokens / self.input_tokens
 
     def to_dict(self) -> dict[str, Any]:

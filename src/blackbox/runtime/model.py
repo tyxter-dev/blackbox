@@ -14,10 +14,11 @@ from blackbox.core.accounting import (
 from blackbox.core.artifacts import Artifact
 from blackbox.core.cache import InMemoryProviderCacheStore, ProviderCacheStore
 from blackbox.core.capabilities import ModelCapabilityProfile, get_model_capability_profile
-from blackbox.core.errors import ConfigurationError
+from blackbox.core.errors import ConfigurationError, UnsupportedFeatureError
 from blackbox.core.events import AgentEvent, EventTypes
 from blackbox.core.results import OutputSpec, OutputStrategy
 from blackbox.core.state import ProviderState
+from blackbox.core.tool_permissions import active_permissions, validate_package_model_config
 from blackbox.observability.presets import ObservabilityPreset
 from blackbox.observability.traces import TraceContext, trace_metadata_from_events
 from blackbox.output.schema import OutputSchema, build_output_schema
@@ -243,6 +244,15 @@ class ModelRuntime:
             ),
             extra={**config_values, **dict(kwargs)},
         )
+        if (
+            active_permissions()
+            and request.controls.tool_search is not None
+            and request.controls.tool_search.enabled
+        ):
+            raise UnsupportedFeatureError(
+                "allowlist_v1 cannot enforce provider-native ToolSearchControl."
+            )
+        request.hosted_tools = validate_package_model_config(request.hosted_tools, request.extra)
         validate_turn_request_capabilities(provider=adapter, request=request)
         effective_run_id = run_id or f"run_{uuid4().hex}"
         trace_context = TraceContext.for_run(

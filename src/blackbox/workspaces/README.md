@@ -30,3 +30,7 @@ patches, snapshots, artifacts, preview ports, and resumable workspace state.
 `workspace_agents/` describes governed agent packages. `workspaces/` describes
 where an agent acts. A workspace agent may reference workspaces, but it should
 not own filesystem or sandbox execution semantics.
+
+Workspace tool registrations carry operation scopes for package authorization.
+Read/list/snapshot require read, writes require write, deletes require delete,
+patches require write and delete, and commands/port exposure require execute.

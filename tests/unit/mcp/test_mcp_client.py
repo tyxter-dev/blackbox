@@ -87,7 +87,7 @@ async def test_start_initializes_and_sends_initialized_notification() -> None:
     assert transport.requests[0][1] == {
         "protocolVersion": "2025-11-25",
         "capabilities": {"roots": {"listChanged": False}, "sampling": {}},
-        "clientInfo": {"name": "blackbox", "version": "0.1.1"},
+        "clientInfo": {"name": "blackbox", "version": "0.2.0"},
     }
     assert transport.notifications == ["notifications/initialized"]
 

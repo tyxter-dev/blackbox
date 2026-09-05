@@ -6,14 +6,14 @@ from blackbox.core.accounting import MarkupPolicy, ModelCatalog, ModelPricing
 from blackbox.providers.catalog import bundled_provider_model_catalog
 from blackbox.providers.model_catalog import ProviderModelCatalog
 
-BUNDLED_PRICING_CATALOG_VERSION = "2026-05-06"
-BUNDLED_PRICING_RETRIEVED_AT = "2026-05-06"
+BUNDLED_PRICING_CATALOG_VERSION = "2026-09-05"
+BUNDLED_PRICING_RETRIEVED_AT = "2026-09-05"
 BUNDLED_PRICING_SOURCE = "blackbox-bundled"
 
 _OPENAI_PRICING_URL = "https://openai.com/api/pricing/"
-_ANTHROPIC_PRICING_URL = "https://docs.claude.com/en/docs/about-claude/pricing"
+_ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing"
 _GEMINI_PRICING_URL = "https://ai.google.dev/gemini-api/docs/pricing"
-_XAI_PRICING_URL = "https://docs.x.ai/docs/models"
+_XAI_PRICING_URL = "https://docs.x.ai/developers/models"
 
 
 def bundled_provider_pricing() -> list[ModelPricing]:
@@ -72,6 +72,7 @@ def _pricing(
     cached_input_per_million: float | None = None,
     cache_read_input_per_million: float | None = None,
     cache_creation_input_per_million: float | None = None,
+    retrieved_at: str = "2026-05-06",
 ) -> ModelPricing:
     return ModelPricing(
         provider=provider,
@@ -83,13 +84,31 @@ def _pricing(
         cache_creation_input_per_million=cache_creation_input_per_million,
         source=BUNDLED_PRICING_SOURCE,
         catalog_version=BUNDLED_PRICING_CATALOG_VERSION,
-        retrieved_at=BUNDLED_PRICING_RETRIEVED_AT,
+        retrieved_at=retrieved_at,
         source_url=source_url,
     )
 
 
 def _openai_pricing() -> list[ModelPricing]:
     return [
+        *[
+            _pricing(
+                provider="openai",
+                model=model,
+                input_per_million=input_rate,
+                cached_input_per_million=input_rate * 0.1,
+                cache_creation_input_per_million=input_rate * 1.25,
+                output_per_million=output_rate,
+                source_url=f"https://developers.openai.com/api/docs/models/{model}",
+                retrieved_at=BUNDLED_PRICING_RETRIEVED_AT,
+            )
+            for model, input_rate, output_rate in (
+                ("gpt-6-astra", 10.0, 50.0),
+                ("gpt-5.6-sol", 4.0, 20.0),
+                ("gpt-5.6-terra", 2.0, 12.0),
+                ("gpt-5.6-luna", 0.2, 1.2),
+            )
+        ],
         _pricing(
             provider="openai",
             model="gpt-5.5",
@@ -119,6 +138,29 @@ def _openai_pricing() -> list[ModelPricing]:
 
 def _anthropic_pricing() -> list[ModelPricing]:
     return [
+        *[
+            _pricing(
+                provider="anthropic",
+                model=model,
+                input_per_million=input_rate,
+                output_per_million=output_rate,
+                cache_creation_input_per_million=input_rate * 1.25,
+                cache_read_input_per_million=read_rate,
+                source_url=_ANTHROPIC_PRICING_URL,
+                retrieved_at=BUNDLED_PRICING_RETRIEVED_AT,
+            )
+            for model, input_rate, output_rate, read_rate in (
+                ("claude-fable-5-1", 10.0, 50.0, 0.25),
+                ("claude-fable-5", 10.0, 50.0, 1.0),
+                ("claude-opus-5", 5.0, 25.0, 0.5),
+                ("claude-sonnet-5", 2.0, 10.0, 0.2),
+                ("claude-opus-4-8", 5.0, 25.0, 0.5),
+                ("claude-opus-4-7", 5.0, 25.0, 0.5),
+                ("claude-opus-4-6", 5.0, 25.0, 0.5),
+                ("claude-opus-4-5", 5.0, 25.0, 0.5),
+                ("claude-sonnet-4-6", 3.0, 15.0, 0.3),
+            )
+        ],
         *_anthropic_aliases(
             models=("claude-opus-4-1", "claude-opus-4-1-20250805"),
             input_per_million=15.00,
@@ -213,16 +255,17 @@ def _xai_pricing() -> list[ModelPricing]:
     return [
         _pricing(
             provider="xai",
-            model="grok-4-1-fast-reasoning",
-            input_per_million=0.20,
-            output_per_million=0.50,
-            source_url=_XAI_PRICING_URL,
-        ),
-        _pricing(
-            provider="xai",
-            model="grok-4-1-fast-non-reasoning",
-            input_per_million=0.20,
-            output_per_million=0.50,
-            source_url=_XAI_PRICING_URL,
-        ),
+            model=model,
+            input_per_million=input_rate,
+            cached_input_per_million=cache_rate,
+            output_per_million=output_rate,
+            source_url=f"{_XAI_PRICING_URL}/{source_model}",
+            retrieved_at=BUNDLED_PRICING_RETRIEVED_AT,
+        )
+        for model, input_rate, cache_rate, output_rate, source_model in (
+            ("grok-4.6", 2.0, 0.5, 6.0, "grok-4.6"),
+            ("grok-4.3", 1.25, 0.2, 2.5, "grok-4.3"),
+            ("grok-4-1-fast-reasoning", 1.25, 0.2, 2.5, "grok-4.3"),
+            ("grok-4-1-fast-non-reasoning", 1.25, 0.2, 2.5, "grok-4.3"),
+        )
     ]

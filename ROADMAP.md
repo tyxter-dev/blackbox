@@ -135,9 +135,10 @@ concept is structurally a `WorkspaceAgentSpec`.
       `before_scheduled_run` policy checkpoint, producing `ScheduledRunRef`s;
       drive it from external cron via `run_due(now=...)` or with the built-in
       `serve()` loop. `calendar` triggers remain downstream.
-- [ ] **Permission enforcement at run time** — `ToolPermission` is metadata
-      today; enforce scopes/connector bindings in the loop's policy gates so
-      a package's grants actually constrain execution.
+- [x] **Permission enforcement at run time** — opt-in `allowlist_v1` constrains
+      exposure and fresh dispatch by ref, operation scopes, and connector binding
+      in model runs and local sessions. Managed/native surfaces without equivalent
+      enforcement fail explicitly; default `inherit` preserves compatibility.
 - [ ] **Connector auth contract** — define how `ConnectorSpec.auth_mode`
       resolves to credentials at run time without pulling OAuth/secret
       storage into core (callback/provider interface, applications implement).

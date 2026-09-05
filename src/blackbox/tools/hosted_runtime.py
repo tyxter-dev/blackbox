@@ -7,7 +7,8 @@ from typing import Any, cast
 from blackbox.core.artifacts import Artifact
 from blackbox.core.errors import ConfigurationError, UnsupportedFeatureError
 from blackbox.core.items import ItemTypes, RunItem
-from blackbox.core.policy import PolicyDecision, PolicyRequest
+from blackbox.core.policy import PolicyRequest
+from blackbox.core.tool_permissions import hosted_request, package_decision
 from blackbox.tools.hosted.calls import HostedToolCall, HostedToolContext, HostedToolOutput
 from blackbox.tools.hosted.specs import (
     ApplyPatch,
@@ -30,10 +31,16 @@ class HostedToolRunner:
         handlers: HostedToolHandlers,
         spec: HostedToolSpec | None,
     ) -> HostedToolOutput:
-        if context.policy is not None:
-            decision = await context.policy.check(_policy_request(call, spec=spec))
-        else:
-            decision = PolicyDecision.allow()
+        request = _policy_request(call, spec=spec)
+        request.metadata.update(hosted_request(call.hosted_tool_type).metadata)
+        decision = package_decision(request)
+        if decision.verdict != "deny" and context.policy is not None:
+            user_decision = await context.policy.check(request)
+            if user_decision.verdict != "allow":
+                decision = user_decision
+        fresh_decision = package_decision(hosted_request(call.hosted_tool_type))
+        if fresh_decision.verdict != "allow":
+            decision = fresh_decision
 
         if decision.verdict == "deny":
             return _denied_output(call, reason=decision.reason)

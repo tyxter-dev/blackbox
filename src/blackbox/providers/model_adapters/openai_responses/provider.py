@@ -103,6 +103,63 @@ _OPENAI_FUNCTION_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _TOOL_NAME_ALIASES_KEY = "_blackbox_tool_name_aliases"
 
 
+_CURRENT_OPENAI_EFFORTS = {
+    "gpt-6-astra": ("low", "medium", "high", "xhigh", "max"),
+    **dict.fromkeys(
+        ("gpt-5.6-sol", "gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"),
+        ("none", "low", "medium", "high", "xhigh", "max"),
+    ),
+}
+
+
+def _validate_model_effort(kwargs: dict[str, Any], efforts: dict[str, tuple[str, ...]]) -> None:
+    effective = {**kwargs, **(kwargs.get("extra_body") or {})}
+    allowed = efforts.get(effective.get("model", ""))
+    reasoning = effective.get("reasoning")
+    if allowed is not None and reasoning is not None:
+        if not isinstance(reasoning, dict):
+            raise UnsupportedFeatureError("reasoning must be a mapping.")
+        effort = reasoning.get("effort")
+        if effort is not None and effort not in allowed:
+            raise UnsupportedFeatureError(
+                f"Unsupported reasoning effort {effort!r}; expected {allowed}."
+            )
+
+
+def _apply_current_openai_controls(request: TurnRequest, kwargs: dict[str, Any]) -> None:
+    effective = {**kwargs, **(kwargs.get("extra_body") or {})}
+    model = effective.get("model")
+    if model == "gpt-6-astra":
+        for parameter in ("temperature", "top_p", "top_logprobs"):
+            if parameter in effective:
+                raise UnsupportedFeatureError(f"GPT-6 Astra does not support {parameter}.")
+        if "message.output_text.logprobs" in (effective.get("include") or []):
+            raise UnsupportedFeatureError("GPT-6 Astra does not support output text logprobs.")
+    current_cache = model in _CURRENT_OPENAI_EFFORTS
+    if current_cache and "prompt_cache_retention" in effective:
+        raise UnsupportedFeatureError(
+            "This model uses prompt_cache_options.ttl, not prompt_cache_retention."
+        )
+    cache = request.controls.cache
+    if current_cache:
+        options = effective.get("prompt_cache_options", {})
+        if not isinstance(options, dict):
+            raise UnsupportedFeatureError("prompt_cache_options must be a mapping.")
+        options = dict(options)
+        if cache is not None and cache.ttl is not None:
+            options.setdefault("ttl", cache.ttl)
+        if "ttl" in options and options["ttl"] != "30m":
+            raise UnsupportedFeatureError(
+                "This model supports only prompt_cache_options.ttl='30m'."
+            )
+        if options or "prompt_cache_options" in effective:
+            kwargs["prompt_cache_options"] = options
+            if "prompt_cache_options" in (kwargs.get("extra_body") or {}):
+                kwargs["extra_body"] = {**kwargs["extra_body"], "prompt_cache_options": options}
+    elif cache is not None and cache.ttl is not None:
+        kwargs.setdefault("prompt_cache_retention", cache.ttl)
+
+
 class OpenAIResponsesProvider:
     """Provider-native adapter for the OpenAI Responses API.
 
@@ -197,19 +254,25 @@ class OpenAIResponsesProvider:
                 "raw": CapabilityDetail(status="passthrough"),
             },
             output_strategies={
-                "provider_native": CapabilityDetail(
-                    status="supported", native_name="text.format"
-                ),
+                "provider_native": CapabilityDetail(status="supported", native_name="text.format"),
                 "finalizer_tool": CapabilityDetail(status="supported", native_name="function"),
                 "posthoc_parse": CapabilityDetail(status="supported"),
                 "posthoc_parse_with_retry": CapabilityDetail(status="supported"),
             },
             controls={
-                "instructions": CapabilityDetail(
-                    status="supported", native_name="instructions"
+                "instructions": CapabilityDetail(status="supported", native_name="instructions"),
+                "temperature": CapabilityDetail(
+                    status="unsupported" if model == "gpt-6-astra" else "supported",
+                    native_name="temperature",
                 ),
-                "temperature": CapabilityDetail(status="supported", native_name="temperature"),
-                "top_p": CapabilityDetail(status="supported", native_name="top_p"),
+                "top_p": CapabilityDetail(
+                    status="unsupported" if model == "gpt-6-astra" else "supported",
+                    native_name="top_p",
+                ),
+                "top_logprobs": CapabilityDetail(
+                    status="unsupported" if model == "gpt-6-astra" else "passthrough",
+                    native_name="top_logprobs",
+                ),
                 "max_output_tokens": CapabilityDetail(
                     status="supported", native_name="max_output_tokens"
                 ),
@@ -220,7 +283,9 @@ class OpenAIResponsesProvider:
                 "reasoning_effort": CapabilityDetail(
                     status="supported",
                     native_name="reasoning.effort",
-                    supported_values=("none", "minimal", "low", "medium", "high", "xhigh"),
+                    supported_values=_CURRENT_OPENAI_EFFORTS.get(
+                        model or "", ("none", "minimal", "low", "medium", "high", "xhigh")
+                    ),
                 ),
                 "reasoning_summary": CapabilityDetail(
                     status="supported", native_name="reasoning.summary"
@@ -231,19 +296,27 @@ class OpenAIResponsesProvider:
                     supported_values=("low", "medium", "high"),
                 ),
                 "cache": CapabilityDetail(status="supported"),
-                "cache_key": CapabilityDetail(
-                    status="supported", native_name="prompt_cache_key"
-                ),
+                "cache_key": CapabilityDetail(status="supported", native_name="prompt_cache_key"),
                 "cache_ttl": CapabilityDetail(
-                    status="supported", native_name="prompt_cache_retention"
+                    status="supported",
+                    native_name="prompt_cache_options.ttl"
+                    if model in _CURRENT_OPENAI_EFFORTS
+                    else "prompt_cache_retention",
+                    supported_values=("30m",) if model in _CURRENT_OPENAI_EFFORTS else (),
                 ),
-                "include": CapabilityDetail(status="supported", native_name="include"),
+                "include": CapabilityDetail(
+                    status="conditional" if model == "gpt-6-astra" else "supported",
+                    native_name="include",
+                    reason="Astra rejects message.output_text.logprobs."
+                    if model == "gpt-6-astra"
+                    else None,
+                ),
                 "background": CapabilityDetail(status="supported", native_name="background"),
                 "store": CapabilityDetail(status="supported", native_name="store"),
-                "conversation": CapabilityDetail(
-                    status="supported", native_name="conversation"
+                "conversation": CapabilityDetail(status="supported", native_name="conversation"),
+                "tool_search": CapabilityDetail(
+                    status="supported", native_name="tools.tool_search"
                 ),
-                "tool_search": CapabilityDetail(status="supported", native_name="tools.tool_search"),
                 "compaction": CapabilityDetail(
                     status="supported",
                     native_name="truncation",
@@ -512,8 +585,6 @@ class OpenAIResponsesProvider:
                 )
             if controls.cache.key is not None:
                 kwargs["prompt_cache_key"] = controls.cache.key
-            if controls.cache.ttl is not None:
-                kwargs["prompt_cache_retention"] = controls.cache.ttl
             kwargs.update(controls.cache.extra)
         if request.output_schema is not None and request.output_strategy == "provider_native":
             _merge_text_format(kwargs, request)
@@ -561,6 +632,8 @@ class OpenAIResponsesProvider:
                         kwargs["tool_choice"],
                         tool_name_aliases,
                     )
+        _apply_current_openai_controls(request, kwargs)
+        _validate_model_effort(kwargs, _CURRENT_OPENAI_EFFORTS)
         return kwargs
 
 

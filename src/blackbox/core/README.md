@@ -37,3 +37,6 @@ import without causing adapter or runtime orchestration side effects.
   should import from `blackbox.planning`.
 - `cache.py` and `stores.py` are shared infrastructure. They may remain here or
   move to an infrastructure package if they continue to grow.
+
+`tool_permissions.py` holds immutable package grants, context-local boundary
+management, and canonical authorization request helpers shared by runtime domains.

@@ -50,7 +50,7 @@ class MCPClient:
             "capabilities": self._client_capabilities(),
             "clientInfo": {
                 "name": "blackbox",
-                "version": "0.1.1",
+                "version": "0.2.0",
             },
         }
         result = await self._request(

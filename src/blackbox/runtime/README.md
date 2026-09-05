@@ -60,3 +60,7 @@ tool facade access, and provider cache lifecycle helpers.
   prompt planning event construction.
 - `workspace_results.py`: workspace event enrichment and workspace metadata
   extraction from runtime events.
+
+Package runs carry immutable context-local constraints through the shared loop.
+Exposure and dispatch compose package checks with existing policy; fresh dispatch
+pins checked callable definitions and approval requirements.

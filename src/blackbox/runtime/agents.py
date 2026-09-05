@@ -41,6 +41,7 @@ from blackbox.core.session_state import (
 from blackbox.core.sessions import AgentRef, AgentSession, InvocationRef, SessionRef
 from blackbox.core.state import ProviderState, RunState
 from blackbox.core.stores import EventStore, RunStore, SessionStore
+from blackbox.core.tool_permissions import active_permissions
 from blackbox.observability.presets import ObservabilityPreset
 from blackbox.observability.traces import TraceContext, trace_metadata_from_events
 from blackbox.providers.base import (
@@ -103,6 +104,10 @@ class AgentRuntimeFacade:
 
     async def create_agent(self, *, provider: str, spec: AgentSpec) -> AgentRef:
         adapter = self.registry.get_agent(ProviderRef.parse(provider).provider_key)
+        if active_permissions() and not adapter.capabilities().supports_package_permissions:
+            raise UnsupportedFeatureError(
+                "Agent provider cannot enforce active package permissions."
+            )
         return await adapter.create_agent(spec)
 
     async def create_session(
@@ -178,6 +183,10 @@ class AgentRuntimeFacade:
         if task is None:
             raise ValueError("task must be provided explicitly or through config.")
         adapter = self.registry.get_agent(ProviderRef.parse(provider).provider_key)
+        if active_permissions() and not adapter.capabilities().supports_package_permissions:
+            raise UnsupportedFeatureError(
+                "Agent provider cannot enforce active package permissions."
+            )
         task_spec = _agent_task_spec(
             task,
             model=model,

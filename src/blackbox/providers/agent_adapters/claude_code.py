@@ -152,9 +152,9 @@ class ClaudeCodeAgentProvider:
         if callable(advertised):
             caps = advertised()
             if isinstance(caps, AgentCapabilities):
-                return caps
+                return replace(caps, supports_package_permissions=False)
             if isinstance(caps, dict):
-                return AgentCapabilities(**caps)
+                return AgentCapabilities(**{**caps, "supports_package_permissions": False})
         return AgentCapabilities(
             supports_sessions=True,
             supports_streaming_events=True,

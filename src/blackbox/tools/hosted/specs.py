@@ -613,6 +613,14 @@ def _anthropic_web_search_version(model: str | None) -> str:
     if model is None:
         return "web_search_20260209"
     normalized = model.lower().replace("_", "-")
+    if normalized in {
+        "claude-fable-5-1",
+        "claude-fable-5",
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-opus-4-8",
+    }:
+        return "web_search_20260209"
     if "sonnet-4-6" in normalized or "opus-4-6" in normalized or "4.6" in normalized:
         return "web_search_20260209"
     return "web_search_20250305"
@@ -622,6 +630,14 @@ def _anthropic_text_editor_version(model: str | None) -> str:
     if model is None:
         return "text_editor_20250728"
     normalized = model.lower().replace("_", "-")
+    if normalized in {
+        "claude-fable-5-1",
+        "claude-fable-5",
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-opus-4-8",
+    }:
+        return "text_editor_20250728"
     if "claude-4" in normalized or "-4-" in normalized:
         return "text_editor_20250728"
     return "text_editor_20250124"

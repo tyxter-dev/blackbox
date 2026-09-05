@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from blackbox.core.errors import ConfigurationError
 from blackbox.core.policy import PolicyCheckpoint, PolicyRequest
+from blackbox.core.tool_permissions import PackagePermissions, ToolGrant, canonical_ref
 
 ConnectorAuthMode = Literal["end_user", "agent_owned"]
 PermissionScope = Literal["read", "write", "delete", "execute", "admin", "custom"]
@@ -73,11 +75,50 @@ class ToolPermission:
             action=action or self.ref,
             arguments=arguments or {},
             metadata={
+                **self.metadata,
                 "agent_id": agent_id,
                 "tool_ref": self.ref,
                 "connector": self.connector,
                 "scopes": list(self.scopes),
                 "approval_mode": self.approval.mode,
-                **self.metadata,
             },
         )
+
+
+def compile_package_permissions(
+    permissions: list[ToolPermission],
+    connectors: list[ConnectorSpec],
+) -> PackagePermissions:
+    """Snapshot grants; connector bindings must name a declared, matching connector."""
+    connector_map = {connector.name: connector for connector in connectors}
+    if len(connector_map) != len(connectors):
+        raise ConfigurationError("Duplicate package connector names.")
+    grants: list[ToolGrant] = []
+    seen: set[str] = set()
+    for permission in permissions:
+        if permission.approval.mode not in {"never", "on_write", "on_execute", "always", "policy"}:
+            raise ConfigurationError("Invalid package approval mode.")
+        ref = canonical_ref(permission.ref)
+        if ref in seen:
+            raise ConfigurationError(f"Duplicate package permission: {ref}.")
+        seen.add(ref)
+        if not set(permission.scopes) <= {"read", "write", "delete", "execute", "admin", "custom"}:
+            raise ConfigurationError(f"Invalid permission scopes for {ref}.")
+        connector = connector_map.get(permission.connector or "")
+        if permission.connector is not None and connector is None:
+            raise ConfigurationError(f"Unknown connector: {permission.connector}.")
+        if connector is not None and ref not in {
+            canonical_ref(item) for item in connector.tool_refs
+        }:
+            raise ConfigurationError(f"Connector {connector.name!r} does not bind {ref!r}.")
+        grants.append(
+            ToolGrant(
+                ref,
+                frozenset(permission.scopes),
+                permission.connector,
+                frozenset(connector.scopes if connector else []),
+                permission.approval.mode,
+                permission.approval.reason,
+            )
+        )
+    return PackagePermissions(tuple(grants))

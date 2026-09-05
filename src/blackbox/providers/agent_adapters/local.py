@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass, field, replace
 from typing import Any
 from uuid import uuid4
@@ -23,9 +23,17 @@ from blackbox.core.sessions import (
     SessionStatus,
 )
 from blackbox.core.state import ProviderState
+from blackbox.core.tool_permissions import (
+    PackagePermissions,
+    active_permissions,
+    definition_allowed,
+    permission_boundary,
+    validate_package_model_config,
+)
 from blackbox.providers.base import AgentSpec, TaskSpec
 from blackbox.runtime import ModelRuntime
 from blackbox.runtime.agent_loop import AgentLoop, ApprovalPolicy
+from blackbox.tools.registry import ToolRegistry
 from blackbox.tools.runtime import ToolRuntime
 
 
@@ -49,6 +57,8 @@ class LocalAgentProvider:
     approval_policy: ApprovalPolicy | None = None
     max_iterations: int = 8
     provider_id: str = "local"
+    _package_permissions: dict[str, tuple[PackagePermissions, ...]] = field(default_factory=dict)
+    _session_permissions: dict[str, tuple[PackagePermissions, ...]] = field(default_factory=dict)
     _agents: dict[str, AgentSpec] = field(default_factory=dict)
     _sessions: dict[str, AgentSession] = field(default_factory=dict)
     _session_tasks: dict[str, TaskSpec] = field(default_factory=dict)
@@ -58,6 +68,7 @@ class LocalAgentProvider:
 
     def capabilities(self) -> AgentCapabilities:
         return AgentCapabilities(
+            supports_package_permissions=True,
             supports_sessions=True,
             supports_streaming_events=True,
             supports_artifacts=False,
@@ -69,8 +80,10 @@ class LocalAgentProvider:
         )
 
     async def create_agent(self, spec: AgentSpec) -> AgentRef:
+        validate_package_model_config(spec.hosted_tools, {})
         agent_id = spec.name
         self._agents[agent_id] = spec
+        self._package_permissions[agent_id] = active_permissions()
         return AgentRef(provider=self.provider_id, id=agent_id, metadata=spec.metadata)
 
     async def start_session(self, agent: AgentRef | str, task: TaskSpec) -> AgentSession:
@@ -83,6 +96,10 @@ class LocalAgentProvider:
             status="created",
             metadata=task.metadata,
         )
+        self._session_permissions[session.id] = (
+            *self._package_permissions.get(agent_id, ()),
+            *active_permissions(),
+        )
         self._sessions[session.id] = session
         self._session_tasks[session.id] = task
         self._enqueue_invocation(session.id, task.prompt)
@@ -94,6 +111,27 @@ class LocalAgentProvider:
         *,
         after_event_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
+        permissions = self._session_permissions.get(session.id, ())
+        boundary = (*active_permissions(), *permissions)
+        stream = self._stream_events(session, after_event_id=after_event_id)
+        try:
+            while True:
+                with permission_boundary(boundary):
+                    try:
+                        event = await anext(stream)
+                    except StopAsyncIteration:
+                        break
+                yield event
+        finally:
+            with permission_boundary(boundary):
+                await stream.aclose()
+
+    async def _stream_events(
+        self,
+        session: SessionRef | AgentSession,
+        *,
+        after_event_id: str | None = None,
+    ) -> AsyncGenerator[AgentEvent, None]:
         """Run the local agent loop and stream normalized session, model, and tool events."""
         session_obj = self._session(session)
         invocation = self._next_invocation(session_obj.id)
@@ -141,7 +179,12 @@ class LocalAgentProvider:
                 provider=model_ref,
                 input=input,
                 provider_state=provider_state,
-                tools=tool_definitions,
+                tools=[
+                    tool
+                    for tool in tool_definitions
+                    if self.tools is not None
+                    and definition_allowed(self.tools.registry.get(tool["name"]))
+                ],
                 hosted_tools=hosted_tools,
                 instructions=instructions,
             ):
@@ -149,7 +192,7 @@ class LocalAgentProvider:
 
         loop = AgentLoop(
             stream_factory=stream_factory,
-            tools=self.tools,
+            tools=self.tools or (ToolRuntime(ToolRegistry()) if active_permissions() else None),
             hosted_tools=hosted_tools,
             approval_policy=self.approval_policy,
             max_iterations=self.max_iterations,

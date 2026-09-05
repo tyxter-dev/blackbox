@@ -7,7 +7,8 @@ from hashlib import sha256
 from typing import Any
 
 from blackbox.core.events import AgentEvent, EventTypes
-from blackbox.core.policy import Policy, PolicyDecision, PolicyRequest
+from blackbox.core.policy import Policy, PolicyRequest
+from blackbox.core.tool_permissions import active_permissions, canonical_ref, package_decision
 from blackbox.mcp import MCPToolset
 from blackbox.tools.hosted.specs import HostedToolSpec
 from blackbox.tools.registry import ToolRegistry
@@ -406,25 +407,39 @@ async def _policy_filter_candidates(
     *,
     policy: Policy | None,
 ) -> tuple[list[ToolCandidate], list[ToolCandidate]]:
-    if policy is None:
+    if policy is None and not active_permissions():
         return list(candidates), []
     allowed: list[ToolCandidate] = []
     blocked: list[ToolCandidate] = []
     for candidate in candidates:
-        decision: PolicyDecision = await policy.check(
-            PolicyRequest(
-                checkpoint="before_tool_exposure",
-                action=candidate.name,
-                metadata={
-                    "ref": candidate.ref,
-                    "kind": candidate.kind,
-                    "category": candidate.category,
-                    "tags": list(candidate.tags),
-                    "risk": candidate.risk,
-                    "tool_metadata": dict(candidate.metadata),
-                },
-            )
+        request = PolicyRequest(
+            checkpoint="before_tool_exposure",
+            action=candidate.name,
+            metadata={
+                "ref": candidate.ref,
+                "kind": candidate.kind,
+                "category": candidate.category,
+                "tags": list(candidate.tags),
+                "risk": candidate.risk,
+                "tool_metadata": dict(candidate.metadata),
+                "tool_ref": (
+                    "workspace:"
+                    + str(
+                        candidate.metadata.get("workspace_operation")
+                        or candidate.name.partition("_")[2]
+                        or candidate.name
+                    )
+                    if candidate.category == "workspace"
+                    else canonical_ref(candidate.name)
+                ),
+                "scopes": list(candidate.metadata.get("scopes") or ["execute"]),
+                "connector": candidate.metadata.get("connector"),
+                "connector_scopes": list(candidate.metadata.get("connector_scopes") or []),
+            },
         )
+        decision = package_decision(request)
+        if decision.verdict != "deny" and policy is not None:
+            decision = await policy.check(request)
         if decision.verdict == "allow":
             allowed.append(candidate)
         else:

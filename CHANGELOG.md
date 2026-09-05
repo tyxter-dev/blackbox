@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+## 0.2.0
+
+### Current model catalog refresh
+
+- Corrected runtime cache hit ratios to count reads, excluding writes, with the
+  combined-count fallback retained for legacy usage reports.
+
+- Added ten verified OpenAI, Claude, and Grok model identities with dated sources;
+  refreshed retirement metadata and standard token/cache rates, including Grok 4.3.
+- Added exact model effort validation, Claude adaptive/structured-output merging,
+  Opus 5 WebFetch rejection, and Fable 5.1 forced-choice and replay restrictions.
+- Mapped current OpenAI cache TTL and native cache-write usage; rejected unsupported
+  Astra sampling/logprob parameters. Astra catalog presence is account-dependent.
+- Corrected normalized Claude input totals to include cache reads/writes while
+  preserving native exclusive counts in usage details.
+- Preserved defaults, user price overrides, legacy identities, native thinking
+  blocks, and older retrieval dates for unchanged rows. Rates remain standard-tier
+  estimates; see the model adapter README for exclusions and replay limitations.
+
+### Workspace agent runtime permissions (#15)
+
+- Added explicit `inherit` / `allowlist_v1` modes with compatible manifest
+  hydration, immutable run/session grants, and exact scope/connector checks.
+- Filtered static/dynamic tool exposure and discovery; checked current tool
+  requirements at dispatch and bound approvals to checked callable metadata.
+- Kept local sessions on AgentLoop, retained permissions on follow-ups, and
+  rejected unsupported managed startup before workspace/agent side effects.
+- Added local MCP/workspace enforcement, WebSearch read-grant configuration,
+  client-hosted handler gates, and offline unit/runtime/contract/package tests.
+- Native RemoteMCP/ToolSearch, opaque provider extras, and other server-executed
+  hosted tools remain explicitly unsupported in allowlist mode. Standalone
+  `prepare_agent_spec` and `WorkspaceAgentSpec.to_agent_spec()` reject restricted packages; use `run_workspace_agent`.
+
 ## 0.1.1
 
 ### CI dependency coverage
@@ -721,7 +754,7 @@ Second real `ModelProvider`, mirroring the M1 OpenAI Responses pattern.
 - 71 → 79 passing offline tests; 1 skipped (network-gated). Ruff +
   mypy --strict clean.
 
-## 0.2.0 — Blackbox `runtime.run(...)` and `AgentResult[T]`
+## Historical implementation slice 0.2.0 — Blackbox `runtime.run(...)` and `AgentResult[T]`
 
 Closes the gap between PRD §6 UC0 and the v0.1 scaffold. The high-level
 product promise from `llm_factory_toolkit` v1 is now restored on top of the

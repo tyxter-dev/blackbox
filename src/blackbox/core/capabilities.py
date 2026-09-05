@@ -237,6 +237,7 @@ class AgentCapabilities:
     supports_evals: bool = False
     supports_cancellation: bool = False
     supports_resume: bool = False
+    supports_package_permissions: bool = False
 
 
 _ProfileCacheRef = weakref.ReferenceType[Any] | None
